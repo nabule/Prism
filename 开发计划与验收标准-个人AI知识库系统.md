@@ -354,4 +354,4 @@ npx nx test sidecar
 
 阻塞项：
 
-- Docker 已安装，但直接 Docker Hub 拉取超时，Xget Docker Hub/GHCR 加速地址返回 429 限流；真实 Memos 容器联调未执行完成，不能将 P0 真实验收标记为完成。
+- Docker 已安装；直接 Docker Hub 拉取超时，旧 Xget 域名返回 429，新 Xget 域名 `xget.your-domain.com` 已验证可拉取 Memos 并构建 Sidecar。真实 Memos 容器联调未执行完成，不能将 P0 真实验收标记为完成。

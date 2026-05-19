@@ -24,17 +24,19 @@ Docker version 29.5.1
 Docker Compose version v5.1.3
 ```
 
-Docker 已可用，但镜像拉取仍受外部网络限制：
+Docker 已可用。镜像拉取验证记录：
 
 ```text
 Docker Hub: i/o timeout
-Xget Docker Hub mirror: 429 Too Many Requests
-Xget GHCR mirror: 429 Too Many Requests
+xget.xi-xu.me Docker Hub mirror: 429 Too Many Requests
+xget.xi-xu.me GHCR mirror: 429 Too Many Requests
+xget.your-domain.com Docker Hub mirror: 拉取 Memos 成功
+xget.your-domain.com GHCR mirror: 构建 Sidecar 成功
 ```
 
-Docker Hub/GHCR 镜像已按 Xget 规则改用 `xget.xi-xu.me/cr/...` 加速地址。当前阻塞为 Xget 限流，非本地 Docker 安装问题。
+Docker Hub/GHCR 镜像已按 Xget 规则改用 `xget.your-domain.com/cr/...` 加速地址。
 
-因此 P0 的真实 Memos 容器联调尚未完成。代码已具备 webhook 接收、任务落库、worker 拉取 memo 和可选探针评论能力；需要在镜像可拉取或提供远程 Memos 实例后执行真实验收。
+P0 的真实 Memos 容器联调仍需继续执行。代码已具备 webhook 接收、任务落库、worker 拉取 memo和可选探针评论能力；镜像拉取阻塞已解除。
 
 ## 待执行真实探针
 

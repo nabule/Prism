@@ -57,6 +57,17 @@ class MemoRecord:
     updated_at: str
 
 
+@dataclass(frozen=True)
+class BusinessTagRecord:
+    id: int
+    workspace_id: str
+    path: str
+    status: str
+    source: str
+    created_at: str
+    updated_at: str
+
+
 class Store:
     def __init__(self, database_path: str | Path):
         self.database_path = Path(database_path)
@@ -139,6 +150,21 @@ class Store:
 
                 CREATE INDEX IF NOT EXISTS idx_tag_candidates_status_created
                   ON tag_candidates(status, created_at);
+
+                CREATE TABLE IF NOT EXISTS business_tags (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  workspace_id TEXT NOT NULL,
+                  path TEXT NOT NULL,
+                  status TEXT NOT NULL,
+                  source TEXT NOT NULL,
+                  created_at TEXT NOT NULL,
+                  updated_at TEXT NOT NULL,
+                  UNIQUE (workspace_id, path),
+                  FOREIGN KEY (workspace_id) REFERENCES workspaces(id)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_business_tags_status_path
+                  ON business_tags(status, path);
                 """
             )
 
@@ -473,7 +499,51 @@ class Store:
                 "SELECT * FROM tag_candidates WHERE id = ?",
                 (candidate_id,),
             ).fetchone()
+            if row is not None and status == "approved" and row["status"] == "approved":
+                connection.execute(
+                    """
+                    INSERT INTO business_tags (
+                      workspace_id, path, status, source, created_at, updated_at
+                    )
+                    VALUES (?, ?, 'active', 'candidate_review', ?, ?)
+                    ON CONFLICT(workspace_id, path) DO UPDATE SET
+                      status = 'active',
+                      source = excluded.source,
+                      updated_at = excluded.updated_at
+                    """,
+                    (row["workspace_id"], row["path"], now, now),
+                )
         return _tag_candidate_from_row(row) if row else None
+
+    def list_business_tags(
+        self,
+        *,
+        workspace_id: str,
+        status: str | None = "active",
+        limit: int = 1000,
+    ) -> list[BusinessTagRecord]:
+        with self.connect() as connection:
+            if status:
+                rows = connection.execute(
+                    """
+                    SELECT * FROM business_tags
+                    WHERE workspace_id = ? AND status = ?
+                    ORDER BY path ASC
+                    LIMIT ?
+                    """,
+                    (workspace_id, status, limit),
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    """
+                    SELECT * FROM business_tags
+                    WHERE workspace_id = ?
+                    ORDER BY path ASC
+                    LIMIT ?
+                    """,
+                    (workspace_id, limit),
+                ).fetchall()
+        return [_business_tag_from_row(row) for row in rows]
 
 
 def _job_from_row(row: sqlite3.Row) -> Job:
@@ -518,6 +588,18 @@ def _tag_candidate_from_row(row: sqlite3.Row) -> TagCandidateRecord:
         similar_tags=json.loads(row["similar_tags_json"]),
         confidence=float(row["confidence"]),
         reviewer_note=row["reviewer_note"],
+        created_at=str(row["created_at"]),
+        updated_at=str(row["updated_at"]),
+    )
+
+
+def _business_tag_from_row(row: sqlite3.Row) -> BusinessTagRecord:
+    return BusinessTagRecord(
+        id=int(row["id"]),
+        workspace_id=str(row["workspace_id"]),
+        path=str(row["path"]),
+        status=str(row["status"]),
+        source=str(row["source"]),
         created_at=str(row["created_at"]),
         updated_at=str(row["updated_at"]),
     )

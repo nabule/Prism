@@ -193,3 +193,56 @@ async def test_worker_uses_llm_draft_when_model_key_is_configured(tmp_path, monk
     assert "LLM 结构化摘要" in FakeMemosClient.created_memos[0]
     assert "- 关键点一" in FakeMemosClient.created_memos[0]
     assert "- 后续任务一" in FakeMemosClient.created_memos[0]
+
+
+@pytest.mark.asyncio
+async def test_worker_uses_approved_business_tags_from_store(tmp_path, monkeypatch):
+    app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
+    write_yaml(tmp_path / "taxonomy.yaml", taxonomy_config_text())
+    monkeypatch.setenv("MEMOS_BASE_URL", "http://memos.local")
+    monkeypatch.setenv("MEMOS_API_TOKEN", "memos-token")
+    config = AppConfig.load(app_path)
+    store = Store(config.database_path)
+    store.migrate()
+    store.ensure_workspace("default")
+    candidate = store.upsert_tag_candidate(
+        workspace_id="default",
+        path="#项目/新方向",
+        parent_path="#项目",
+        reason="memo contains a tag outside the approved taxonomy",
+    )
+    store.review_tag_candidate(candidate_id=candidate.id, status="approved")
+    store.create_job(
+        workspace_id="default",
+        job_type="process_memo",
+        idempotency_key="memo:approved-tag",
+        payload={"memo_uid": "approved-tag"},
+    )
+
+    class FakeClient:
+        created_memos: list[str] = []
+
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def get_memo(self, memo_uid):
+            return {"name": f"memos/{memo_uid}", "content": "已审核新方向推进记录 #项目/新方向"}
+
+        async def create_memo(self, content):
+            self.created_memos.append(content)
+            return {"name": "memos/summary-approved-tag", "content": content}
+
+        async def create_comment(self, memo_uid, content):
+            raise AssertionError("clear jobs must not create comments")
+
+    monkeypatch.setattr("memosima.worker.runner.MemosClient", FakeClient)
+
+    processed = await Worker(config, store).run_once()
+
+    assert processed is True
+    job = store.list_jobs()[0]
+    assert job.status == "succeeded"
+    assert job.result["ai_plan"]["active_tags"] == ["#项目/新方向"]
+    assert job.result["ai_plan"]["candidate_tags"] == []
+    assert store.list_tag_candidates(workspace_id="default", status="candidate") == []
+    assert "#项目/新方向" in FakeClient.created_memos[0]

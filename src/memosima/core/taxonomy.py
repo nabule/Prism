@@ -113,6 +113,21 @@ class TaxonomyConfig:
     def active_tag_paths(self) -> tuple[str, ...]:
         return tuple(tag.path for tag in self.business_tags if tag.status == "active")
 
+    def with_active_tags(self, tag_paths: list[str] | tuple[str, ...]) -> "TaxonomyConfig":
+        existing = {tag.path for tag in self.business_tags}
+        business_tags = list(self.business_tags)
+        for path in tag_paths:
+            normalized = _normalize_tag(path)
+            if normalized not in existing:
+                business_tags.append(BusinessTag(path=normalized, status="active"))
+                existing.add(normalized)
+        return TaxonomyConfig(
+            system_tags=self.system_tags,
+            business_tags=tuple(business_tags),
+            aliases=self.aliases,
+            disabled=self.disabled,
+        )
+
     def build_organization_plan(self, content: str) -> OrganizationPlan:
         raw_tags = _extract_tags(content)
         system_original = self.system_tags.get("original", "#系统/原始记录")

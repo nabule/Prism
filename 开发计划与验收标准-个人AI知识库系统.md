@@ -116,7 +116,7 @@
 - AI 整理 memo 包含 `#系统/AI整理`。当前已通过自动化测试。
 - 已有标签被优先使用。
 - 新标签进入 candidate 状态。
-- 审核通过后标签进入 active 状态。
+- 审核通过后标签进入 active 状态。当前已写入 Sidecar `business_tags` 表，并被 worker 后续处理使用。
 - 澄清问题以评论形式写入原始 memo，任务进入 `waiting_user`。当前已通过自动化测试。
 
 ### 5.4 真实测试

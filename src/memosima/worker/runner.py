@@ -5,20 +5,23 @@ import asyncio
 import hashlib
 import json
 import logging
+import os
 
-from memosima.core.config import AppConfig
+from memosima.core.config import AppConfig, ModelsConfig
 from memosima.core.summary import build_summary_memo_content
-from memosima.core.taxonomy import TaxonomyConfig
+from memosima.core.taxonomy import OrganizationPlan, TaxonomyConfig
 from memosima.db.store import Job, Store
+from memosima.llm.provider import LLMOrganizationDraft, OpenAICompatibleClient
 from memosima.memos.client import MemosClient
 
 LOGGER = logging.getLogger(__name__)
 
 
 class Worker:
-    def __init__(self, config: AppConfig, store: Store):
+    def __init__(self, config: AppConfig, store: Store, models_config: ModelsConfig | None = None):
         self.config = config
         self.store = store
+        self.models_config = models_config
 
     async def run_once(self) -> bool:
         job = self.store.claim_next_job()
@@ -94,12 +97,30 @@ class Worker:
                 "clarification_comment_created": True,
                 "clarification_comment": comment,
             }
+        llm_draft = await self._build_llm_draft(
+            source_content=source_content,
+            taxonomy=taxonomy,
+            organization_plan=organization_plan,
+        )
+        if llm_draft and llm_draft.needs_clarification:
+            comment = _clarification_comment(llm_draft.clarification_question)
+            await client.create_comment(memo_uid, comment)
+            return {
+                "status": "waiting_user",
+                "memo_uid": memo_uid,
+                "content_hash": content_hash,
+                "ai_plan": organization_plan.to_dict(),
+                "ai_source": "llm",
+                "clarification_comment_created": True,
+                "clarification_comment": comment,
+            }
 
         summary_content = build_summary_memo_content(
             source_memo_uid=memo_uid,
             source_content=source_content,
             organization_plan=organization_plan,
             taxonomy=taxonomy,
+            llm_draft=llm_draft,
         )
         summary_memo = await client.create_memo(summary_content)
         summary_memo_uid = _extract_memo_uid(summary_memo)
@@ -122,8 +143,33 @@ class Worker:
             "content_hash": content_hash,
             "ai_summary_memo_uid": summary_memo_uid,
             "ai_plan": organization_plan.to_dict(),
+            "ai_source": "llm" if llm_draft else "local",
             "comment_created": comment_created,
         }
+
+    async def _build_llm_draft(
+        self,
+        *,
+        source_content: str,
+        taxonomy: TaxonomyConfig,
+        organization_plan: OrganizationPlan,
+    ) -> LLMOrganizationDraft | None:
+        if self.models_config is None:
+            return None
+        provider = self.models_config.providers[self.models_config.default_provider]
+        api_key = os.getenv(provider.api_key_env)
+        if not api_key:
+            return None
+        client = OpenAICompatibleClient(
+            provider=provider,
+            api_key=api_key,
+            timeout_seconds=self.config.memos_timeout_seconds,
+        )
+        return await client.organize_memo(
+            content=source_content,
+            taxonomy=taxonomy,
+            local_plan=organization_plan,
+        )
 
 
 def _memo_hash(memo: dict[str, object]) -> str:
@@ -145,10 +191,11 @@ def _clarification_comment(reason: str | None) -> str:
 
 async def _run(args: argparse.Namespace) -> None:
     config = AppConfig.load(args.config)
+    models = ModelsConfig.load(args.models)
     store = Store(config.database_path)
     store.migrate()
     store.ensure_workspace(config.workspace_id)
-    worker = Worker(config, store)
+    worker = Worker(config, store, models)
     if args.once:
         await worker.run_once()
     else:
@@ -158,6 +205,7 @@ async def _run(args: argparse.Namespace) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="config/app.yaml")
+    parser.add_argument("--models", default="config/models.yaml")
     parser.add_argument("--once", action="store_true")
     parser.add_argument("--log-level", default="INFO")
     args = parser.parse_args()

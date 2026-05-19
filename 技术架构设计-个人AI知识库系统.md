@@ -168,6 +168,14 @@ providers:
 - 输出校验结果。
 - 错误信息。
 
+当前实现状态：
+
+- 已实现 OpenAI-compatible `/chat/completions` provider。
+- 默认 provider 为 OpenRouter，默认模型为 `deepseek/deepseek-v4-flash:free`。
+- API key 只从 `api_key_env` 指定的环境变量读取，不写入配置文件或仓库。
+- 模型输出按 JSON 对象校验，字段包含 `title`、`summary`、`key_points`、`todos`、`needs_clarification` 和 `clarification_question`。
+- 未配置 API key 时，worker 自动回退到本地模板整理。
+
 ### 4.5 标签树模块
 
 Sidecar 持有正式标签树、候选标签、别名和禁用词。Memos 中的标签只作为展示与检索入口。

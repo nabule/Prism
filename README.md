@@ -9,6 +9,8 @@ cp .env.example .env
 npx nx test sidecar
 ```
 
+Python 包由 `uv` 管理，常用命令统一通过 Nx target 执行。
+
 启动 API：
 
 ```bash

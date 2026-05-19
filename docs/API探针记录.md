@@ -36,7 +36,9 @@ xget.your-domain.com GHCR mirror: 构建 Sidecar 成功
 
 Docker Hub/GHCR 镜像已按 Xget 规则改用 `xget.your-domain.com/cr/...` 加速地址。
 
-P0 的真实 Memos 容器联调仍需继续执行。代码已具备 webhook 接收、任务落库、worker 拉取 memo和可选探针评论能力；镜像拉取阻塞已解除。
+P0 的真实 Memos 容器联调已跑通手动 webhook 投递路径：真实 Memos memo 创建成功，Sidecar 接收 webhook 后创建任务，worker 使用真实 Memos API 读取 memo 并写入 `memos` 映射表。
+
+尚未完成 Memos 内置 webhook 配置自动回调；后续需要在 Memos 管理界面或 API 中配置 webhook URL。
 
 ## 待执行真实探针
 

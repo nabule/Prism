@@ -6,6 +6,8 @@ ENV UV_PROJECT_ENVIRONMENT=/app/.venv
 ENV PATH="/app/.venv/bin:${PATH}"
 
 COPY pyproject.toml README.md ./
+RUN mkdir -p src/memosima && printf '__version__ = "0.1.0"\\n' > src/memosima/__init__.py
+RUN uv sync --no-dev --no-install-project
 COPY src ./src
 RUN uv sync --no-dev
 

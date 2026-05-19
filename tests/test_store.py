@@ -122,6 +122,11 @@ def test_tag_candidate_upsert_list_and_review_flow(tmp_path):
     assert reviewed.status == "approved"
     assert reviewed.reviewer_note == "纳入正式标签"
     assert store.list_tag_candidates(workspace_id="default", status="candidate") == []
+    active_tags = store.list_business_tags(workspace_id="default")
+    assert len(active_tags) == 1
+    assert active_tags[0].path == "#项目/新方向"
+    assert active_tags[0].status == "active"
+    assert active_tags[0].source == "candidate_review"
 
 
 def test_memo_records_can_be_listed_by_type_and_source(tmp_path):

@@ -64,7 +64,7 @@ class Worker:
         )
         memo = await client.get_memo(memo_uid)
         content_hash = _memo_hash(memo)
-        taxonomy = TaxonomyConfig.load(self.config.taxonomy_path)
+        taxonomy = self._load_taxonomy(job.workspace_id)
         content = memo.get("content")
         source_content = content if isinstance(content, str) else ""
         organization_plan = taxonomy.build_organization_plan(source_content)
@@ -170,6 +170,13 @@ class Worker:
             taxonomy=taxonomy,
             local_plan=organization_plan,
         )
+
+    def _load_taxonomy(self, workspace_id: str) -> TaxonomyConfig:
+        taxonomy = TaxonomyConfig.load(self.config.taxonomy_path)
+        approved_tags = [
+            tag.path for tag in self.store.list_business_tags(workspace_id=workspace_id, status="active")
+        ]
+        return taxonomy.with_active_tags(approved_tags)
 
 
 def _memo_hash(memo: dict[str, object]) -> str:

@@ -26,7 +26,10 @@ class Worker:
             return False
         try:
             result = await self.handle_job(job)
-            self.store.mark_job_succeeded(job.id, result)
+            if result.get("status") == "waiting_user":
+                self.store.mark_job_waiting_user(job.id, result)
+            else:
+                self.store.mark_job_succeeded(job.id, result)
             return True
         except Exception as exc:
             LOGGER.exception("Job failed: %s", job.id)
@@ -80,6 +83,18 @@ class Worker:
                 confidence=candidate.confidence,
             )
 
+        if organization_plan.needs_clarification:
+            comment = _clarification_comment(organization_plan.clarification_reason)
+            await client.create_comment(memo_uid, comment)
+            return {
+                "status": "waiting_user",
+                "memo_uid": memo_uid,
+                "content_hash": content_hash,
+                "ai_plan": organization_plan.to_dict(),
+                "clarification_comment_created": True,
+                "clarification_comment": comment,
+            }
+
         summary_content = build_summary_memo_content(
             source_memo_uid=memo_uid,
             source_content=source_content,
@@ -121,6 +136,11 @@ def _extract_memo_uid(memo: dict[str, object]) -> str:
     if not isinstance(name, str) or not name.startswith("memos/"):
         raise ValueError("Created summary memo response is missing name")
     return name.removeprefix("memos/")
+
+
+def _clarification_comment(reason: str | None) -> str:
+    message = reason or "内容需要进一步澄清。"
+    return f"Memosima 需要补充信息后再整理：{message}"
 
 
 async def _run(args: argparse.Namespace) -> None:

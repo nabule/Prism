@@ -254,6 +254,19 @@ class Store:
                 (result_json, now, job_id),
             )
 
+    def mark_job_waiting_user(self, job_id: int, result: dict[str, Any] | None = None) -> None:
+        now = utc_now()
+        result_json = json.dumps(result or {}, ensure_ascii=False, sort_keys=True)
+        with self.connect() as connection:
+            connection.execute(
+                """
+                UPDATE jobs
+                SET status = 'waiting_user', result_json = ?, error = NULL, updated_at = ?
+                WHERE id = ?
+                """,
+                (result_json, now, job_id),
+            )
+
     def mark_job_failed(self, job_id: int, error: str, max_attempts: int) -> None:
         now = utc_now()
         with self.connect() as connection:

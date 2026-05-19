@@ -74,3 +74,56 @@ async def test_worker_processes_memo_with_mock_client(tmp_path, monkeypatch):
     assert len(summaries) == 1
     assert summaries[0].memos_uid == "summary123"
     assert summaries[0].status == "created"
+
+
+@pytest.mark.asyncio
+async def test_worker_waits_for_user_when_memo_needs_clarification(tmp_path, monkeypatch):
+    app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
+    write_yaml(tmp_path / "taxonomy.yaml", taxonomy_config_text())
+    monkeypatch.setenv("MEMOS_BASE_URL", "http://memos.local")
+    monkeypatch.setenv("MEMOS_API_TOKEN", "memos-token")
+    config = AppConfig.load(app_path)
+    store = Store(config.database_path)
+    store.migrate()
+    store.ensure_workspace("default")
+    store.create_job(
+        workspace_id="default",
+        job_type="process_memo",
+        idempotency_key="memo:short",
+        payload={"memo_uid": "short"},
+    )
+
+    class FakeClient:
+        created_memos: list[str] = []
+        comments: list[tuple[str, str]] = []
+
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def get_memo(self, memo_uid):
+            return {"name": f"memos/{memo_uid}", "content": "啥？"}
+
+        async def create_memo(self, content):
+            self.created_memos.append(content)
+            raise AssertionError("clarification jobs must not create summary memos")
+
+        async def create_comment(self, memo_uid, content):
+            self.comments.append((memo_uid, content))
+            return {"name": f"memos/{memo_uid}/comments/1", "content": content}
+
+    monkeypatch.setattr("memosima.worker.runner.MemosClient", FakeClient)
+
+    processed = await Worker(config, store).run_once()
+
+    assert processed is True
+    jobs = store.list_jobs()
+    assert jobs[0].status == "waiting_user"
+    assert jobs[0].result["status"] == "waiting_user"
+    assert jobs[0].result["memo_uid"] == "short"
+    assert jobs[0].result["clarification_comment_created"] is True
+    assert jobs[0].result["ai_plan"]["needs_clarification"] is True
+    assert FakeClient.created_memos == []
+    assert len(FakeClient.comments) == 1
+    assert FakeClient.comments[0][0] == "short"
+    assert "需要补充信息" in FakeClient.comments[0][1]
+    assert store.list_memos(workspace_id="default", memo_type="ai_summary") == []

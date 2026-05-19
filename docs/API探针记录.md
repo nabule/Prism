@@ -17,7 +17,7 @@
 
 ## 本机真实探针状态
 
-当前 WSL 环境执行结果：
+当前 Linux 环境执行结果：
 
 ```text
 docker: command not found

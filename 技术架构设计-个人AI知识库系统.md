@@ -543,4 +543,4 @@ disabled:
 - Memos Client：封装读取 memo、创建 memo、创建评论、资源下载。
 - 模型配置：OpenRouter，默认模型 `deepseek/deepseek-v4-flash:free`，密钥仅从 `OPENROUTER_API_KEY` 读取。
 
-当前 WSL 环境缺少 Docker，真实 Memos 容器联调尚未完成，详见 `docs/API探针记录.md` 与 `docs/P0-P1验收记录.md`。
+当前 Linux 环境缺少 Docker，真实 Memos 容器联调尚未完成，详见 `docs/API探针记录.md` 与 `docs/P0-P1验收记录.md`。

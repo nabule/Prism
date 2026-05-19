@@ -29,6 +29,7 @@ async def test_worker_processes_memo_with_mock_client(tmp_path, monkeypatch):
 
     class FakeClient:
         created_memos: list[str] = []
+        relations: list[tuple[str, str]] = []
 
         def __init__(self, *args, **kwargs):
             pass
@@ -45,6 +46,10 @@ async def test_worker_processes_memo_with_mock_client(tmp_path, monkeypatch):
 
         async def create_comment(self, memo_uid, content):
             raise AssertionError("probe comment is disabled")
+
+        async def upsert_memo_reference_relation(self, *, source_memo_uid, related_memo_uid):
+            self.relations.append((source_memo_uid, related_memo_uid))
+            return {}
 
     monkeypatch.setattr("memosima.worker.runner.MemosClient", FakeClient)
 
@@ -75,6 +80,7 @@ async def test_worker_processes_memo_with_mock_client(tmp_path, monkeypatch):
     assert len(summaries) == 1
     assert summaries[0].memos_uid == "summary123"
     assert summaries[0].status == "created"
+    assert FakeClient.relations == [("abc123", "summary123")]
 
 
 @pytest.mark.asyncio
@@ -152,6 +158,7 @@ async def test_worker_uses_llm_draft_when_model_key_is_configured(tmp_path, monk
 
     class FakeMemosClient:
         created_memos: list[str] = []
+        relations: list[tuple[str, str]] = []
 
         def __init__(self, *args, **kwargs):
             pass
@@ -165,6 +172,10 @@ async def test_worker_uses_llm_draft_when_model_key_is_configured(tmp_path, monk
 
         async def create_comment(self, memo_uid, content):
             raise AssertionError("clear LLM jobs must not create comments")
+
+        async def upsert_memo_reference_relation(self, *, source_memo_uid, related_memo_uid):
+            self.relations.append((source_memo_uid, related_memo_uid))
+            return {}
 
     class FakeLLMClient:
         def __init__(self, *args, **kwargs):
@@ -190,6 +201,7 @@ async def test_worker_uses_llm_draft_when_model_key_is_configured(tmp_path, monk
     assert jobs[0].result["ai_source"] == "llm"
     assert jobs[0].result["ai_summary_memo_uid"] == "summary-llm"
     assert len(FakeMemosClient.created_memos) == 1
+    assert FakeMemosClient.relations == [("llm", "summary-llm")]
     assert "LLM 结构化摘要" in FakeMemosClient.created_memos[0]
     assert "- 关键点一" in FakeMemosClient.created_memos[0]
     assert "- 后续任务一" in FakeMemosClient.created_memos[0]
@@ -221,6 +233,7 @@ async def test_worker_uses_approved_business_tags_from_store(tmp_path, monkeypat
 
     class FakeClient:
         created_memos: list[str] = []
+        relations: list[tuple[str, str]] = []
 
         def __init__(self, *args, **kwargs):
             pass
@@ -235,6 +248,10 @@ async def test_worker_uses_approved_business_tags_from_store(tmp_path, monkeypat
         async def create_comment(self, memo_uid, content):
             raise AssertionError("clear jobs must not create comments")
 
+        async def upsert_memo_reference_relation(self, *, source_memo_uid, related_memo_uid):
+            self.relations.append((source_memo_uid, related_memo_uid))
+            return {}
+
     monkeypatch.setattr("memosima.worker.runner.MemosClient", FakeClient)
 
     processed = await Worker(config, store).run_once()
@@ -246,3 +263,4 @@ async def test_worker_uses_approved_business_tags_from_store(tmp_path, monkeypat
     assert job.result["ai_plan"]["candidate_tags"] == []
     assert store.list_tag_candidates(workspace_id="default", status="candidate") == []
     assert "#项目/新方向" in FakeClient.created_memos[0]
+    assert FakeClient.relations == [("approved-tag", "summary-approved-tag")]

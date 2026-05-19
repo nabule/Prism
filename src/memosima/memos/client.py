@@ -69,6 +69,37 @@ class MemosClient:
             json={"content": content},
         )
 
+    async def list_memo_relations(self, memo_uid: str) -> dict[str, Any]:
+        return await self._request("GET", f"/api/v1/memos/{memo_uid}/relations")
+
+    async def upsert_memo_reference_relation(
+        self,
+        *,
+        source_memo_uid: str,
+        related_memo_uid: str,
+    ) -> dict[str, Any]:
+        source_name = _memo_name(source_memo_uid)
+        related_name = _memo_name(related_memo_uid)
+        current = await self.list_memo_relations(source_memo_uid)
+        relations = current.get("relations", [])
+        if not isinstance(relations, list):
+            raise MemosClientError("Memos returned unexpected memo relations response")
+
+        relation = {
+            "memo": {"name": source_name},
+            "relatedMemo": {"name": related_name},
+            "type": "REFERENCE",
+        }
+        merged = [_as_relation_payload(item) for item in relations if isinstance(item, dict)]
+        if not _has_reference_relation(merged, source_name, related_name):
+            merged.append(relation)
+
+        return await self._request(
+            "PATCH",
+            f"/api/v1/{source_name}/relations",
+            json={"relations": merged},
+        )
+
     async def list_user_webhooks(self, parent: str) -> dict[str, Any]:
         return await self._request("GET", f"/api/v1/{parent}/webhooks")
 
@@ -165,3 +196,46 @@ class MemosClient:
                 status_code=response.status_code,
             ) from exc
         return response
+
+
+def _memo_name(memo_uid_or_name: str) -> str:
+    if memo_uid_or_name.startswith("memos/"):
+        return memo_uid_or_name
+    return f"memos/{memo_uid_or_name}"
+
+
+def _as_relation_payload(relation: dict[str, Any]) -> dict[str, Any]:
+    memo_name = _nested_name(relation.get("memo"))
+    related_name = _nested_name(relation.get("relatedMemo"))
+    relation_type = relation.get("type")
+    if not memo_name or not related_name or not isinstance(relation_type, str):
+        return relation
+    return {
+        "memo": {"name": memo_name},
+        "relatedMemo": {"name": related_name},
+        "type": relation_type,
+    }
+
+
+def _nested_name(value: Any) -> str | None:
+    if isinstance(value, dict):
+        name = value.get("name")
+        return name if isinstance(name, str) else None
+    if isinstance(value, str):
+        return value
+    return None
+
+
+def _has_reference_relation(
+    relations: list[dict[str, Any]],
+    source_name: str,
+    related_name: str,
+) -> bool:
+    for relation in relations:
+        if (
+            _nested_name(relation.get("memo")) == source_name
+            and _nested_name(relation.get("relatedMemo")) == related_name
+            and relation.get("type") == "REFERENCE"
+        ):
+            return True
+    return False

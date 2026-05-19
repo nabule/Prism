@@ -106,7 +106,7 @@
 - 实现候选标签创建。
 - 实现候选标签审核 API。
 - 实现 AI 整理 memo 创建。已支持本地模板版和 OpenAI-compatible LLM 版。
-- 实现原始 memo 与 AI memo 关联。Sidecar 本地来源关联已完成，Memos 原生 relation 待探针后接入。
+- 实现原始 memo 与 AI memo 关联。已支持 Sidecar 本地来源关联和 Memos 原生 `REFERENCE` relation。
 - 实现待澄清判断和评论追问。本地规则版已完成，任务会进入 `waiting_user`。
 
 ### 5.3 验收标准

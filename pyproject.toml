@@ -22,6 +22,7 @@ dev = [
 [project.scripts]
 memosima-api = "memosima.api.app:main"
 memosima-worker = "memosima.worker.runner:main"
+memosima-probe-memos = "memosima.memos.probe:main"
 
 [build-system]
 requires = ["hatchling"]

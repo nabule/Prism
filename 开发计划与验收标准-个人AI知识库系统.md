@@ -348,10 +348,10 @@
 自动化测试：
 
 ```text
-.venv/bin/pytest
-11 passed
+npx nx test sidecar
+12 passed
 ```
 
 阻塞项：
 
-- 当前 Linux 环境未安装 Docker，真实 Memos 容器联调未执行，不能将 P0 真实验收标记为完成。
+- Docker 已安装，但直接 Docker Hub 拉取超时，Xget Docker Hub/GHCR 加速地址返回 429 限流；真实 Memos 容器联调未执行完成，不能将 P0 真实验收标记为完成。

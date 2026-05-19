@@ -22,6 +22,9 @@ class MemosClient:
     def _url(self, path: str) -> str:
         return f"{self.base_url.rstrip('/')}/{path.lstrip('/')}"
 
+    async def get_health(self) -> dict[str, Any]:
+        return await self._request("GET", "/api/v1/health")
+
     async def get_memo(self, memo_uid: str) -> dict[str, Any]:
         return await self._request("GET", f"/api/v1/memos/{memo_uid}")
 
@@ -68,4 +71,3 @@ class MemosClient:
                 f"Memos request failed: {method} {path} -> {response.status_code}"
             ) from exc
         return response
-

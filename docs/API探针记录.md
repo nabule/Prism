@@ -20,11 +20,21 @@
 当前 Linux 环境执行结果：
 
 ```text
-docker: command not found
-docker compose: command not found
+Docker version 29.5.1
+Docker Compose version v5.1.3
 ```
 
-因此 P0 的真实 Memos 容器联调尚未完成。代码已具备 webhook 接收、任务落库、worker 拉取 memo 和可选探针评论能力；需要在 Docker 可用或提供远程 Memos 实例后执行真实验收。
+Docker 已可用，但镜像拉取仍受外部网络限制：
+
+```text
+Docker Hub: i/o timeout
+Xget Docker Hub mirror: 429 Too Many Requests
+Xget GHCR mirror: 429 Too Many Requests
+```
+
+Docker Hub/GHCR 镜像已按 Xget 规则改用 `xget.xi-xu.me/cr/...` 加速地址。当前阻塞为 Xget 限流，非本地 Docker 安装问题。
+
+因此 P0 的真实 Memos 容器联调尚未完成。代码已具备 webhook 接收、任务落库、worker 拉取 memo 和可选探针评论能力；需要在镜像可拉取或提供远程 Memos 实例后执行真实验收。
 
 ## 待执行真实探针
 
@@ -36,4 +46,3 @@ docker compose: command not found
 6. 运行 worker。
 7. 确认 worker 能读取真实 memo 并标记任务成功。
 8. 如开启 `worker.create_probe_comment`，确认原 memo 下出现 P0 探针评论。
-

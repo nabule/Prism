@@ -53,4 +53,4 @@ def test_job_claim_fail_and_retry_flow(tmp_path):
     assert retried is not None
     assert retried.status == "pending"
     assert retried.error is None
-
+    assert retried.retry_count == 0

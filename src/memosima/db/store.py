@@ -231,7 +231,7 @@ class Store:
             connection.execute(
                 """
                 UPDATE jobs
-                SET status = 'pending', error = NULL, updated_at = ?
+                SET status = 'pending', error = NULL, retry_count = 0, updated_at = ?
                 WHERE id = ? AND status IN ('failed', 'waiting_user')
                 """,
                 (now, job_id),

@@ -7,7 +7,9 @@ import httpx
 
 
 class MemosClientError(RuntimeError):
-    pass
+    def __init__(self, message: str, status_code: int | None = None):
+        super().__init__(message)
+        self.status_code = status_code
 
 
 @dataclass(frozen=True)
@@ -24,6 +26,28 @@ class MemosClient:
 
     async def get_health(self) -> dict[str, Any]:
         return await self._request("GET", "/api/v1/health")
+
+    async def create_user(
+        self,
+        *,
+        username: str,
+        password: str,
+        email: str = "",
+    ) -> dict[str, Any]:
+        return await self._request(
+            "POST",
+            "/api/v1/users",
+            json={"username": username, "password": password, "email": email},
+            include_auth=False,
+        )
+
+    async def sign_in(self, *, username: str, password: str) -> dict[str, Any]:
+        return await self._request(
+            "POST",
+            "/api/v1/auth/signin",
+            json={"passwordCredentials": {"username": username, "password": password}},
+            include_auth=False,
+        )
 
     async def get_memo(self, memo_uid: str) -> dict[str, Any]:
         return await self._request("GET", f"/api/v1/memos/{memo_uid}")
@@ -46,8 +70,15 @@ class MemosClient:
         response = await self._raw_request("GET", resource_name)
         return response.content
 
-    async def _request(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
-        response = await self._raw_request(method, path, **kwargs)
+    async def _request(
+        self,
+        method: str,
+        path: str,
+        *,
+        include_auth: bool = True,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        response = await self._raw_request(method, path, include_auth=include_auth, **kwargs)
         try:
             data = response.json()
         except ValueError as exc:
@@ -56,18 +87,27 @@ class MemosClient:
             raise MemosClientError(f"Memos returned unexpected response for {path}")
         return data
 
-    async def _raw_request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
+    async def _raw_request(
+        self,
+        method: str,
+        path: str,
+        *,
+        include_auth: bool = True,
+        **kwargs: Any,
+    ) -> httpx.Response:
+        headers = self._headers() if include_auth else {}
         async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
             response = await client.request(
                 method,
                 self._url(path),
-                headers=self._headers(),
+                headers=headers,
                 **kwargs,
             )
         try:
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
             raise MemosClientError(
-                f"Memos request failed: {method} {path} -> {response.status_code}"
+                f"Memos request failed: {method} {path} -> {response.status_code}",
+                status_code=response.status_code,
             ) from exc
         return response

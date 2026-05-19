@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>个人 AI 知识库系统开发计划与验收标准</title>
+<style>:root{color-scheme:light dark;--bg:#f7f8fa;--fg:#1f2937;--muted:#667085;--panel:#fff;--border:#d0d5dd;--accent:#2563eb;--code:#101828;--codebg:#eef2f6}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{max-width:1040px;margin:0 auto;padding:40px 24px 72px}article{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:32px;box-shadow:0 1px 2px rgba(16,24,40,.05)}h1,h2,h3{line-height:1.25;margin:1.4em 0 .6em}h1{margin-top:0;font-size:2rem}h2{border-top:1px solid var(--border);padding-top:1.1em}a{color:var(--accent)}table{border-collapse:collapse;width:100%;margin:1rem 0;display:block;overflow-x:auto}th,td{border:1px solid var(--border);padding:.55rem .7rem;text-align:left;vertical-align:top}th{background:#f2f4f7}pre{background:var(--codebg);color:var(--code);padding:1rem;border-radius:8px;overflow-x:auto}code{background:var(--codebg);color:var(--code);padding:.12rem .28rem;border-radius:4px}pre code{background:transparent;padding:0}blockquote{border-left:4px solid var(--border);margin:1rem 0;padding:.2rem 1rem;color:var(--muted)}.meta{color:var(--muted);font-size:.92rem;margin-bottom:1.5rem}.toc{background:#f9fafb;border:1px solid var(--border);border-radius:8px;padding:1rem;margin:1rem 0 1.5rem}.toc a{display:inline-block;margin:.15rem .6rem .15rem 0}@media (prefers-color-scheme:dark){:root{--bg:#0b1220;--fg:#e5e7eb;--muted:#9ca3af;--panel:#111827;--border:#374151;--accent:#60a5fa;--code:#e5e7eb;--codebg:#1f2937}th{background:#1f2937}.toc{background:#111827}}</style>
+</head>
+<body>
+<main>
+<article>
+<div class="meta">来源：开发计划与验收标准-个人AI知识库系统.html</div>
+<h1>个人 AI 知识库系统开发计划与验收标准</h1>
+<h2>1. 交付原则</h2>
+<ol>
+<li>每个阶段必须有可运行产物。</li>
+<li>所有代码完成标准是真实测试通过。</li>
+<li>更新代码时同步更新架构、设计和使用说明文档。</li>
+<li>Git 提交使用中文，并按独立功能点详细说明提交内容。</li>
+<li>不覆盖原始 memo，AI 产物以新 memo 形式创建并关联来源。</li>
+</ol>
+<h2>2. 阶段总览</h2>
+<table>
+<thead>
+<tr>
+<th>阶段</th>
+<th>周期</th>
+<th>目标</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>P0</td>
+<td>1-2 天</td>
+<td>技术探针与项目骨架</td>
+</tr>
+<tr>
+<td>P1</td>
+<td>第 1 周</td>
+<td>Memos 联调与任务系统</td>
+</tr>
+<tr>
+<td>P2</td>
+<td>第 2 周</td>
+<td>AI 整理、标签审核、澄清</td>
+</tr>
+<tr>
+<td>P3</td>
+<td>第 3 周</td>
+<td>附件解析、索引、简单问答</td>
+</tr>
+<tr>
+<td>P4</td>
+<td>第 4 周</td>
+<td>自动文档、版本、备份恢复</td>
+</tr>
+<tr>
+<td>P5</td>
+<td>第 5 周可选</td>
+<td>稳定性、文档、部署验收</td>
+</tr>
+</tbody></table>
+<h2>3. P0：技术探针与项目骨架</h2>
+<h3>3.1 目标</h3>
+<p>确认 Memos 当前版本 API、Webhook、评论、附件下载、memo 创建和关联能力，建立项目基础结构。</p>
+<h3>3.2 任务</h3>
+<ul>
+<li>初始化代码仓库。</li>
+<li>创建 Docker Compose 草案。</li>
+<li>固定 Memos 镜像版本。</li>
+<li>启动本地 Memos 实例。</li>
+<li>创建测试账号和 API token。</li>
+<li>配置 Memos webhook。</li>
+<li>验证 webhook payload。</li>
+<li>验证创建 memo、读取 memo、创建评论、新建 memo、资源下载。</li>
+<li>创建项目目录结构。</li>
+<li>创建基础配置文件示例。</li>
+</ul>
+<h3>3.3 验收标准</h3>
+<ul>
+<li>可以在 NAS/Linux 或本机 Linux 环境启动 Memos。</li>
+<li>Sidecar 能收到真实 Memos webhook。</li>
+<li>Sidecar 能通过 API 读取 memo。</li>
+<li>Sidecar 能创建测试评论或测试 memo。</li>
+<li>API 探针结果记录到开发文档。</li>
+</ul>
+<h3>3.4 真实测试</h3>
+<pre><code class="language-text">手动创建一条 Memos memo
+-&gt; webhook 到达 Sidecar
+-&gt; Sidecar 拉取 memo 详情
+-&gt; Sidecar 创建一条测试评论
+</code></pre>
+<h2>4. P1：Memos 联调与任务系统</h2>
+<h3>4.1 目标</h3>
+<p>实现可重试、可观测、幂等的后台任务框架。</p>
+<h3>4.2 任务</h3>
+<ul>
+<li>实现 FastAPI 应用。</li>
+<li>实现 Memos Client。</li>
+<li>实现 SQLite 数据库迁移。</li>
+<li>实现 jobs 表和 worker 轮询。</li>
+<li>实现 webhook 幂等处理。</li>
+<li>实现任务状态流转。</li>
+<li>实现日志与错误记录。</li>
+<li>实现健康检查接口。</li>
+</ul>
+<h3>4.3 验收标准</h3>
+<ul>
+<li>webhook 接收后快速返回。</li>
+<li>后台 worker 能异步处理 memo。</li>
+<li>同一 webhook 重复发送不会重复创建任务。</li>
+<li>失败任务记录错误并可重试。</li>
+<li>任务状态可查询。</li>
+</ul>
+<h3>4.4 真实测试</h3>
+<pre><code class="language-text">连续创建 3 条 memo
+-&gt; 产生 3 个 process_memo 任务
+-&gt; worker 全部处理成功
+-&gt; 重放同一个 webhook 不产生重复结果
+</code></pre>
+<h2>5. P2：AI 整理、标签审核、澄清</h2>
+<h3>5.1 目标</h3>
+<p>完成从原始 memo 到 AI 整理 memo 的闭环，支持受控标签树和待审核新标签。</p>
+<h3>5.2 任务</h3>
+<ul>
+<li>实现 LLM provider 配置。OpenAI-compatible provider 已完成。</li>
+<li>支持 OpenRouter、Qwen、DeepSeek、自定义 endpoint。当前配置已支持同类 OpenAI-compatible endpoint。</li>
+<li>设计 AI 整理 Prompt 与 JSON 输出 schema。已完成基础 schema。</li>
+<li>实现输出校验与失败重试。JSON 输出校验已完成，失败重试沿用任务重试机制。</li>
+<li>实现标签树加载。</li>
+<li>实现别名映射和禁用词校验。</li>
+<li>实现候选标签创建。</li>
+<li>实现候选标签审核 API。</li>
+<li>实现 AI 整理 memo 创建。已支持本地模板版和 OpenAI-compatible LLM 版。</li>
+<li>实现原始 memo 与 AI memo 关联。已支持 Sidecar 本地来源关联和 Memos 原生 <code>REFERENCE</code> relation。</li>
+<li>实现待澄清判断和评论追问。本地规则版已完成，任务会进入 <code>waiting_user</code>。</li>
+</ul>
+<h3>5.3 验收标准</h3>
+<ul>
+<li>原始 memo 不被覆盖。</li>
+<li>AI 整理结果新建为 memo。当前已支持本地模板和 LLM JSON 草案两种来源。</li>
+<li>AI 整理 memo 包含 <code>#系统/AI整理</code>。当前已通过自动化测试。</li>
+<li>已有标签被优先使用。</li>
+<li>新标签进入 candidate 状态。</li>
+<li>审核通过后标签进入 active 状态。当前已写入 Sidecar <code>business_tags</code> 表，并被 worker 后续处理使用。</li>
+<li>澄清问题以评论形式写入原始 memo，任务进入 <code>waiting_user</code>。当前已通过自动化测试。</li>
+</ul>
+<h3>5.4 真实测试</h3>
+<pre><code class="language-text">输入明确 memo
+-&gt; 新建 AI 整理 memo
+-&gt; 使用已有标签
+
+输入涉及新主题 memo
+-&gt; 创建候选标签
+-&gt; 审核通过
+-&gt; 重新处理或补全 AI 整理 memo
+
+输入指代不明 memo
+-&gt; 原 memo 下出现 AI 澄清评论
+-&gt; 任务进入 waiting_user
+</code></pre>
+<h2>6. P3：附件解析、索引、简单问答</h2>
+<h3>6.1 目标</h3>
+<p>完成指定附件格式解析、语义单元索引和最小问答闭环。</p>
+<h3>6.2 任务</h3>
+<ul>
+<li>实现附件下载。txt/md 路径已完成。</li>
+<li>实现 txt/md 解析。已写入 <code>artifacts</code> 表。</li>
+<li>实现 docx/xlsx/pdf 文本解析。</li>
+<li>实现 drawio XML 节点提取。</li>
+<li>实现 Mind Elixir JSON 大纲解析。</li>
+<li>实现 artifacts 表。已完成。</li>
+<li>实现 vector_units 表。</li>
+<li>集成 sqlite-vec。</li>
+<li>实现 embedding provider 配置。</li>
+<li>实现语义单元切分。</li>
+<li>实现 <code>#系统/问答</code> memo 识别。</li>
+<li>实现检索与回答生成。</li>
+<li>新建 AI 回答 memo 并关联问题 memo。</li>
+</ul>
+<h3>6.3 验收标准</h3>
+<ul>
+<li>支持格式能生成 Markdown artifact。txt/md 已通过自动化测试。</li>
+<li>不支持格式只记录附件，不解析。当前会在 job <code>result.attachments</code> 中标记 skipped。</li>
+<li>PDF 只提取文本层，不做 OCR。</li>
+<li>Mind Elixir JSON 能转为层级大纲。</li>
+<li>问答结果包含来源引用。</li>
+<li>问答结果新建 memo 或评论回复，建议新建 memo。</li>
+</ul>
+<h3>6.4 真实测试</h3>
+<pre><code class="language-text">上传 docx/xlsx/pdf/drawio/mind-elixir-json
+-&gt; 解析出 Markdown artifact
+-&gt; 写入向量索引
+
+创建 #系统/问答 memo
+-&gt; 系统检索相关内容
+-&gt; 新建回答 memo
+-&gt; 回答包含来源 memo 链接
+</code></pre>
+<h2>7. P4：自动文档、版本、备份恢复</h2>
+<h3>7.1 目标</h3>
+<p>完成多触发模式自动文档生成、最近 N 版保留、本地备份恢复。</p>
+<h3>7.2 任务</h3>
+<ul>
+<li>实现文档生成配置。</li>
+<li>实现标签审核通过触发生成。</li>
+<li>实现定时生成。</li>
+<li>实现手动全局生成。</li>
+<li>实现手动指定标签生成。</li>
+<li>实现手动指定标签层级以下全部生成。</li>
+<li>实现 document_versions 表。</li>
+<li>实现默认保留最近 5 个版本。</li>
+<li>实现本地备份。</li>
+<li>实现备份 manifest。</li>
+<li>实现 checksum 校验。</li>
+<li>实现恢复前检查。</li>
+<li>编写恢复操作文档。</li>
+</ul>
+<h3>7.3 验收标准</h3>
+<ul>
+<li>审核标签通过后可触发对应文档生成。</li>
+<li>定时任务可生成指定范围文档。</li>
+<li>手动接口可生成全局、单标签、标签子树文档。</li>
+<li>同一文档只保留最近 N 个版本。</li>
+<li>备份包包含 Memos 数据、附件、Sidecar 数据、向量库、配置。</li>
+<li>备份包校验通过。</li>
+<li>恢复演练成功。</li>
+</ul>
+<h3>7.4 真实测试</h3>
+<pre><code class="language-text">审核一个新标签
+-&gt; 自动生成该标签文档
+
+手动触发 #项目/个人AI知识库
+-&gt; 新建 AI 文档 memo
+-&gt; 连续生成 6 次
+-&gt; 默认只保留最近 5 个版本
+
+执行备份
+-&gt; 校验 checksum
+-&gt; 在测试目录恢复
+-&gt; 服务可启动且数据可读
+</code></pre>
+<h2>8. P5：稳定性、文档、部署验收</h2>
+<h3>8.1 目标</h3>
+<p>完善部署、使用、故障处理和真实验收文档。</p>
+<h3>8.2 任务</h3>
+<ul>
+<li>编写部署手册。</li>
+<li>编写配置说明。</li>
+<li>编写使用手册。</li>
+<li>编写备份恢复手册。</li>
+<li>编写常见问题。</li>
+<li>增加日志轮转配置。</li>
+<li>增加任务失败告警预留。</li>
+<li>增加真实样例数据。</li>
+<li>完成 NAS/Linux 部署演练。</li>
+</ul>
+<h3>8.3 验收标准</h3>
+<ul>
+<li>按部署手册可从零启动系统。</li>
+<li>按使用手册可完成 memo 整理、标签审核、文档生成、问答、备份。</li>
+<li>常见错误有明确排查方式。</li>
+<li>文档与实际配置一致。</li>
+</ul>
+<h2>9. 里程碑交付物</h2>
+<table>
+<thead>
+<tr>
+<th>里程碑</th>
+<th>交付物</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>M0</td>
+<td>API 探针记录、项目骨架、Docker Compose 草案</td>
+</tr>
+<tr>
+<td>M1</td>
+<td>Webhook 接入、任务系统、Memos Client</td>
+</tr>
+<tr>
+<td>M2</td>
+<td>AI 整理、标签审核、澄清闭环</td>
+</tr>
+<tr>
+<td>M3</td>
+<td>附件解析、向量索引、简单问答</td>
+</tr>
+<tr>
+<td>M4</td>
+<td>自动文档、版本保留、本地备份恢复</td>
+</tr>
+<tr>
+<td>M5</td>
+<td>部署手册、使用手册、验收报告</td>
+</tr>
+</tbody></table>
+<h2>10. 风险清单</h2>
+<table>
+<thead>
+<tr>
+<th>风险</th>
+<th>优先级</th>
+<th>应对</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Memos API 与文档不一致</td>
+<td>高</td>
+<td>P0 真实探针，固定版本</td>
+</tr>
+<tr>
+<td>AI 标签泛滥</td>
+<td>高</td>
+<td>候选审核、别名、禁用词、相似标签提示</td>
+</tr>
+<tr>
+<td>附件解析质量不稳定</td>
+<td>中</td>
+<td>保留原文件，解析失败不阻断</td>
+</tr>
+<tr>
+<td>NAS 性能不足</td>
+<td>中</td>
+<td>后台任务限流，定时低峰执行</td>
+</tr>
+<tr>
+<td>多 provider 输出差异</td>
+<td>中</td>
+<td>JSON schema 校验，prompt 版本管理</td>
+</tr>
+<tr>
+<td>备份恢复误操作</td>
+<td>高</td>
+<td>恢复前快照、checksum、恢复演练</td>
+</tr>
+</tbody></table>
+<h2>11. 初始任务拆分建议</h2>
+<h3>11.1 工程初始化</h3>
+<ul>
+<li>创建 Python 项目。</li>
+<li>配置依赖管理。</li>
+<li>创建 Docker Compose。</li>
+<li>添加 lint/test 命令。</li>
+<li>初始化文档目录。</li>
+</ul>
+<h3>11.2 Memos 接入</h3>
+<ul>
+<li>实现 API token 配置。</li>
+<li>实现 memo 读取。</li>
+<li>实现 memo 创建。</li>
+<li>实现评论创建。</li>
+<li>实现资源下载。</li>
+<li>实现 webhook handler。</li>
+</ul>
+<h3>11.3 标签与 AI</h3>
+<ul>
+<li>定义标签树 schema。</li>
+<li>实现标签路径校验。</li>
+<li>实现候选标签表。</li>
+<li>实现 LLM structured output。</li>
+<li>实现 AI 整理 memo 创建。</li>
+</ul>
+<h3>11.4 附件与索引</h3>
+<ul>
+<li>实现解析器接口。</li>
+<li>实现各格式解析器。</li>
+<li>实现 artifact 存储。</li>
+<li>实现 embedding。</li>
+<li>实现 sqlite-vec 检索。</li>
+</ul>
+<h3>11.5 文档与备份</h3>
+<ul>
+<li>实现文档生成配置。</li>
+<li>实现生成任务。</li>
+<li>实现版本清理。</li>
+<li>实现备份包。</li>
+<li>实现恢复校验。</li>
+</ul>
+<h2>12. 完成定义</h2>
+<p>一个功能点完成必须满足：</p>
+<ol>
+<li>代码已实现。</li>
+<li>配置示例已更新。</li>
+<li>架构、设计或使用文档已更新。</li>
+<li>单元测试通过。</li>
+<li>涉及 Memos 的功能通过真实 Memos 实例测试。</li>
+<li>错误路径有记录和可排查信息。</li>
+<li>Git 提交信息为中文，并说明独立功能点。</li>
+</ol>
+<h2>13. P0-P1 当前执行记录（2026-05-19）</h2>
+<p>已完成：</p>
+<ul>
+<li>Python/FastAPI 项目骨架。</li>
+<li>Docker Compose 与 Dockerfile 草案。</li>
+<li>配置示例：<code>app.yaml</code>、<code>models.yaml</code>、<code>taxonomy.yaml</code>。</li>
+<li>Memos webhook 接收与 SQLite 幂等任务创建。</li>
+<li>Memos 用户 webhook 自动配置探针。</li>
+<li>jobs 管理查询与 retry 接口。</li>
+<li>SQLite worker 轮询与 <code>process_memo</code> 基础处理。</li>
+<li>Memos Client 基础 API 封装。</li>
+<li>OpenRouter 默认模型配置为 <code>deepseek/deepseek-v4-flash:free</code>。</li>
+<li>开发运行、配置、API 探针和验收记录文档。</li>
+<li>P2 第一片：标签树配置加载、本地整理草案生成、worker job result 输出 <code>ai_plan</code>。</li>
+<li>P2 第二片：候选标签落库，提供 <code>/admin/tag-candidates</code> 查询、approve、reject 管理接口。</li>
+</ul>
+<p>自动化测试：</p>
+<pre><code class="language-text">npx nx test sidecar
+20 passed
+</code></pre>
+<p>阻塞项：</p>
+<ul>
+<li>Docker 已安装；直接 Docker Hub 拉取超时，旧 Xget 域名返回 429，新 Xget 域名 <code>xget.your-domain.com</code> 已验证可拉取 Memos 并构建 Sidecar。真实 Memos 手动 webhook 投递、worker 读取 memo 和任务成功流转已通过。Memos 内置 webhook 管理接口已验证，且已通过 <code>cloudflared</code> 临时公网隧道完成自动回调验收：memo <code>memos/aJMxBAuM2SpAdcZsQd4dPe</code> 自动进入 Sidecar，job <code>3</code> 成功，worker 读取真实 Memos API 返回 <code>200 OK</code>。Memos <code>0.28.0</code> 会拒绝指向本机/Docker 内网/私有 IP 的 webhook URL，长期部署仍需要公网可达 <code>MEMOS_WEBHOOK_URL</code> 或正式隧道。</li>
+</ul>
+
+</article>
+</main>
+</body>
+</html>

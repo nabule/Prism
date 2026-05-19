@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>配置说明</title>
+<style>:root{color-scheme:light dark;--bg:#f7f8fa;--fg:#1f2937;--muted:#667085;--panel:#fff;--border:#d0d5dd;--accent:#2563eb;--code:#101828;--codebg:#eef2f6}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{max-width:1040px;margin:0 auto;padding:40px 24px 72px}article{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:32px;box-shadow:0 1px 2px rgba(16,24,40,.05)}h1,h2,h3{line-height:1.25;margin:1.4em 0 .6em}h1{margin-top:0;font-size:2rem}h2{border-top:1px solid var(--border);padding-top:1.1em}a{color:var(--accent)}table{border-collapse:collapse;width:100%;margin:1rem 0;display:block;overflow-x:auto}th,td{border:1px solid var(--border);padding:.55rem .7rem;text-align:left;vertical-align:top}th{background:#f2f4f7}pre{background:var(--codebg);color:var(--code);padding:1rem;border-radius:8px;overflow-x:auto}code{background:var(--codebg);color:var(--code);padding:.12rem .28rem;border-radius:4px}pre code{background:transparent;padding:0}blockquote{border-left:4px solid var(--border);margin:1rem 0;padding:.2rem 1rem;color:var(--muted)}.meta{color:var(--muted);font-size:.92rem;margin-bottom:1.5rem}.toc{background:#f9fafb;border:1px solid var(--border);border-radius:8px;padding:1rem;margin:1rem 0 1.5rem}.toc a{display:inline-block;margin:.15rem .6rem .15rem 0}@media (prefers-color-scheme:dark){:root{--bg:#0b1220;--fg:#e5e7eb;--muted:#9ca3af;--panel:#111827;--border:#374151;--accent:#60a5fa;--code:#e5e7eb;--codebg:#1f2937}th{background:#1f2937}.toc{background:#111827}}</style>
+</head>
+<body>
+<main>
+<article>
+<div class="meta">来源：docs/配置说明.html</div>
+<h1>配置说明</h1>
+<h2>环境变量</h2>
+<p>复制示例文件：</p>
+<pre><code class="language-bash">cp .env.example .env
+</code></pre>
+<p>必须配置：</p>
+<table>
+<thead>
+<tr>
+<th>变量</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>SIDECAR_ADMIN_TOKEN</code></td>
+<td>管理接口 Bearer 令牌</td>
+</tr>
+<tr>
+<td><code>MEMOS_BASE_URL</code></td>
+<td>Memos 服务地址</td>
+</tr>
+<tr>
+<td><code>MEMOS_API_TOKEN</code></td>
+<td>Memos API token</td>
+</tr>
+<tr>
+<td><code>MEMOS_WEBHOOK_URL</code></td>
+<td>Memos 回调 Sidecar 的公网 URL，例如 <code>https://your-public-sidecar.example.com/webhooks/memos</code></td>
+</tr>
+<tr>
+<td><code>OPENROUTER_API_KEY</code></td>
+<td>OpenRouter API key</td>
+</tr>
+</tbody></table>
+<p><code>OPENROUTER_API_KEY</code> 只通过环境变量读取，不写入仓库。不要把真实 key 提交到 git。</p>
+<p><code>MEMOS_API_TOKEN</code> 建议使用 Memos Personal Access Token，而不是登录接口返回的短期 access token。可通过 Nx 探针生成：</p>
+<pre><code class="language-bash">npx nx run sidecar:probe-memos -- \
+  --bootstrap-username test \
+  --bootstrap-password testtest \
+  --create-pat \
+  --pat-output-env-file /tmp/memosima-pat.env
+</code></pre>
+<p>探针默认不会在 JSON 输出中显示 PAT 原文；临时 env 文件只用于本机注入容器或复制到受控密钥管理位置。</p>
+<h2>app.yaml</h2>
+<p><code>config/app.yaml</code> 控制 Sidecar 基础行为：</p>
+<ul>
+<li><code>database.path</code>：Sidecar SQLite 路径。</li>
+<li><code>security.admin_token_env</code>：管理 token 的环境变量名。</li>
+<li><code>memos.base_url_env</code>：Memos 地址的环境变量名。</li>
+<li><code>memos.api_token_env</code>：Memos token 的环境变量名。</li>
+<li><code>memos.webhook_url_env</code>：Memos 内置 webhook 回调 URL 的环境变量名。</li>
+<li><code>worker.max_attempts</code>：任务失败后的最大尝试次数。</li>
+<li><code>worker.create_probe_comment</code>：P0 探针是否在 memo 下写入测试评论，默认关闭。</li>
+</ul>
+<p>Memos <code>0.28.0</code> 会拒绝 webhook URL 指向本机、Docker 内网或其他保留/私有 IP。Compose 内部地址 <code>http://sidecar:8080/webhooks/memos</code> 不能用于 Memos 内置 webhook；需要配置公网可达 URL，或使用公网隧道转发到本机 Sidecar。</p>
+<h2>models.yaml</h2>
+<p>当前默认模型配置：</p>
+<pre><code class="language-yaml">default_provider: openrouter
+providers:
+  openrouter:
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    default_model: deepseek/deepseek-v4-flash:free
+</code></pre>
+<p>worker 会读取默认 provider，并在对应 <code>api_key_env</code> 环境变量存在时发起 OpenAI-compatible <code>/chat/completions</code> 调用。模型输出必须是 JSON 对象，Sidecar 会校验 <code>title</code>、<code>summary</code>、<code>key_points</code>、<code>todos</code>、<code>needs_clarification</code> 和 <code>clarification_question</code> 字段。没有配置 key 时不调用 LLM，自动回退到本地模板整理。</p>
+<h2>taxonomy.yaml</h2>
+<p><code>config/taxonomy.yaml</code> 保存系统标签、初始业务标签、别名和禁用标签。路径由 <code>config/app.yaml</code> 中的 <code>taxonomy.path</code> 指定。</p>
+<p>当前 P2 本地整理草案会读取该配置：</p>
+<ul>
+<li><code>system_tags</code>：用于标识原始记录、AI 整理、待澄清、标签待审核等状态。</li>
+<li><code>business_tags</code>：已审核业务标签；只有 <code>status: active</code> 的标签会被直接使用。</li>
+<li><code>aliases</code>：把常用别名映射到正式业务标签。</li>
+<li><code>disabled</code>：禁用标签，命中后不会进入正式标签或候选标签。</li>
+</ul>
+<p>worker 会把解析结果写入 job <code>result.ai_plan</code>。内容明确时会用 <code>system_tags.ai_summary</code> 创建 AI 整理 memo；内容过短或包含问号时会用 <code>system_tags.pending_clarification</code> 标记草案，在原 memo 下写澄清评论，并把任务置为 <code>waiting_user</code>。</p>
+<p>候选标签持久化后会进入 Sidecar SQLite 的 <code>tag_candidates</code> 表，可通过 <code>/admin/tag-candidates</code> 查询，并通过 <code>/admin/tag-candidates/{id}/approve</code> 或 <code>/admin/tag-candidates/{id}/reject</code> 审核。审核通过后会同步写入 <code>business_tags</code> 表并标记为 <code>active</code>，worker 后续会把这些标签与 <code>config/taxonomy.yaml</code> 中的 active 标签合并使用。当前审核结果不会自动改写 <code>config/taxonomy.yaml</code>。</p>
+<h2>limits</h2>
+<p><code>limits.max_attachment_mb</code> 控制单个附件解析大小上限。<code>limits.allowed_parse_extensions</code> 控制允许进入解析流程的扩展名。</p>
+<p>当前已实现 <code>.txt</code> 和 <code>.md</code> 的安全文本解析；<code>.docx</code>、<code>.xlsx</code>、<code>.pdf</code>、<code>.drawio</code>、<code>.drawio.svg</code> 和 <code>.json</code> 仍保留在配置中，后续接入专用解析器前会被跳过，不会主动执行未知格式内容。</p>
+
+</article>
+</main>
+</body>
+</html>

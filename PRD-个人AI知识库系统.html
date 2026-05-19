@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>个人 AI 知识库系统 PRD</title>
+<style>:root{color-scheme:light dark;--bg:#f7f8fa;--fg:#1f2937;--muted:#667085;--panel:#fff;--border:#d0d5dd;--accent:#2563eb;--code:#101828;--codebg:#eef2f6}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{max-width:1040px;margin:0 auto;padding:40px 24px 72px}article{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:32px;box-shadow:0 1px 2px rgba(16,24,40,.05)}h1,h2,h3{line-height:1.25;margin:1.4em 0 .6em}h1{margin-top:0;font-size:2rem}h2{border-top:1px solid var(--border);padding-top:1.1em}a{color:var(--accent)}table{border-collapse:collapse;width:100%;margin:1rem 0;display:block;overflow-x:auto}th,td{border:1px solid var(--border);padding:.55rem .7rem;text-align:left;vertical-align:top}th{background:#f2f4f7}pre{background:var(--codebg);color:var(--code);padding:1rem;border-radius:8px;overflow-x:auto}code{background:var(--codebg);color:var(--code);padding:.12rem .28rem;border-radius:4px}pre code{background:transparent;padding:0}blockquote{border-left:4px solid var(--border);margin:1rem 0;padding:.2rem 1rem;color:var(--muted)}.meta{color:var(--muted);font-size:.92rem;margin-bottom:1.5rem}.toc{background:#f9fafb;border:1px solid var(--border);border-radius:8px;padding:1rem;margin:1rem 0 1.5rem}.toc a{display:inline-block;margin:.15rem .6rem .15rem 0}@media (prefers-color-scheme:dark){:root{--bg:#0b1220;--fg:#e5e7eb;--muted:#9ca3af;--panel:#111827;--border:#374151;--accent:#60a5fa;--code:#e5e7eb;--codebg:#1f2937}th{background:#1f2937}.toc{background:#111827}}</style>
+</head>
+<body>
+<main>
+<article>
+<div class="meta">来源：PRD-个人AI知识库系统.html</div>
+<h1>个人 AI 知识库系统 PRD</h1>
+<h2>1. 产品定位</h2>
+<p>本产品是基于 Memos 的个人私有 AI 知识库 Sidecar 系统。Memos 负责知识采集、原始资料保存和日常阅读；旁路 AI 服务负责内容整理、标签审核、附件解析、自动文档生成、问答检索、备份恢复等智能能力。</p>
+<p>v1 优先服务个人使用场景，部署目标为 NAS 与 Linux 服务器。系统设计需要预留多人、多工作区、更多存储目标和独立管理页面的扩展空间。</p>
+<h2>2. 产品目标</h2>
+<ol>
+<li>保留 Memos 的轻量、隐私、低成本优势，不魔改 Memos 主体。</li>
+<li>将零散 memo、附件和结构化文件整理成可复用的知识资产。</li>
+<li>通过受控标签树避免标签无限膨胀，AI 可建议新标签，但必须经过审核。</li>
+<li>支持按标签、层级和全局范围自动生成知识文档。</li>
+<li>支持轻量问答检索，第一版采用最简单入口。</li>
+<li>支持本地整体备份恢复，确保 NAS/Linux 私有部署可长期维护。</li>
+</ol>
+<h2>3. 用户与场景</h2>
+<h3>3.1 目标用户</h3>
+<ul>
+<li>个人知识管理用户。</li>
+<li>程序员、研究者、产品经理、自由职业者等长期积累资料的人。</li>
+<li>后续可扩展到小团队或家庭 NAS 共享知识库。</li>
+</ul>
+<h3>3.2 核心场景</h3>
+<ol>
+<li>用户在 Memos 中写下一段原始想法、会议记录、学习笔记或任务线索。</li>
+<li>用户上传 Markdown、Word、Excel、PDF、drawio、Mind Elixir JSON 等附件。</li>
+<li>AI 自动生成整理版 memo，并关联原始 memo。</li>
+<li>AI 根据已有标签树匹配标签；无法匹配时提交候选标签等待审核。</li>
+<li>标签审核通过后，触发相关标签文档自动生成或更新。</li>
+<li>用户通过简单入口提出问题，系统基于已整理知识回答并附来源。</li>
+<li>系统定期将 Memos 数据、附件、Sidecar 数据、配置和索引打包备份。</li>
+</ol>
+<h2>4. 已确认产品决策</h2>
+<table>
+<thead>
+<tr>
+<th>决策项</th>
+<th>结论</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>初始使用范围</td>
+<td>个人使用，后续考虑多人</td>
+</tr>
+<tr>
+<td>部署目标</td>
+<td>NAS、Linux</td>
+</tr>
+<tr>
+<td>AI 整理结果</td>
+<td>新建 memo，并与原始 memo 建立关联</td>
+</tr>
+<tr>
+<td>原始内容处理</td>
+<td>保留原始 memo，不覆盖原文</td>
+</tr>
+<tr>
+<td>内容区分方式</td>
+<td>使用系统标签区分原始、AI 整理、AI 文档、待审核等类型</td>
+</tr>
+<tr>
+<td>标签策略</td>
+<td>AI 可自动提出新标签，但进入待审核</td>
+</tr>
+<tr>
+<td>标签审核入口</td>
+<td>第一版使用配置文件或简单管理接口，后续可做 Web 页面</td>
+</tr>
+<tr>
+<td>模型供应商</td>
+<td>支持 OpenRouter、Qwen、DeepSeek、自定义 OpenAI-compatible endpoint</td>
+</tr>
+<tr>
+<td>问答入口</td>
+<td>暂时搁置复杂页面，第一版采用最简单实现</td>
+</tr>
+<tr>
+<td>附件解析</td>
+<td>纯文本、Markdown、Word、Excel、PDF、drawio、Mind Elixir JSON</td>
+</tr>
+<tr>
+<td>OCR</td>
+<td>暂不实现</td>
+</tr>
+<tr>
+<td>其他附件</td>
+<td>只保存，不解析</td>
+</tr>
+<tr>
+<td>自动文档触发</td>
+<td>标签确认后、定期、手动全局、手动指定标签、手动指定层级以下</td>
+</tr>
+<tr>
+<td>文档版本</td>
+<td>保留最近 N 个版本，默认 N=5</td>
+</tr>
+<tr>
+<td>备份目标</td>
+<td>本地目录</td>
+</tr>
+</tbody></table>
+<h2>5. 标签体系</h2>
+<h3>5.1 系统标签</h3>
+<p>系统标签用于标识处理状态和内容类型，建议统一放在 <code>#系统/</code> 命名空间下。</p>
+<table>
+<thead>
+<tr>
+<th>标签</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>#系统/原始记录</code></td>
+<td>用户原始输入或原始附件说明</td>
+</tr>
+<tr>
+<td><code>#系统/AI整理</code></td>
+<td>AI 生成的结构化整理 memo</td>
+</tr>
+<tr>
+<td><code>#系统/AI文档</code></td>
+<td>AI 生成的聚合文档</td>
+</tr>
+<tr>
+<td><code>#系统/待澄清</code></td>
+<td>需要用户补充上下文</td>
+</tr>
+<tr>
+<td><code>#系统/标签待审核</code></td>
+<td>包含 AI 候选新标签，等待审核</td>
+</tr>
+<tr>
+<td><code>#系统/问答</code></td>
+<td>简单问答入口</td>
+</tr>
+<tr>
+<td><code>#系统/处理失败</code></td>
+<td>自动处理失败，需要排查</td>
+</tr>
+</tbody></table>
+<h3>5.2 业务标签</h3>
+<p>业务标签采用多级路径，例如：</p>
+<pre><code class="language-text">#项目/个人AI知识库/需求
+#项目/个人AI知识库/架构
+#技术/Python/FastAPI
+#技术/知识库/RAG
+</code></pre>
+<p>业务标签由受控标签树管理。AI 只能直接使用已审核标签；当需要新增标签时，必须创建候选记录，等待人工审核。</p>
+<h3>5.3 标签审核规则</h3>
+<ol>
+<li>AI 输出标签前必须读取当前标签树、别名和禁用词。</li>
+<li>命中别名时自动映射到正式标签。</li>
+<li>命中禁用词或近似重复标签时不允许创建。</li>
+<li>新标签候选需要包含名称、父标签、创建理由、相似现有标签、置信度。</li>
+<li>审核通过后才进入正式标签树。</li>
+<li>审核拒绝后需要记录原因，可选择映射到已有标签。</li>
+</ol>
+<h2>6. 功能需求</h2>
+<h3>6.1 Memos Webhook 接入</h3>
+<ul>
+<li>接收 Memos 创建、更新、删除事件。</li>
+<li>根据事件拉取 memo 详情。</li>
+<li>对重复事件进行幂等处理。</li>
+<li>记录任务状态、错误信息和重试次数。</li>
+</ul>
+<h3>6.2 AI 整理 memo</h3>
+<ul>
+<li>保留原始 memo。</li>
+<li>新建 AI 整理 memo。</li>
+<li>整理内容包括标题、摘要、关键点、待办、相关标签、来源链接。</li>
+<li>AI 整理 memo 需要关联原始 memo。</li>
+<li>处理成功后写入向量索引。</li>
+<li>处理失败时标记 <code>#系统/处理失败</code> 或记录失败任务。</li>
+</ul>
+<h3>6.3 人机澄清</h3>
+<ul>
+<li>当内容指代不明、标签归属不确定或关键信息缺失时，系统进入待澄清状态。</li>
+<li>系统在原始 memo 下创建评论，说明需要用户补充什么。</li>
+<li>原始 memo 或任务状态标记为待澄清。</li>
+<li>用户补充后，系统恢复处理。</li>
+</ul>
+<h3>6.4 待审核标签</h3>
+<ul>
+<li>AI 提出新标签时，创建待审核记录。</li>
+<li>第一版通过配置文件或简单管理接口审核。</li>
+<li>审核通过后触发相关自动文档策略。</li>
+<li>审核拒绝后任务可重新绑定到已有标签。</li>
+</ul>
+<h3>6.5 附件解析</h3>
+<p>第一版解析以下格式：</p>
+<table>
+<thead>
+<tr>
+<th>格式</th>
+<th>处理策略</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>.txt</code></td>
+<td>读取文本</td>
+</tr>
+<tr>
+<td><code>.md</code></td>
+<td>保留 Markdown 结构</td>
+</tr>
+<tr>
+<td><code>.docx</code></td>
+<td>转 Markdown</td>
+</tr>
+<tr>
+<td><code>.xlsx</code></td>
+<td>表格转 Markdown</td>
+</tr>
+<tr>
+<td><code>.pdf</code></td>
+<td>文本层提取，暂不 OCR</td>
+</tr>
+<tr>
+<td><code>.drawio</code> / <code>.drawio.svg</code></td>
+<td>提取 XML/文本节点，保留源文件链接</td>
+</tr>
+<tr>
+<td>Mind Elixir <code>.json</code></td>
+<td>解析节点树，转 Markdown 大纲</td>
+</tr>
+</tbody></table>
+<p>其他格式只保存附件信息，不进入解析和向量化。</p>
+<h3>6.6 自动文档生成</h3>
+<p>系统支持以下触发模式：</p>
+<ol>
+<li>标签审核通过后自动生成。</li>
+<li>定时生成，例如每日、每周。</li>
+<li>手动生成全局文档。</li>
+<li>手动生成某一个标签文档。</li>
+<li>手动生成某一级标签以下全部文档。</li>
+</ol>
+<p>生成文档以新 memo 形式写入 Memos，并标记 <code>#系统/AI文档</code>。同一文档保留最近 N 个版本，默认 N=5。</p>
+<h3>6.7 简单问答</h3>
+<p>第一版不做独立问答页面。建议支持以下最小闭环：</p>
+<ol>
+<li>用户创建包含 <code>#系统/问答</code> 的 memo。</li>
+<li>Sidecar 识别问题。</li>
+<li>系统基于向量索引和标签上下文检索资料。</li>
+<li>AI 生成回答。</li>
+<li>系统新建回答 memo 或在原 memo 评论中回复。</li>
+</ol>
+<p>默认建议新建回答 memo，并关联问题 memo，保持与 AI 整理结果一致。</p>
+<h3>6.8 备份恢复</h3>
+<p>第一版支持本地目录备份。备份内容包括：</p>
+<ul>
+<li>Memos SQLite 数据库。</li>
+<li>Memos 附件目录。</li>
+<li>Sidecar SQLite 数据库。</li>
+<li>向量索引数据库。</li>
+<li>配置文件。</li>
+<li>标签树导出。</li>
+<li>文档生成策略。</li>
+<li>版本信息与恢复说明。</li>
+</ul>
+<p>恢复流程需要支持校验备份包完整性，并提供恢复前检查。</p>
+<h2>7. 非功能需求</h2>
+<h3>7.1 隐私与安全</h3>
+<ul>
+<li>默认私有部署，不依赖公有云存储。</li>
+<li>模型供应商密钥通过环境变量或本地 secrets 文件配置。</li>
+<li>解析附件需要限制文件大小和允许格式。</li>
+<li>不对未知格式执行主动解析。</li>
+<li>管理接口需要鉴权。</li>
+</ul>
+<h3>7.2 可维护性</h3>
+<ul>
+<li>所有处理任务有状态记录。</li>
+<li>所有 AI 调用有审计日志。</li>
+<li>失败任务可重试。</li>
+<li>配置有示例文件和说明。</li>
+<li>文档与代码同步更新。</li>
+</ul>
+<h3>7.3 可扩展性</h3>
+<ul>
+<li>数据表预留 <code>workspace_id</code>、<code>user_id</code>。</li>
+<li>LLM 网关支持 OpenAI-compatible 扩展。</li>
+<li>向量存储通过接口封装，后续可替换。</li>
+<li>标签审核入口后续可从配置文件升级为 Web 管理页面。</li>
+</ul>
+<h3>7.4 性能要求</h3>
+<ul>
+<li>个人知识库规模下，万级 memo 能正常检索。</li>
+<li>Webhook 接收应快速返回，耗时任务进入后台队列。</li>
+<li>自动文档生成可异步执行，不阻塞日常 memo 使用。</li>
+</ul>
+<h2>8. 验收标准摘要</h2>
+<ol>
+<li>能部署 Memos 与 Sidecar，并完成 webhook 联调。</li>
+<li>创建原始 memo 后，系统能新建 AI 整理 memo 并关联来源。</li>
+<li>AI 使用已有标签时不产生待审核标签。</li>
+<li>AI 提出新标签时进入待审核流程。</li>
+<li>审核通过后，新标签进入正式标签树。</li>
+<li>支持指定格式附件解析。</li>
+<li>支持至少一种自动文档触发方式和一种手动触发方式。</li>
+<li>支持简单问答闭环。</li>
+<li>支持本地备份与恢复演练。</li>
+<li>所有核心功能通过真实 Memos 实例测试。</li>
+</ol>
+
+</article>
+</main>
+</body>
+</html>

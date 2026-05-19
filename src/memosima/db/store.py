@@ -44,6 +44,19 @@ class TagCandidateRecord:
     updated_at: str
 
 
+@dataclass(frozen=True)
+class MemoRecord:
+    id: int
+    workspace_id: str
+    memos_uid: str
+    type: str
+    source_memo_uid: str | None
+    content_hash: str | None
+    status: str
+    created_at: str
+    updated_at: str
+
+
 class Store:
     def __init__(self, database_path: str | Path):
         self.database_path = Path(database_path)
@@ -312,6 +325,35 @@ class Store:
                 ),
             )
 
+    def list_memos(
+        self,
+        *,
+        workspace_id: str,
+        memo_type: str | None = None,
+        source_memo_uid: str | None = None,
+        limit: int = 100,
+    ) -> list[MemoRecord]:
+        conditions = ["workspace_id = ?"]
+        params: list[Any] = [workspace_id]
+        if memo_type is not None:
+            conditions.append("type = ?")
+            params.append(memo_type)
+        if source_memo_uid is not None:
+            conditions.append("source_memo_uid = ?")
+            params.append(source_memo_uid)
+        params.append(limit)
+        with self.connect() as connection:
+            rows = connection.execute(
+                f"""
+                SELECT * FROM memos
+                WHERE {" AND ".join(conditions)}
+                ORDER BY created_at DESC, id DESC
+                LIMIT ?
+                """,
+                params,
+            ).fetchall()
+        return [_memo_from_row(row) for row in rows]
+
     def upsert_tag_candidate(
         self,
         *,
@@ -432,6 +474,20 @@ def _job_from_row(row: sqlite3.Row) -> Job:
         result=json.loads(row["result_json"]) if row["result_json"] else None,
         error=row["error"],
         retry_count=int(row["retry_count"]),
+        created_at=str(row["created_at"]),
+        updated_at=str(row["updated_at"]),
+    )
+
+
+def _memo_from_row(row: sqlite3.Row) -> MemoRecord:
+    return MemoRecord(
+        id=int(row["id"]),
+        workspace_id=str(row["workspace_id"]),
+        memos_uid=str(row["memos_uid"]),
+        type=str(row["type"]),
+        source_memo_uid=row["source_memo_uid"],
+        content_hash=row["content_hash"],
+        status=str(row["status"]),
         created_at=str(row["created_at"]),
         updated_at=str(row["updated_at"]),
     )

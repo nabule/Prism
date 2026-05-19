@@ -97,3 +97,36 @@ def test_tag_candidate_upsert_list_and_review_flow(tmp_path):
     assert reviewed.status == "approved"
     assert reviewed.reviewer_note == "纳入正式标签"
     assert store.list_tag_candidates(workspace_id="default", status="candidate") == []
+
+
+def test_memo_records_can_be_listed_by_type_and_source(tmp_path):
+    store = Store(tmp_path / "sidecar.db")
+    store.migrate()
+    store.ensure_workspace("default")
+
+    store.upsert_memo(
+        workspace_id="default",
+        memos_uid="abc123",
+        memo_type="original",
+        status="synced",
+        content_hash="original-hash",
+    )
+    store.upsert_memo(
+        workspace_id="default",
+        memos_uid="summary123",
+        memo_type="ai_summary",
+        source_memo_uid="abc123",
+        status="created",
+        content_hash="summary-hash",
+    )
+
+    summaries = store.list_memos(
+        workspace_id="default",
+        memo_type="ai_summary",
+        source_memo_uid="abc123",
+    )
+
+    assert len(summaries) == 1
+    assert summaries[0].memos_uid == "summary123"
+    assert summaries[0].source_memo_uid == "abc123"
+    assert summaries[0].content_hash == "summary-hash"

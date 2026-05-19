@@ -7,6 +7,7 @@ import json
 import logging
 
 from memosima.core.config import AppConfig
+from memosima.core.summary import build_summary_memo_content
 from memosima.core.taxonomy import TaxonomyConfig
 from memosima.db.store import Job, Store
 from memosima.memos.client import MemosClient
@@ -59,7 +60,8 @@ class Worker:
         content_hash = _memo_hash(memo)
         taxonomy = TaxonomyConfig.load(self.config.taxonomy_path)
         content = memo.get("content")
-        organization_plan = taxonomy.build_organization_plan(content if isinstance(content, str) else "")
+        source_content = content if isinstance(content, str) else ""
+        organization_plan = taxonomy.build_organization_plan(source_content)
         self.store.upsert_memo(
             workspace_id=job.workspace_id,
             memos_uid=memo_uid,
@@ -78,6 +80,23 @@ class Worker:
                 confidence=candidate.confidence,
             )
 
+        summary_content = build_summary_memo_content(
+            source_memo_uid=memo_uid,
+            source_content=source_content,
+            organization_plan=organization_plan,
+            taxonomy=taxonomy,
+        )
+        summary_memo = await client.create_memo(summary_content)
+        summary_memo_uid = _extract_memo_uid(summary_memo)
+        self.store.upsert_memo(
+            workspace_id=job.workspace_id,
+            memos_uid=summary_memo_uid,
+            memo_type="ai_summary",
+            source_memo_uid=memo_uid,
+            status="created",
+            content_hash=_memo_hash(summary_memo),
+        )
+
         comment_created = False
         if self.config.worker_create_probe_comment:
             await client.create_comment(memo_uid, "Memosima P0 探针评论：Sidecar 已读取此 memo。")
@@ -86,6 +105,7 @@ class Worker:
         return {
             "memo_uid": memo_uid,
             "content_hash": content_hash,
+            "ai_summary_memo_uid": summary_memo_uid,
             "ai_plan": organization_plan.to_dict(),
             "comment_created": comment_created,
         }
@@ -94,6 +114,13 @@ class Worker:
 def _memo_hash(memo: dict[str, object]) -> str:
     payload = json.dumps(memo, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _extract_memo_uid(memo: dict[str, object]) -> str:
+    name = memo.get("name")
+    if not isinstance(name, str) or not name.startswith("memos/"):
+        raise ValueError("Created summary memo response is missing name")
+    return name.removeprefix("memos/")
 
 
 async def _run(args: argparse.Namespace) -> None:

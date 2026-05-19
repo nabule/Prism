@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from memosima.core.taxonomy import OrganizationPlan, TaxonomyConfig
+from memosima.llm.provider import LLMOrganizationDraft
 
 
 def build_summary_memo_content(
@@ -9,6 +10,7 @@ def build_summary_memo_content(
     source_content: str,
     organization_plan: OrganizationPlan,
     taxonomy: TaxonomyConfig,
+    llm_draft: LLMOrganizationDraft | None = None,
 ) -> str:
     ai_summary_tag = taxonomy.system_tags.get("ai_summary", "#系统/AI整理")
     tags = _dedupe(
@@ -29,11 +31,26 @@ def build_summary_memo_content(
         "",
         "### 摘要",
         "",
-        _summary_text(source_content),
-        "",
-        "### 标签",
+        llm_draft.summary if llm_draft else _summary_text(source_content),
         "",
     ]
+
+    if llm_draft and llm_draft.key_points:
+        lines.extend(["### 要点", ""])
+        lines.extend(f"- {point}" for point in llm_draft.key_points)
+        lines.append("")
+
+    if llm_draft and llm_draft.todos:
+        lines.extend(["### 待办", ""])
+        lines.extend(f"- {todo}" for todo in llm_draft.todos)
+        lines.append("")
+
+    lines.extend(
+        [
+        "### 标签",
+        "",
+        ]
+    )
 
     if organization_plan.active_tags:
         lines.extend(f"- 已使用：{tag}" for tag in organization_plan.active_tags)

@@ -97,10 +97,10 @@
 
 ### 5.2 任务
 
-- 实现 LLM provider 配置。
-- 支持 OpenRouter、Qwen、DeepSeek、自定义 endpoint。
-- 设计 AI 整理 Prompt 与 JSON 输出 schema。
-- 实现输出校验与失败重试。
+- 实现 LLM provider 配置。OpenAI-compatible provider 已完成。
+- 支持 OpenRouter、Qwen、DeepSeek、自定义 endpoint。当前配置已支持同类 OpenAI-compatible endpoint。
+- 设计 AI 整理 Prompt 与 JSON 输出 schema。已完成基础 schema。
+- 实现输出校验与失败重试。JSON 输出校验已完成，失败重试沿用任务重试机制。
 - 实现标签树加载。
 - 实现别名映射和禁用词校验。
 - 实现候选标签创建。

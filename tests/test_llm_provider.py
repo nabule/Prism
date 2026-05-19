@@ -1,0 +1,67 @@
+from __future__ import annotations
+
+import pytest
+from fastapi import FastAPI, Request
+from httpx import ASGITransport, AsyncClient
+
+from memosima.core.config import ModelsConfig
+from memosima.core.taxonomy import TaxonomyConfig
+from memosima.llm.provider import OpenAICompatibleClient
+
+from helpers import models_config_text, taxonomy_config_text, write_yaml
+
+
+@pytest.mark.asyncio
+async def test_openai_compatible_client_parses_structured_draft(tmp_path, monkeypatch):
+    models_path = write_yaml(tmp_path / "models.yaml", models_config_text())
+    taxonomy_path = write_yaml(tmp_path / "taxonomy.yaml", taxonomy_config_text())
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    models = ModelsConfig.load(models_path)
+    provider = models.providers[models.default_provider]
+    taxonomy = TaxonomyConfig.load(taxonomy_path)
+    local_plan = taxonomy.build_organization_plan("整理个人 AI 知识库开发记录 #AI知识库")
+    app = FastAPI()
+    seen: dict[str, object] = {}
+
+    @app.post("/api/v1/chat/completions")
+    async def chat_completions(request: Request):
+        seen["authorization"] = request.headers.get("authorization")
+        seen["payload"] = await request.json()
+        return {
+            "choices": [
+                {
+                    "message": {
+                        "content": (
+                            '{"title":"整理记录","summary":"结构化摘要",'
+                            '"key_points":["要点一"],"todos":["待办一"],'
+                            '"needs_clarification":false,"clarification_question":null}'
+                        )
+                    }
+                }
+            ]
+        }
+
+    original_async_client = AsyncClient
+
+    def fake_async_client(*args, **kwargs):
+        kwargs["transport"] = ASGITransport(app=app)
+        kwargs["base_url"] = "http://testserver"
+        return original_async_client(*args, **kwargs)
+
+    monkeypatch.setattr("memosima.llm.provider.httpx.AsyncClient", fake_async_client)
+
+    draft = await OpenAICompatibleClient(provider, "test-key").organize_memo(
+        content="整理个人 AI 知识库开发记录 #AI知识库",
+        taxonomy=taxonomy,
+        local_plan=local_plan,
+    )
+
+    assert draft.summary == "结构化摘要"
+    assert draft.key_points == ["要点一"]
+    assert draft.todos == ["待办一"]
+    assert draft.needs_clarification is False
+    assert seen["authorization"] == " ".join(["Bearer", "test-key"])
+    payload = seen["payload"]
+    assert isinstance(payload, dict)
+    assert payload["model"] == "deepseek/deepseek-v4-flash:free"
+    assert payload["response_format"] == {"type": "json_object"}

@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import pytest
 
-from memosima.core.config import AppConfig
+from memosima.core.config import AppConfig, ModelsConfig
 from memosima.db.store import Store
+from memosima.llm.provider import LLMOrganizationDraft
 from memosima.worker.runner import Worker
 
-from helpers import app_config_text, taxonomy_config_text, write_yaml
+from helpers import app_config_text, models_config_text, taxonomy_config_text, write_yaml
 
 
 @pytest.mark.asyncio
@@ -127,3 +128,68 @@ async def test_worker_waits_for_user_when_memo_needs_clarification(tmp_path, mon
     assert FakeClient.comments[0][0] == "short"
     assert "需要补充信息" in FakeClient.comments[0][1]
     assert store.list_memos(workspace_id="default", memo_type="ai_summary") == []
+
+
+@pytest.mark.asyncio
+async def test_worker_uses_llm_draft_when_model_key_is_configured(tmp_path, monkeypatch):
+    app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
+    models_path = write_yaml(tmp_path / "models.yaml", models_config_text())
+    write_yaml(tmp_path / "taxonomy.yaml", taxonomy_config_text())
+    monkeypatch.setenv("MEMOS_BASE_URL", "http://memos.local")
+    monkeypatch.setenv("MEMOS_API_TOKEN", "memos-token")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    config = AppConfig.load(app_path)
+    models = ModelsConfig.load(models_path)
+    store = Store(config.database_path)
+    store.migrate()
+    store.ensure_workspace("default")
+    store.create_job(
+        workspace_id="default",
+        job_type="process_memo",
+        idempotency_key="memo:llm",
+        payload={"memo_uid": "llm"},
+    )
+
+    class FakeMemosClient:
+        created_memos: list[str] = []
+
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def get_memo(self, memo_uid):
+            return {"name": f"memos/{memo_uid}", "content": "整理个人 AI 知识库开发记录 #AI知识库"}
+
+        async def create_memo(self, content):
+            self.created_memos.append(content)
+            return {"name": "memos/summary-llm", "content": content}
+
+        async def create_comment(self, memo_uid, content):
+            raise AssertionError("clear LLM jobs must not create comments")
+
+    class FakeLLMClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def organize_memo(self, *, content, taxonomy, local_plan):
+            return LLMOrganizationDraft(
+                title="整理记录",
+                summary="LLM 结构化摘要",
+                key_points=["关键点一"],
+                todos=["后续任务一"],
+                needs_clarification=False,
+            )
+
+    monkeypatch.setattr("memosima.worker.runner.MemosClient", FakeMemosClient)
+    monkeypatch.setattr("memosima.worker.runner.OpenAICompatibleClient", FakeLLMClient)
+
+    processed = await Worker(config, store, models).run_once()
+
+    assert processed is True
+    jobs = store.list_jobs()
+    assert jobs[0].status == "succeeded"
+    assert jobs[0].result["ai_source"] == "llm"
+    assert jobs[0].result["ai_summary_memo_uid"] == "summary-llm"
+    assert len(FakeMemosClient.created_memos) == 1
+    assert "LLM 结构化摘要" in FakeMemosClient.created_memos[0]
+    assert "- 关键点一" in FakeMemosClient.created_memos[0]
+    assert "- 后续任务一" in FakeMemosClient.created_memos[0]

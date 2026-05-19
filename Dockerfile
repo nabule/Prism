@@ -1,4 +1,4 @@
-FROM xget.xi-xu.me/cr/ghcr/astral-sh/uv:python3.12-bookworm-slim
+FROM xget.your-domain.com/cr/ghcr/astral-sh/uv:python3.12-bookworm-slim
 
 WORKDIR /app
 ENV UV_LINK_MODE=copy

@@ -152,7 +152,7 @@ class MemosClient:
         await self._raw_request("DELETE", f"/api/v1/{name}")
 
     async def download_resource(self, resource_name: str) -> bytes:
-        response = await self._raw_request("GET", resource_name)
+        response = await self._raw_request("GET", _resource_path(resource_name))
         return response.content
 
     async def _request(
@@ -202,6 +202,14 @@ def _memo_name(memo_uid_or_name: str) -> str:
     if memo_uid_or_name.startswith("memos/"):
         return memo_uid_or_name
     return f"memos/{memo_uid_or_name}"
+
+
+def _resource_path(resource_name: str) -> str:
+    if resource_name.startswith("/"):
+        return resource_name
+    if resource_name.startswith("resources/"):
+        return f"/file/{resource_name}"
+    return resource_name
 
 
 def _as_relation_payload(relation: dict[str, Any]) -> dict[str, Any]:

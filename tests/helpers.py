@@ -29,6 +29,11 @@ worker:
   poll_interval_seconds: 0.01
   max_attempts: 2
   create_probe_comment: false
+limits:
+  max_attachment_mb: 1
+  allowed_parse_extensions:
+    - .txt
+    - .md
 """
 
 

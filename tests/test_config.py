@@ -37,6 +37,8 @@ def test_app_config_reads_secret_values_from_environment(tmp_path, monkeypatch):
     assert config.memos_base_url == "http://memos.local"
     assert config.memos_api_token == "memos-token"
     assert config.memos_webhook_url == "https://sidecar.example.com/webhooks/memos"
+    assert config.max_attachment_bytes == 1024 * 1024
+    assert config.allowed_parse_extensions == (".txt", ".md")
 
 
 def test_taxonomy_config_builds_local_organization_plan(tmp_path):

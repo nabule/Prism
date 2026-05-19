@@ -144,12 +144,12 @@
 
 ### 6.2 任务
 
-- 实现附件下载。
-- 实现 txt/md 解析。
+- 实现附件下载。txt/md 路径已完成。
+- 实现 txt/md 解析。已写入 `artifacts` 表。
 - 实现 docx/xlsx/pdf 文本解析。
 - 实现 drawio XML 节点提取。
 - 实现 Mind Elixir JSON 大纲解析。
-- 实现 artifacts 表。
+- 实现 artifacts 表。已完成。
 - 实现 vector_units 表。
 - 集成 sqlite-vec。
 - 实现 embedding provider 配置。
@@ -160,8 +160,8 @@
 
 ### 6.3 验收标准
 
-- 支持格式能生成 Markdown artifact。
-- 不支持格式只记录附件，不解析。
+- 支持格式能生成 Markdown artifact。txt/md 已通过自动化测试。
+- 不支持格式只记录附件，不解析。当前会在 job `result.attachments` 中标记 skipped。
 - PDF 只提取文本层，不做 OCR。
 - Mind Elixir JSON 能转为层级大纲。
 - 问答结果包含来源引用。

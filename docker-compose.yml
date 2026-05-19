@@ -1,0 +1,47 @@
+services:
+  memos:
+    image: neosmemo/memos:stable
+    container_name: memosima-memos
+    restart: unless-stopped
+    ports:
+      - "5230:5230"
+    volumes:
+      - ./data/memos:/var/opt/memos
+    environment:
+      MEMOS_PORT: 5230
+      MEMOS_DRIVER: sqlite
+
+  sidecar:
+    build: .
+    container_name: memosima-sidecar
+    restart: unless-stopped
+    depends_on:
+      - memos
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    environment:
+      MEMOS_BASE_URL: http://memos:5230
+    volumes:
+      - ./config:/app/config:ro
+      - ./data/sidecar:/app/data/sidecar
+      - ./logs:/app/logs
+    command: uvicorn memosima.api.app:create_app --factory --host 0.0.0.0 --port 8080
+
+  sidecar-worker:
+    build: .
+    container_name: memosima-sidecar-worker
+    restart: unless-stopped
+    depends_on:
+      - memos
+      - sidecar
+    env_file:
+      - .env
+    environment:
+      MEMOS_BASE_URL: http://memos:5230
+    volumes:
+      - ./config:/app/config:ro
+      - ./data/sidecar:/app/data/sidecar
+      - ./logs:/app/logs
+    command: memosima-worker

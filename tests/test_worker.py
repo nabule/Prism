@@ -1,0 +1,46 @@
+from __future__ import annotations
+
+import pytest
+
+from memosima.core.config import AppConfig
+from memosima.db.store import Store
+from memosima.worker.runner import Worker
+
+from helpers import app_config_text, write_yaml
+
+
+@pytest.mark.asyncio
+async def test_worker_processes_memo_with_mock_client(tmp_path, monkeypatch):
+    app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
+    monkeypatch.setenv("MEMOS_BASE_URL", "http://memos.local")
+    monkeypatch.setenv("MEMOS_API_TOKEN", "memos-token")
+    config = AppConfig.load(app_path)
+    store = Store(config.database_path)
+    store.migrate()
+    store.ensure_workspace("default")
+    store.create_job(
+        workspace_id="default",
+        job_type="process_memo",
+        idempotency_key="memo:abc123",
+        payload={"memo_uid": "abc123"},
+    )
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def get_memo(self, memo_uid):
+            return {"name": f"memos/{memo_uid}", "content": "hello"}
+
+        async def create_comment(self, memo_uid, content):
+            raise AssertionError("probe comment is disabled")
+
+    monkeypatch.setattr("memosima.worker.runner.MemosClient", FakeClient)
+
+    processed = await Worker(config, store).run_once()
+
+    assert processed is True
+    jobs = store.list_jobs()
+    assert jobs[0].status == "succeeded"
+    assert jobs[0].result["memo_uid"] == "abc123"
+    assert jobs[0].result["comment_created"] is False

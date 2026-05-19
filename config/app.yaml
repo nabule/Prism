@@ -1,0 +1,28 @@
+app:
+  workspace_id: default
+  public_base_url: http://localhost:5230
+  timezone: Asia/Shanghai
+database:
+  path: data/sidecar/sidecar.db
+security:
+  admin_token_env: SIDECAR_ADMIN_TOKEN
+memos:
+  base_url_env: MEMOS_BASE_URL
+  api_token_env: MEMOS_API_TOKEN
+  request_timeout_seconds: 15
+worker:
+  poll_interval_seconds: 2
+  max_attempts: 3
+  create_probe_comment: false
+limits:
+  max_attachment_mb: 50
+  allowed_parse_extensions:
+    - .txt
+    - .md
+    - .docx
+    - .xlsx
+    - .pdf
+    - .drawio
+    - .drawio.svg
+    - .json
+

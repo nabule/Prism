@@ -1,0 +1,17 @@
+system_tags:
+  original: "#系统/原始记录"
+  ai_summary: "#系统/AI整理"
+  ai_document: "#系统/AI文档"
+  pending_clarification: "#系统/待澄清"
+  tag_candidate: "#系统/标签待审核"
+  qa: "#系统/问答"
+  failed: "#系统/处理失败"
+business_tags:
+  - path: "#项目/个人AI知识库"
+    status: active
+aliases:
+  - alias: "#AI知识库"
+    target: "#项目/个人AI知识库"
+disabled:
+  - "#杂项"
+

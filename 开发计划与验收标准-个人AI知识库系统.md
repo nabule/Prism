@@ -105,14 +105,14 @@
 - 实现别名映射和禁用词校验。
 - 实现候选标签创建。
 - 实现候选标签审核 API。
-- 实现 AI 整理 memo 创建。本地模板版已完成，真实 LLM 版待接入。
+- 实现 AI 整理 memo 创建。已支持本地模板版和 OpenAI-compatible LLM 版。
 - 实现原始 memo 与 AI memo 关联。Sidecar 本地来源关联已完成，Memos 原生 relation 待探针后接入。
 - 实现待澄清判断和评论追问。本地规则版已完成，任务会进入 `waiting_user`。
 
 ### 5.3 验收标准
 
 - 原始 memo 不被覆盖。
-- AI 整理结果新建为 memo。当前已通过本地模板创建。
+- AI 整理结果新建为 memo。当前已支持本地模板和 LLM JSON 草案两种来源。
 - AI 整理 memo 包含 `#系统/AI整理`。当前已通过自动化测试。
 - 已有标签被优先使用。
 - 新标签进入 candidate 状态。

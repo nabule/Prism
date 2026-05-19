@@ -331,3 +331,27 @@
 6. 错误路径有记录和可排查信息。
 7. Git 提交信息为中文，并说明独立功能点。
 
+## 13. P0-P1 当前执行记录（2026-05-19）
+
+已完成：
+
+- Python/FastAPI 项目骨架。
+- Docker Compose 与 Dockerfile 草案。
+- 配置示例：`app.yaml`、`models.yaml`、`taxonomy.yaml`。
+- Memos webhook 接收与 SQLite 幂等任务创建。
+- jobs 管理查询与 retry 接口。
+- SQLite worker 轮询与 `process_memo` 基础处理。
+- Memos Client 基础 API 封装。
+- OpenRouter 默认模型配置为 `deepseek/deepseek-v4-flash:free`。
+- 开发运行、配置、API 探针和验收记录文档。
+
+自动化测试：
+
+```text
+.venv/bin/pytest
+11 passed
+```
+
+阻塞项：
+
+- 当前 WSL 环境未安装 Docker，真实 Memos 容器联调未执行，不能将 P0 真实验收标记为完成。

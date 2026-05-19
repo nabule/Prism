@@ -533,3 +533,14 @@ disabled:
 | 模型供应商差异 | OpenAI-compatible 适配层，配置化 provider |
 | 备份恢复损坏 | checksum、manifest、恢复前快照 |
 
+## 9. P0-P1 实现状态（2026-05-19）
+
+当前仓库已完成 P0-P1 技术基座：
+
+- FastAPI Sidecar：`GET /health`、`POST /webhooks/memos`、`GET /admin/jobs`、`POST /admin/jobs/{id}/retry`。
+- SQLite 任务系统：`workspaces`、`memos`、`jobs` 表和幂等任务创建。
+- Worker：轮询 `process_memo` 任务，读取 Memos memo，并记录原始 memo 映射。
+- Memos Client：封装读取 memo、创建 memo、创建评论、资源下载。
+- 模型配置：OpenRouter，默认模型 `deepseek/deepseek-v4-flash:free`，密钥仅从 `OPENROUTER_API_KEY` 读取。
+
+当前 WSL 环境缺少 Docker，真实 Memos 容器联调尚未完成，详见 `docs/API探针记录.md` 与 `docs/P0-P1验收记录.md`。

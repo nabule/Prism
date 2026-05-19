@@ -63,7 +63,7 @@
   1. Python 服务截获内容，结合“系统全局标签树”状态发送给大模型。
   2. 若内容不清晰，大模型触发“澄清分支”，Python 服务通过 `POST /api/v1/memos/{memo}/comments` 接口向原笔记写入 AI 的询问。流程暂停。
   3. 若内容清晰，大模型返回排版后的 Markdown 以及匹配/生成好的标签组。
-  4. Python 服务通过 API 更新原笔记的内容与标签。
+  4. Python 服务通过 API 新建 AI 整理 memo，并与原始 memo 建立关联；不覆盖原始 memo。
 
 ### 4.2 标签树文档自动生成 (Auto-Documentation)
 

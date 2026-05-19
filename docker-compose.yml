@@ -1,6 +1,6 @@
 services:
   memos:
-    image: neosmemo/memos:stable
+    image: xget.xi-xu.me/cr/docker/neosmemo/memos:stable
     container_name: memosima-memos
     restart: unless-stopped
     ports:

@@ -1,5 +1,7 @@
 .env
 .venv/
+.nx/
+node_modules/
 __pycache__/
 .pytest_cache/
 *.pyc
@@ -12,4 +14,3 @@ logs/
 dist/
 build/
 *.egg-info/
-

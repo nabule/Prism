@@ -339,6 +339,7 @@
 - Docker Compose 与 Dockerfile 草案。
 - 配置示例：`app.yaml`、`models.yaml`、`taxonomy.yaml`。
 - Memos webhook 接收与 SQLite 幂等任务创建。
+- Memos 用户 webhook 自动配置探针。
 - jobs 管理查询与 retry 接口。
 - SQLite worker 轮询与 `process_memo` 基础处理。
 - Memos Client 基础 API 封装。
@@ -349,9 +350,9 @@
 
 ```text
 npx nx test sidecar
-13 passed
+16 passed
 ```
 
 阻塞项：
 
-- Docker 已安装；直接 Docker Hub 拉取超时，旧 Xget 域名返回 429，新 Xget 域名 `xget.your-domain.com` 已验证可拉取 Memos 并构建 Sidecar。真实 Memos 手动 webhook 投递、worker 读取 memo 和任务成功流转已通过；Memos 内置 webhook 自动回调尚未完成配置。
+- Docker 已安装；直接 Docker Hub 拉取超时，旧 Xget 域名返回 429，新 Xget 域名 `xget.your-domain.com` 已验证可拉取 Memos 并构建 Sidecar。真实 Memos 手动 webhook 投递、worker 读取 memo 和任务成功流转已通过。Memos 内置 webhook 管理接口已验证，且已通过 `cloudflared` 临时公网隧道完成自动回调验收：memo `memos/aJMxBAuM2SpAdcZsQd4dPe` 自动进入 Sidecar，job `3` 成功，worker 读取真实 Memos API 返回 `200 OK`。Memos `0.28.0` 会拒绝指向本机/Docker 内网/私有 IP 的 webhook URL，长期部署仍需要公网可达 `MEMOS_WEBHOOK_URL` 或正式隧道。

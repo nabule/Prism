@@ -49,6 +49,9 @@ class MemosClient:
             include_auth=False,
         )
 
+    async def get_current_user(self) -> dict[str, Any]:
+        return await self._request("GET", "/api/v1/auth/me")
+
     async def get_memo(self, memo_uid: str) -> dict[str, Any]:
         return await self._request("GET", f"/api/v1/memos/{memo_uid}")
 
@@ -65,6 +68,57 @@ class MemosClient:
             f"/api/v1/memos/{memo_uid}/comments",
             json={"content": content},
         )
+
+    async def list_user_webhooks(self, parent: str) -> dict[str, Any]:
+        return await self._request("GET", f"/api/v1/{parent}/webhooks")
+
+    async def create_user_webhook(
+        self,
+        *,
+        parent: str,
+        url: str,
+        display_name: str,
+    ) -> dict[str, Any]:
+        return await self._request(
+            "POST",
+            f"/api/v1/{parent}/webhooks",
+            json={"url": url, "displayName": display_name},
+        )
+
+    async def update_user_webhook(
+        self,
+        *,
+        name: str,
+        url: str,
+        display_name: str,
+    ) -> dict[str, Any]:
+        return await self._request(
+            "PATCH",
+            f"/api/v1/{name}",
+            json={"name": name, "url": url, "displayName": display_name},
+        )
+
+    async def delete_user_webhook(self, name: str) -> None:
+        await self._raw_request("DELETE", f"/api/v1/{name}")
+
+    async def list_personal_access_tokens(self, parent: str) -> dict[str, Any]:
+        return await self._request("GET", f"/api/v1/{parent}/personalAccessTokens")
+
+    async def create_personal_access_token(
+        self,
+        *,
+        parent: str,
+        description: str,
+        expires_in_days: int = 0,
+    ) -> dict[str, Any]:
+        return await self._request(
+            "POST",
+            f"/api/v1/{parent}/personalAccessTokens",
+            json={"description": description, "expiresInDays": expires_in_days},
+        )
+
+    async def delete_personal_access_token(self, name: str) -> None:
+        await self._raw_request("DELETE", f"/api/v1/{name}")
 
     async def download_resource(self, resource_name: str) -> bytes:
         response = await self._raw_request("GET", resource_name)

@@ -25,6 +25,7 @@ def test_app_config_reads_secret_values_from_environment(tmp_path, monkeypatch):
     monkeypatch.setenv("SIDECAR_ADMIN_TOKEN", "admin-token")
     monkeypatch.setenv("MEMOS_BASE_URL", "http://memos.local")
     monkeypatch.setenv("MEMOS_API_TOKEN", "memos-token")
+    monkeypatch.setenv("MEMOS_WEBHOOK_URL", "https://sidecar.example.com/webhooks/memos")
 
     config = AppConfig.load(app_path)
 
@@ -32,3 +33,4 @@ def test_app_config_reads_secret_values_from_environment(tmp_path, monkeypatch):
     assert config.admin_token == "admin-token"
     assert config.memos_base_url == "http://memos.local"
     assert config.memos_api_token == "memos-token"
+    assert config.memos_webhook_url == "https://sidecar.example.com/webhooks/memos"

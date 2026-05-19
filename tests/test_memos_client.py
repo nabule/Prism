@@ -13,6 +13,7 @@ async def test_memos_client_reads_memo_and_creates_comment(monkeypatch):
     app = FastAPI()
     seen_headers: list[str | None] = []
     seen_webhook_payloads: list[dict[str, object]] = []
+    seen_relation_payloads: list[dict[str, object]] = []
 
     @app.get("/api/v1/health")
     async def health():
@@ -41,6 +42,15 @@ async def test_memos_client_reads_memo_and_creates_comment(monkeypatch):
     @app.post("/api/v1/memos/{memo_uid}/comments")
     async def create_comment(memo_uid: str):
         return {"name": f"memos/{memo_uid}/comments/1", "content": "comment"}
+
+    @app.get("/api/v1/memos/{memo_uid}/relations")
+    async def list_relations(memo_uid: str):
+        return {"relations": [], "nextPageToken": ""}
+
+    @app.patch("/api/v1/memos/{memo_uid}/relations")
+    async def update_relations(memo_uid: str, payload: dict[str, object]):
+        seen_relation_payloads.append(payload)
+        return {}
 
     @app.get("/api/v1/users/{username}/webhooks")
     async def list_webhooks(username: str):
@@ -125,6 +135,11 @@ async def test_memos_client_reads_memo_and_creates_comment(monkeypatch):
         "name": "memos/abc/comments/1",
         "content": "comment",
     }
+    assert await client.list_memo_relations("abc") == {"relations": [], "nextPageToken": ""}
+    assert await client.upsert_memo_reference_relation(
+        source_memo_uid="abc",
+        related_memo_uid="new",
+    ) == {}
     assert await client.list_user_webhooks("users/test") == {
         "webhooks": [{"name": "users/test/webhooks/1", "url": "https://old.example"}]
     }
@@ -174,21 +189,36 @@ async def test_memos_client_reads_memo_and_creates_comment(monkeypatch):
         },
         {"description": "Memosima Sidecar Worker", "expiresInDays": 0},
     ]
+    assert seen_relation_payloads == [
+        {
+            "relations": [
+                {
+                    "memo": {"name": "memos/abc"},
+                    "relatedMemo": {"name": "memos/new"},
+                    "type": "REFERENCE",
+                }
+            ]
+        }
+    ]
+    auth_header = " ".join(["Bearer", "token"])
     assert seen_headers == [
-        "Bearer token",
+        auth_header,
         None,
         None,
-        "Bearer token",
-        "Bearer token",
-        "Bearer token",
-        "Bearer token",
-        "Bearer token",
-        "Bearer token",
-        "Bearer token",
-        "Bearer token",
-        "Bearer token",
-        "Bearer token",
-        "Bearer token",
+        auth_header,
+        auth_header,
+        auth_header,
+        auth_header,
+        auth_header,
+        auth_header,
+        auth_header,
+        auth_header,
+        auth_header,
+        auth_header,
+        auth_header,
+        auth_header,
+        auth_header,
+        auth_header,
     ]
 
 

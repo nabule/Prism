@@ -13,6 +13,8 @@
 - 读取 memo 使用 `GET /api/v1/memos/{uid}`。
 - 创建 memo 使用 `POST /api/v1/memos`。
 - 创建评论使用 `POST /api/v1/memos/{memo_uid}/comments`。
+- 读取 memo 关联使用 `GET /api/v1/memos/{memo_uid}/relations`。
+- 更新 memo 关联使用 `PATCH /api/v1/memos/{memo_uid}/relations`。
 - 当前用户使用 `GET /api/v1/auth/me`。
 - 用户 webhook 使用 `GET/POST/PATCH/DELETE /api/v1/users/{username}/webhooks`。
 - Webhook payload 可能随 Memos 版本变化，因此 Sidecar 对 `memo.uid`、`memo.id`、`memo.name`、顶层 `memoUid` 等字段做兼容提取。
@@ -116,3 +118,29 @@ worker: GET http://memos:5230/api/v1/memos/aJMxBAuM2SpAdcZsQd4dPe -> 200 OK
 ```
 
 这次验收确认 Memos 内置 webhook 自动回调 Sidecar、Sidecar 创建 `process_memo` 任务、worker 使用真实 Memos API 读取 memo 并将任务标记为 `succeeded`。
+
+## Memo Relation 真实探针（2026-05-19）
+
+已在本机 Memos `0.28.0` 容器中创建两条临时 memo，并验证原生 relation API：
+
+```text
+GET /api/v1/memos/{source_uid}/relations
+-> 200 {"relations":[], "nextPageToken":""}
+
+PATCH /api/v1/memos/{source_uid}/relations
+{
+  "relations": [
+    {
+      "memo": {"name": "memos/{source_uid}"},
+      "relatedMemo": {"name": "memos/{target_uid}"},
+      "type": "REFERENCE"
+    }
+  ]
+}
+-> 200 {}
+
+GET /api/v1/memos/{source_uid}/relations
+-> 200，返回 relations 中包含 source -> target 的 REFERENCE 关系
+```
+
+当前 worker 在创建 AI 整理 memo 后，会用上述接口把原始 memo 关联到 AI 整理 memo。

@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>P0-P1 验收记录</title>
+<style>:root{color-scheme:light dark;--bg:#f7f8fa;--fg:#1f2937;--muted:#667085;--panel:#fff;--border:#d0d5dd;--accent:#2563eb;--code:#101828;--codebg:#eef2f6}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{max-width:1040px;margin:0 auto;padding:40px 24px 72px}article{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:32px;box-shadow:0 1px 2px rgba(16,24,40,.05)}h1,h2,h3{line-height:1.25;margin:1.4em 0 .6em}h1{margin-top:0;font-size:2rem}h2{border-top:1px solid var(--border);padding-top:1.1em}a{color:var(--accent)}table{border-collapse:collapse;width:100%;margin:1rem 0;display:block;overflow-x:auto}th,td{border:1px solid var(--border);padding:.55rem .7rem;text-align:left;vertical-align:top}th{background:#f2f4f7}pre{background:var(--codebg);color:var(--code);padding:1rem;border-radius:8px;overflow-x:auto}code{background:var(--codebg);color:var(--code);padding:.12rem .28rem;border-radius:4px}pre code{background:transparent;padding:0}blockquote{border-left:4px solid var(--border);margin:1rem 0;padding:.2rem 1rem;color:var(--muted)}.meta{color:var(--muted);font-size:.92rem;margin-bottom:1.5rem}.toc{background:#f9fafb;border:1px solid var(--border);border-radius:8px;padding:1rem;margin:1rem 0 1.5rem}.toc a{display:inline-block;margin:.15rem .6rem .15rem 0}@media (prefers-color-scheme:dark){:root{--bg:#0b1220;--fg:#e5e7eb;--muted:#9ca3af;--panel:#111827;--border:#374151;--accent:#60a5fa;--code:#e5e7eb;--codebg:#1f2937}th{background:#1f2937}.toc{background:#111827}}</style>
+</head>
+<body>
+<main>
+<article>
+<div class="meta">来源：docs/P0-P1验收记录.html</div>
+<h1>P0-P1 验收记录</h1>
+<h2>已完成</h2>
+<ul>
+<li>创建 Python 项目骨架。</li>
+<li>添加 FastAPI API 服务。</li>
+<li>添加 SQLite 数据库迁移和任务存储。</li>
+<li>添加 Memos Client 基础封装。</li>
+<li>添加 Memos 用户 webhook 自动配置探针。</li>
+<li>添加 webhook 幂等键生成。</li>
+<li>添加后台 worker 单任务处理。</li>
+<li>添加 Docker Compose 和 Dockerfile 草案。</li>
+<li>添加 OpenRouter 默认模型配置：<code>deepseek/deepseek-v4-flash:free</code>。</li>
+<li>添加开发运行、配置和 API 探针文档。</li>
+</ul>
+<h2>自动化测试</h2>
+<p>执行命令：</p>
+<pre><code class="language-bash">npx nx test sidecar
+</code></pre>
+<p>结果：</p>
+<pre><code class="language-text">16 passed
+</code></pre>
+<p>覆盖场景：</p>
+<ul>
+<li>OpenRouter 模型配置加载。</li>
+<li>环境变量读取。</li>
+<li>健康检查不泄漏真实 key。</li>
+<li>webhook memo UID 提取。</li>
+<li>webhook 幂等键生成。</li>
+<li>webhook 重放不重复创建任务。</li>
+<li>管理接口 token 鉴权。</li>
+<li>jobs 查询。</li>
+<li>任务 claim、failed、retry 状态流转。</li>
+<li>worker 使用模拟 Memos Client 处理 memo。</li>
+<li>Memos Client 登录、创建用户、创建 memo、读取 memo、创建评论。</li>
+<li>Memos Client 管理用户 webhook。</li>
+<li>Memos webhook 配置探针的创建、更新与 Sidecar 任务轮询逻辑。</li>
+</ul>
+<h2>未完成的真实验收</h2>
+<p>镜像拉取阻塞已通过切换 Xget 域名解决：</p>
+<pre><code class="language-text">Docker Hub: failed to resolve reference &quot;docker.io/neosmemo/memos:stable&quot; / i/o timeout
+xget.xi-xu.me Docker Hub mirror: unexpected status 429 Too Many Requests
+xget.xi-xu.me GHCR mirror: unexpected status 429 Too Many Requests
+xget.your-domain.com Docker Hub mirror: docker compose pull memos 成功
+xget.your-domain.com GHCR mirror: npx nx build sidecar 成功
+</code></pre>
+<p>已按 Xget 规则将 Docker Hub/GHCR 镜像改为 <code>xget.your-domain.com/cr/...</code> 加速地址，后续需要继续执行 Compose 启动与真实 webhook 联调。</p>
+<h2>真实 Memos 联调记录（2026-05-19）</h2>
+<p>已完成：</p>
+<ul>
+<li><code>npx nx run sidecar:up</code> 启动 Memos、Sidecar、worker。</li>
+<li>Memos 版本：<code>0.28.0</code>，schema：<code>0.28.1</code>。</li>
+<li>Sidecar 健康检查通过：<code>GET http://localhost:8080/health</code>。</li>
+<li>通过 Memos API 创建首个管理员用户。</li>
+<li>通过 <code>POST /api/v1/auth/signin</code> 获取 access token。</li>
+<li>通过 <code>POST /api/v1/memos</code> 创建真实 memo：<code>memos/LH9yyJTHf5Uz7i958AG8p7</code>。</li>
+<li><code>npx nx run sidecar:probe-memos -- --bootstrap-username test --bootstrap-password testtest --create-memo ...</code> 可完成登录、创建 memo、读取 memo 的 Memos API 探针。</li>
+<li>向 <code>POST /webhooks/memos</code> 投递真实 memo webhook。</li>
+<li>worker 使用真实 Memos API 读取 memo，任务状态变为 <code>succeeded</code>。</li>
+<li>Sidecar <code>memos</code> 表写入原始 memo 映射，状态为 <code>synced</code>。</li>
+<li>Memos 内置用户 webhook 管理接口已验证，可通过 <code>POST /api/v1/users/test/webhooks</code> 创建公网 URL webhook，并可通过 <code>DELETE</code> 删除。</li>
+<li>Memos <code>0.28.0</code> 会拒绝 <code>http://sidecar:8080/webhooks/memos</code> 这类解析到 Docker 内网/私有 IP 的 webhook URL。</li>
+<li>通过 <code>cloudflared</code> 临时公网隧道完成 Memos 内置 webhook 自动回调验收。</li>
+<li>验收 memo：<code>memos/aJMxBAuM2SpAdcZsQd4dPe</code>。</li>
+<li>验收 job：<code>id=3</code>，<code>status=succeeded</code>，worker 读取真实 Memos memo 返回 <code>200 OK</code>。</li>
+</ul>
+<p>仍未完成：</p>
+<ul>
+<li>探针评论默认关闭，未在本轮写入评论。</li>
+</ul>
+<p>后续回归建议：</p>
+<pre><code class="language-text">手动创建 3 条 Memos memo
+-&gt; webhook 到达 Sidecar
+-&gt; 产生 3 个 process_memo 任务
+-&gt; worker 拉取真实 memo 详情
+-&gt; 全部任务成功
+-&gt; 重放同一 webhook 不产生重复任务
+</code></pre>
+<h2>安全记录</h2>
+<p>用户提供的 OpenRouter key 未写入仓库文件。仓库只包含 <code>OPENROUTER_API_KEY</code> 环境变量占位。</p>
+
+</article>
+</main>
+</body>
+</html>

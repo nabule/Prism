@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Memosima</title>
+  <style>
+    :root { color-scheme: light dark; --bg:#f7f8fa; --fg:#1f2937; --muted:#667085; --panel:#fff; --border:#d0d5dd; --accent:#2563eb; --code:#101828; --codebg:#eef2f6; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.65 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    main { max-width: 1040px; margin: 0 auto; padding: 40px 24px 72px; }
+    article { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 32px; box-shadow: 0 1px 2px rgba(16,24,40,.05); }
+    h1, h2 { line-height: 1.25; margin: 1.4em 0 .6em; }
+    h1 { margin-top: 0; font-size: 2rem; }
+    h2 { border-top: 1px solid var(--border); padding-top: 1.1em; }
+    a { color: var(--accent); }
+    pre { background: var(--codebg); color: var(--code); padding: 1rem; border-radius: 8px; overflow-x: auto; }
+    code { background: var(--codebg); color: var(--code); padding: .12rem .28rem; border-radius: 4px; }
+    pre code { background: transparent; padding: 0; }
+    .note { background: #f9fafb; border: 1px solid var(--border); border-radius: 8px; padding: 1rem; color: var(--muted); }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg:#0b1220; --fg:#e5e7eb; --muted:#9ca3af; --panel:#111827; --border:#374151; --accent:#60a5fa; --code:#e5e7eb; --codebg:#1f2937; }
+      .note { background: #1f2937; }
+    }
+  </style>
+</head>
+<body>
+<main>
+<article>
+  <h1>Memosima</h1>
+  <p>Memosima 是基于 Memos 的个人 AI 知识库 Sidecar 服务。Memos 负责采集和保存原始知识，Sidecar 负责 AI 整理、标签治理、澄清评论、附件解析和后续检索能力。</p>
+
+  <h2>当前状态</h2>
+  <p>已完成 P0、P1、P2 核心闭环，并开始 P3 文本附件解析基础。</p>
+  <ul>
+    <li>Memos webhook 接入和 SQLite 任务系统。</li>
+    <li>AI 整理 memo 创建，支持 OpenRouter/OpenAI-compatible LLM 和本地模板回退。</li>
+    <li>Memos 原生 <code>REFERENCE</code> relation 关联原始 memo 与 AI memo。</li>
+    <li>候选标签审核和审核后 active 生效。</li>
+    <li>待澄清评论和 <code>waiting_user</code> 状态。</li>
+    <li><code>.txt</code>、<code>.md</code> 附件解析为 artifact。</li>
+  </ul>
+  <p class="note">未完成范围：docx/xlsx/pdf/drawio/Mind Elixir 专用解析、向量索引、问答、自动文档、备份恢复。</p>
+
+  <h2>快速开始</h2>
+  <pre><code>cp .env.example .env
+npx nx run sidecar:up
+curl http://localhost:8080/health</code></pre>
+
+  <h2>常用命令</h2>
+  <pre><code>npx nx test sidecar
+npx nx run sidecar:compile
+npx nx build sidecar
+npx nx run sidecar:probe-memos</code></pre>
+
+  <h2>文档入口</h2>
+  <ul>
+    <li><a href="docs/使用手册.html">使用手册</a></li>
+    <li><a href="docs/配置说明.html">配置说明</a></li>
+    <li><a href="docs/开发运行说明.html">开发运行说明</a></li>
+    <li><a href="docs/API探针记录.html">API 探针记录</a></li>
+    <li><a href="开发计划与验收标准-个人AI知识库系统.html">开发计划与验收标准</a></li>
+    <li><a href="技术架构设计-个人AI知识库系统.html">技术架构设计</a></li>
+    <li><a href="PRD-个人AI知识库系统.html">PRD</a></li>
+  </ul>
+</article>
+</main>
+</body>
+</html>

@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>开发运行说明</title>
+<style>:root{color-scheme:light dark;--bg:#f7f8fa;--fg:#1f2937;--muted:#667085;--panel:#fff;--border:#d0d5dd;--accent:#2563eb;--code:#101828;--codebg:#eef2f6}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{max-width:1040px;margin:0 auto;padding:40px 24px 72px}article{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:32px;box-shadow:0 1px 2px rgba(16,24,40,.05)}h1,h2,h3{line-height:1.25;margin:1.4em 0 .6em}h1{margin-top:0;font-size:2rem}h2{border-top:1px solid var(--border);padding-top:1.1em}a{color:var(--accent)}table{border-collapse:collapse;width:100%;margin:1rem 0;display:block;overflow-x:auto}th,td{border:1px solid var(--border);padding:.55rem .7rem;text-align:left;vertical-align:top}th{background:#f2f4f7}pre{background:var(--codebg);color:var(--code);padding:1rem;border-radius:8px;overflow-x:auto}code{background:var(--codebg);color:var(--code);padding:.12rem .28rem;border-radius:4px}pre code{background:transparent;padding:0}blockquote{border-left:4px solid var(--border);margin:1rem 0;padding:.2rem 1rem;color:var(--muted)}.meta{color:var(--muted);font-size:.92rem;margin-bottom:1.5rem}.toc{background:#f9fafb;border:1px solid var(--border);border-radius:8px;padding:1rem;margin:1rem 0 1.5rem}.toc a{display:inline-block;margin:.15rem .6rem .15rem 0}@media (prefers-color-scheme:dark){:root{--bg:#0b1220;--fg:#e5e7eb;--muted:#9ca3af;--panel:#111827;--border:#374151;--accent:#60a5fa;--code:#e5e7eb;--codebg:#1f2937}th{background:#1f2937}.toc{background:#111827}}</style>
+</head>
+<body>
+<main>
+<article>
+<div class="meta">来源：docs/开发运行说明.html</div>
+<h1>开发运行说明</h1>
+<h2>当前阶段</h2>
+<p>当前实现范围为 P0+P1+P2，并开始 P3 的文本附件解析基础：</p>
+<ul>
+<li>FastAPI Sidecar API。</li>
+<li>Memos webhook 接收。</li>
+<li>SQLite 任务表、工作区表和 memo 映射表。</li>
+<li>后台 worker 轮询处理 <code>process_memo</code> 任务。</li>
+<li>Memos API Client 基础封装。</li>
+<li>Memos 用户 webhook 自动配置探针。</li>
+<li>标签树配置加载与本地整理草案生成。</li>
+<li>候选标签持久化与后台审核接口。</li>
+<li>审核通过的候选标签进入 Sidecar active 标签集合，后续整理会直接使用。</li>
+<li>AI 整理 memo 本地模板创建，并在 Sidecar 数据库记录来源关联。</li>
+<li>待澄清 memo 评论追问，并把任务置为 <code>waiting_user</code>。</li>
+<li>OpenAI-compatible LLM provider 接入，默认使用 OpenRouter 免费模型配置。</li>
+<li>P3 起步：txt/md 附件下载、解析为 Markdown artifact 并写入 <code>artifacts</code> 表。</li>
+</ul>
+<p>docx/xlsx/pdf/drawio/Mind Elixir 解析、RAG、自动文档和备份恢复属于后续阶段。</p>
+<h2>环境准备</h2>
+<p>本项目在 Linux 环境下开发和测试。所有常用开发命令通过 Nx 任务入口执行：</p>
+<pre><code class="language-bash">npx nx test sidecar
+npx nx run sidecar:compile
+npx nx build sidecar
+</code></pre>
+<p>不要直接运行 <code>pip install</code>；Python 包和虚拟环境统一由 <code>uv</code> 管理，并封装在 Nx target、容器构建或后续统一脚本中。开发阶段优先执行本地 Nx 测试，Docker 构建放到阶段末尾验收。</p>
+<h2>启动 API</h2>
+<pre><code class="language-bash">npx nx run sidecar:up
+</code></pre>
+<p>健康检查：</p>
+<pre><code class="language-bash">curl http://localhost:8080/health
+</code></pre>
+<h2>Memos 探针</h2>
+<p>执行 Memos API 探针：</p>
+<pre><code class="language-bash">npx nx run sidecar:probe-memos
+</code></pre>
+<p>首次本地联调可创建测试用户、登录并创建 memo：</p>
+<pre><code class="language-bash">npx nx run sidecar:probe-memos -- --bootstrap-username test --bootstrap-password testtest --create-memo &quot;探针 memo #系统/原始记录&quot;
+</code></pre>
+<p>创建 Memos Personal Access Token，供 Sidecar/worker 长期读取 Memos API：</p>
+<pre><code class="language-bash">npx nx run sidecar:probe-memos -- \
+  --bootstrap-username test \
+  --bootstrap-password testtest \
+  --create-pat \
+  --pat-output-env-file /tmp/memosima-pat.env
+</code></pre>
+<p>默认输出会隐藏 PAT 原文；<code>/tmp/memosima-pat.env</code> 仅供本机临时注入容器，不要提交到仓库。</p>
+<p>配置 Memos 内置 webhook：</p>
+<pre><code class="language-bash">npx nx run sidecar:probe-memos -- \
+  --bootstrap-username test \
+  --bootstrap-password testtest \
+  --configure-webhook-url &quot;https://your-public-sidecar.example.com/webhooks/memos&quot;
+</code></pre>
+<p>也可以通过 <code>.env</code> 配置 <code>MEMOS_WEBHOOK_URL</code>，然后直接执行探针。Memos <code>0.28.0</code> 会拒绝 webhook URL 解析到本机、Docker 内网或其他保留/私有 IP，例如 <code>http://sidecar:8080/webhooks/memos</code>、<code>http://localhost:8080/webhooks/memos</code> 和 <code>http://172.x.x.x:8080/webhooks/memos</code>。真实自动回调验收需要公网可达 URL，或使用公网隧道把 <code>http://localhost:8080</code> 暴露出去。</p>
+<p>配置 webhook、创建 memo 并轮询 Sidecar 任务状态：</p>
+<pre><code class="language-bash">npx nx run sidecar:probe-memos -- \
+  --bootstrap-username test \
+  --bootstrap-password testtest \
+  --configure-webhook-url &quot;$MEMOS_WEBHOOK_URL&quot; \
+  --create-memo &quot;自动 webhook 探针 #系统/原始记录&quot; \
+  --verify-sidecar-url &quot;http://localhost:8080&quot; \
+  --verify-sidecar-token &quot;$SIDECAR_ADMIN_TOKEN&quot;
+</code></pre>
+<h2>启动 Worker</h2>
+<p>持续轮询由 Compose 中的 <code>sidecar-worker</code> 服务负责：</p>
+<pre><code class="language-bash">npx nx run sidecar:up
+</code></pre>
+<h2>管理接口</h2>
+<p>查询任务：</p>
+<pre><code class="language-bash">curl -H &quot;Authorization: Bearer&lt;空格&gt;$SIDECAR_ADMIN_TOKEN&quot; \
+  &quot;http://localhost:8080/admin/jobs&quot;
+</code></pre>
+<p>重试失败任务：</p>
+<pre><code class="language-bash">curl -X POST -H &quot;Authorization: Bearer&lt;空格&gt;$SIDECAR_ADMIN_TOKEN&quot; \
+  &quot;http://localhost:8080/admin/jobs/1/retry&quot;
+</code></pre>
+<h2>测试</h2>
+<pre><code class="language-bash">npx nx test sidecar
+</code></pre>
+<p>当前已通过自动化测试：</p>
+<pre><code class="language-text">npx nx test sidecar
+30 passed
+</code></pre>
+<h2>P2 本地整理草案</h2>
+<p>worker 处理 memo 时会加载 <code>config/taxonomy.yaml</code>，在 job <code>result.ai_plan</code> 中写入本地整理草案：</p>
+<ul>
+<li><code>system_tags</code>：默认包含 <code>#系统/原始记录</code>，必要时包含 <code>#系统/待澄清</code> 或 <code>#系统/标签待审核</code>。</li>
+<li><code>active_tags</code>：命中已审核业务标签或别名后的正式标签。</li>
+<li><code>candidate_tags</code>：memo 中出现但不在已审核标签树中的业务标签。</li>
+<li><code>disabled_tags</code>：命中禁用标签的条目。</li>
+<li><code>needs_clarification</code>：短内容或包含问号时标记为需要澄清。</li>
+</ul>
+<p>该草案用于 P2 早期验证标签治理和任务结构。内容明确时，worker 会创建一条 Markdown AI 整理 memo，内容包含 <code>#系统/AI整理</code>、来源 memo、摘要、标签状态和原文摘录，并在 job <code>result.ai_summary_memo_uid</code> 返回新 memo uid。</p>
+<p>当 <code>OPENROUTER_API_KEY</code> 存在时，worker 会按 <code>config/models.yaml</code> 调用 OpenAI-compatible <code>/chat/completions</code>，要求模型返回 JSON 对象，并把模型输出的摘要、要点和待办写入 AI 整理 memo。当前默认模型为 <code>deepseek/deepseek-v4-flash:free</code>。如果未配置模型 key，worker 会自动回退到本地模板整理，job <code>result.ai_source</code> 会标记为 <code>local</code>；使用 LLM 时标记为 <code>llm</code>。</p>
+<p>Sidecar 会在本地 <code>memos</code> 表记录两类 memo：</p>
+<ul>
+<li><code>type=original</code>：原始 Memos memo，同步状态为 <code>synced</code>。</li>
+<li><code>type=ai_summary</code>：AI 整理 memo，<code>source_memo_uid</code> 指向原始 memo，状态为 <code>created</code>。</li>
+</ul>
+<p>worker 创建 AI 整理 memo 后，会同时写入 Memos 原生 relation：原始 memo <code>REFERENCE</code> 到 AI 整理 memo。Sidecar 本地 <code>memos.source_memo_uid</code> 仍保留，作为本地查询和恢复时的冗余关联。</p>
+<p>当 <code>needs_clarification=true</code> 时，worker 不会创建 AI 整理 memo，而是在原 memo 下创建澄清评论，并把任务状态置为 <code>waiting_user</code>。补充原始 memo 内容后，可以通过现有重试接口重新处理：</p>
+<pre><code class="language-bash">curl -X POST -H &quot;Authorization: Bearer&lt;空格&gt;$SIDECAR_ADMIN_TOKEN&quot; \
+  &quot;http://localhost:8080/admin/jobs/1/retry&quot;
+</code></pre>
+<p>候选标签管理接口：</p>
+<pre><code class="language-bash">curl -H &quot;Authorization: Bearer&lt;空格&gt;$SIDECAR_ADMIN_TOKEN&quot; \
+  &quot;http://localhost:8080/admin/tag-candidates&quot;
+
+curl -X POST -H &quot;Authorization: Bearer&lt;空格&gt;$SIDECAR_ADMIN_TOKEN&quot; \
+  -H &quot;Content-Type: application/json&quot; \
+  -d &#39;{&quot;note&quot;:&quot;纳入正式标签&quot;}&#39; \
+  &quot;http://localhost:8080/admin/tag-candidates/1/approve&quot;
+
+curl -X POST -H &quot;Authorization: Bearer&lt;空格&gt;$SIDECAR_ADMIN_TOKEN&quot; \
+  -H &quot;Content-Type: application/json&quot; \
+  -d &#39;{&quot;note&quot;:&quot;重复标签&quot;}&#39; \
+  &quot;http://localhost:8080/admin/tag-candidates/1/reject&quot;
+</code></pre>
+<p>审核通过会把候选标签写入 Sidecar SQLite 的 <code>business_tags</code> 表，状态为 <code>active</code>。worker 每次处理 memo 时会合并 <code>config/taxonomy.yaml</code> 中的 active 标签和数据库中审核通过的 active 标签，因此后续同类 memo 会直接使用该标签，不再重复创建候选。</p>
+<p>当前不会自动改写 <code>config/taxonomy.yaml</code>；如果需要把运行期审核结果固化为配置文件，后续会提供导出或管理接口。</p>
+<h2>P3 文本附件解析</h2>
+<p>worker 处理 memo 时会读取 memo 中的 <code>resources</code> 或 <code>attachments</code> 字段。对于允许扩展名内的 <code>.txt</code> 和 <code>.md</code> 附件，会通过 Memos 资源接口下载内容，并写入 Sidecar SQLite 的 <code>artifacts</code> 表：</p>
+<ul>
+<li><code>kind=attachment_text</code></li>
+<li><code>memo_uid</code>：来源 memo uid</li>
+<li><code>resource_uid</code>：Memos resource name，例如 <code>resources/...</code></li>
+<li><code>content_markdown</code>：解析后的 Markdown 文本</li>
+<li><code>metadata_json</code>：文件名、content type、大小、扩展名等元数据</li>
+</ul>
+<p>解析结果会出现在 job <code>result.attachments</code> 中，状态可能是 <code>parsed</code>、<code>skipped</code> 或 <code>failed</code>。当前只实现 txt/md 安全文本解析；其他允许扩展会先记录为跳过，后续按 P3 计划逐步接入专用解析器。</p>
+<h2>Docker 状态</h2>
+<p>仓库已提供 <code>docker-compose.yml</code> 和 <code>Dockerfile</code> 草案。Docker Hub 镜像下载优先使用 Xget 加速地址，例如 <code>xget.your-domain.com/cr/docker/neosmemo/memos:stable</code>。</p>
+<p>最近一次 <code>docker compose pull memos</code> 与 <code>npx nx build sidecar</code> 已通过 <code>xget.your-domain.com</code> 成功完成镜像拉取和构建。真实 Memos 手动 webhook 联调已通过；Memos 内置 webhook 自动配置接口已验证，但自动回调需要公网可达的 Sidecar webhook URL。</p>
+<p>Dockerfile 已将第三方依赖安装与项目源码拷贝分层，后续普通代码变更不会反复下载全部 Python 依赖。</p>
+
+</article>
+</main>
+</body>
+</html>

@@ -5,11 +5,11 @@ ENV UV_LINK_MODE=copy
 ENV UV_PROJECT_ENVIRONMENT=/app/.venv
 ENV PATH="/app/.venv/bin:${PATH}"
 
-COPY pyproject.toml README.md ./
+COPY pyproject.toml uv.lock README.html ./
 RUN mkdir -p src/memosima && printf '__version__ = "0.1.0"\\n' > src/memosima/__init__.py
-RUN uv sync --no-dev --no-install-project
+RUN uv sync --frozen --no-dev --no-install-project
 COPY src ./src
-RUN uv sync --no-dev
+RUN uv sync --frozen --no-dev
 
 COPY config ./config
 CMD ["uvicorn", "memosima.api.app:create_app", "--factory", "--host", "0.0.0.0", "--port", "8080"]

@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>API 探针记录</title>
+<style>:root{color-scheme:light dark;--bg:#f7f8fa;--fg:#1f2937;--muted:#667085;--panel:#fff;--border:#d0d5dd;--accent:#2563eb;--code:#101828;--codebg:#eef2f6}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{max-width:1040px;margin:0 auto;padding:40px 24px 72px}article{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:32px;box-shadow:0 1px 2px rgba(16,24,40,.05)}h1,h2,h3{line-height:1.25;margin:1.4em 0 .6em}h1{margin-top:0;font-size:2rem}h2{border-top:1px solid var(--border);padding-top:1.1em}a{color:var(--accent)}table{border-collapse:collapse;width:100%;margin:1rem 0;display:block;overflow-x:auto}th,td{border:1px solid var(--border);padding:.55rem .7rem;text-align:left;vertical-align:top}th{background:#f2f4f7}pre{background:var(--codebg);color:var(--code);padding:1rem;border-radius:8px;overflow-x:auto}code{background:var(--codebg);color:var(--code);padding:.12rem .28rem;border-radius:4px}pre code{background:transparent;padding:0}blockquote{border-left:4px solid var(--border);margin:1rem 0;padding:.2rem 1rem;color:var(--muted)}.meta{color:var(--muted);font-size:.92rem;margin-bottom:1.5rem}.toc{background:#f9fafb;border:1px solid var(--border);border-radius:8px;padding:1rem;margin:1rem 0 1.5rem}.toc a{display:inline-block;margin:.15rem .6rem .15rem 0}@media (prefers-color-scheme:dark){:root{--bg:#0b1220;--fg:#e5e7eb;--muted:#9ca3af;--panel:#111827;--border:#374151;--accent:#60a5fa;--code:#e5e7eb;--codebg:#1f2937}th{background:#1f2937}.toc{background:#111827}}</style>
+</head>
+<body>
+<main>
+<article>
+<div class="meta">来源：docs/API探针记录.html</div>
+<h1>API 探针记录</h1>
+<h2>官方资料</h2>
+<ul>
+<li>Memos API latest: <a href="https://usememos.com/docs/api/latest">https://usememos.com/docs/api/latest</a></li>
+<li>Memos Webhooks: <a href="https://usememos.com/docs/integrations/webhooks">https://usememos.com/docs/integrations/webhooks</a></li>
+<li>Memos Docker 部署: <a href="https://usememos.com/docs/deploy/docker">https://usememos.com/docs/deploy/docker</a></li>
+<li>OpenRouter OpenAI-compatible API: <a href="https://openrouter.ai/docs">https://openrouter.ai/docs</a></li>
+</ul>
+<h2>当前实现假设</h2>
+<ul>
+<li>Memos API 通过 <code>/api/v1</code> 暴露。</li>
+<li>读取 memo 使用 <code>GET /api/v1/memos/{uid}</code>。</li>
+<li>创建 memo 使用 <code>POST /api/v1/memos</code>。</li>
+<li>创建评论使用 <code>POST /api/v1/memos/{memo_uid}/comments</code>。</li>
+<li>读取 memo 关联使用 <code>GET /api/v1/memos/{memo_uid}/relations</code>。</li>
+<li>更新 memo 关联使用 <code>PATCH /api/v1/memos/{memo_uid}/relations</code>。</li>
+<li>当前用户使用 <code>GET /api/v1/auth/me</code>。</li>
+<li>用户 webhook 使用 <code>GET/POST/PATCH/DELETE /api/v1/users/{username}/webhooks</code>。</li>
+<li>Webhook payload 可能随 Memos 版本变化，因此 Sidecar 对 <code>memo.uid</code>、<code>memo.id</code>、<code>memo.name</code>、顶层 <code>memoUid</code> 等字段做兼容提取。</li>
+</ul>
+<h2>本机真实探针状态</h2>
+<p>当前 Linux 环境执行结果：</p>
+<pre><code class="language-text">Docker version 29.5.1
+Docker Compose version v5.1.3
+</code></pre>
+<p>Docker 已可用。镜像拉取验证记录：</p>
+<pre><code class="language-text">Docker Hub: i/o timeout
+xget.xi-xu.me Docker Hub mirror: 429 Too Many Requests
+xget.xi-xu.me GHCR mirror: 429 Too Many Requests
+xget.your-domain.com Docker Hub mirror: 拉取 Memos 成功
+xget.your-domain.com GHCR mirror: 构建 Sidecar 成功
+</code></pre>
+<p>Docker Hub/GHCR 镜像已按 Xget 规则改用 <code>xget.your-domain.com/cr/...</code> 加速地址。</p>
+<p>P0 的真实 Memos 容器联调已跑通手动 webhook 投递路径：真实 Memos memo 创建成功，Sidecar 接收 webhook 后创建任务，worker 使用真实 Memos API 读取 memo 并写入 <code>memos</code> 映射表。</p>
+<p>Memos 内置 webhook 管理接口已验证：</p>
+<pre><code class="language-text">GET /api/v1/users/test/webhooks -&gt; {&quot;webhooks&quot;:[]}
+POST /api/v1/users/test/webhooks {&quot;url&quot;:&quot;https://example.com/memosima-webhook&quot;,&quot;displayName&quot;:&quot;Memosima Sidecar Test&quot;}
+-&gt; {&quot;name&quot;:&quot;users/test/webhooks/...&quot;,&quot;url&quot;:&quot;https://example.com/memosima-webhook&quot;,&quot;displayName&quot;:&quot;Memosima Sidecar Test&quot;,...}
+DELETE /api/v1/users/test/webhooks/...
+</code></pre>
+<p>同时确认 Memos <code>0.28.0</code> 会拒绝 webhook URL 解析到 Docker 内网或保留/私有 IP：</p>
+<pre><code class="language-text">POST /api/v1/users/test/webhooks {&quot;url&quot;:&quot;http://sidecar:8080/webhooks/memos&quot;,...}
+-&gt; 400 webhook URL must not resolve to a reserved or private IP address
+</code></pre>
+<p>因此自动回调验收需要 <code>MEMOS_WEBHOOK_URL</code> 指向公网可达的 Sidecar URL，或通过公网隧道转发到本机 <code>http://localhost:8080</code>。</p>
+<h2>待执行真实探针</h2>
+<ol>
+<li>启动 Memos 和 Sidecar。</li>
+<li>创建 Memos 管理员和 API token。</li>
+<li>使用 <code>npx nx run sidecar:probe-memos -- --configure-webhook-url &quot;$MEMOS_WEBHOOK_URL&quot;</code> 配置 Memos 用户 webhook。</li>
+<li>手动创建一条 memo。</li>
+<li>确认 Sidecar 创建 <code>process_memo</code> 任务。</li>
+<li>运行 worker。</li>
+<li>确认 worker 能读取真实 memo 并标记任务成功。</li>
+<li>如开启 <code>worker.create_probe_comment</code>，确认原 memo 下出现 P0 探针评论。</li>
+</ol>
+<p>可使用一条命令完成“配置 webhook -&gt; 创建 memo -&gt; 轮询 Sidecar jobs”的自动探针：</p>
+<pre><code class="language-bash">npx nx run sidecar:probe-memos -- \
+  --bootstrap-username test \
+  --bootstrap-password testtest \
+  --configure-webhook-url &quot;$MEMOS_WEBHOOK_URL&quot; \
+  --create-memo &quot;自动 webhook 探针 #系统/原始记录&quot; \
+  --verify-sidecar-url &quot;http://localhost:8080&quot; \
+  --verify-sidecar-token &quot;$SIDECAR_ADMIN_TOKEN&quot;
+</code></pre>
+<h2>自动 webhook 真实验收（2026-05-19）</h2>
+<p>已使用 <code>cloudflared</code> 临时公网隧道暴露本机 Sidecar：</p>
+<pre><code class="language-text">https://goat-pest-drum-lips.trycloudflare.com -&gt; http://localhost:8080
+</code></pre>
+<p>验收前通过 Nx 探针创建 Memos Personal Access Token，并以临时 env 文件注入 Sidecar/worker 容器，避免 worker 使用会过期的登录 access token。</p>
+<p>执行命令：</p>
+<pre><code class="language-bash">npx nx run sidecar:probe-memos -- \
+  --bootstrap-username test \
+  --bootstrap-password testtest \
+  --configure-webhook-url &quot;https://goat-pest-drum-lips.trycloudflare.com/webhooks/memos&quot; \
+  --webhook-display-name &quot;Memosima Sidecar Tunnel&quot; \
+  --create-memo &quot;自动 webhook PAT 验收 2026-05-19T16:16:21+08:00 #系统/原始记录&quot; \
+  --verify-sidecar-url &quot;http://localhost:8080&quot; \
+  --verify-sidecar-token &quot;$SIDECAR_ADMIN_TOKEN&quot; \
+  --verify-timeout-seconds 60
+</code></pre>
+<p>结果：</p>
+<pre><code class="language-text">created_memo: memos/aJMxBAuM2SpAdcZsQd4dPe
+webhook_action: unchanged
+sidecar_verification.status: succeeded
+sidecar job id: 3
+worker: GET http://memos:5230/api/v1/memos/aJMxBAuM2SpAdcZsQd4dPe -&gt; 200 OK
+</code></pre>
+<p>这次验收确认 Memos 内置 webhook 自动回调 Sidecar、Sidecar 创建 <code>process_memo</code> 任务、worker 使用真实 Memos API 读取 memo 并将任务标记为 <code>succeeded</code>。</p>
+<h2>Memo Relation 真实探针（2026-05-19）</h2>
+<p>已在本机 Memos <code>0.28.0</code> 容器中创建两条临时 memo，并验证原生 relation API：</p>
+<pre><code class="language-text">GET /api/v1/memos/{source_uid}/relations
+-&gt; 200 {&quot;relations&quot;:[], &quot;nextPageToken&quot;:&quot;&quot;}
+
+PATCH /api/v1/memos/{source_uid}/relations
+{
+  &quot;relations&quot;: [
+    {
+      &quot;memo&quot;: {&quot;name&quot;: &quot;memos/{source_uid}&quot;},
+      &quot;relatedMemo&quot;: {&quot;name&quot;: &quot;memos/{target_uid}&quot;},
+      &quot;type&quot;: &quot;REFERENCE&quot;
+    }
+  ]
+}
+-&gt; 200 {}
+
+GET /api/v1/memos/{source_uid}/relations
+-&gt; 200，返回 relations 中包含 source -&gt; target 的 REFERENCE 关系
+</code></pre>
+<p>当前 worker 在创建 AI 整理 memo 后，会用上述接口把原始 memo 关联到 AI 整理 memo。</p>
+
+</article>
+</main>
+</body>
+</html>

@@ -38,6 +38,14 @@ async def test_worker_processes_memo_with_mock_client(tmp_path, monkeypatch):
             return {
                 "name": f"memos/{memo_uid}",
                 "content": "个人 AI 知识库开发记录 #AI知识库 #项目/新方向",
+                "resources": [
+                    {
+                        "name": "resources/note1",
+                        "filename": "note.txt",
+                        "contentType": "text/plain",
+                        "size": 12,
+                    }
+                ],
             }
 
         async def create_memo(self, content):
@@ -46,6 +54,10 @@ async def test_worker_processes_memo_with_mock_client(tmp_path, monkeypatch):
 
         async def create_comment(self, memo_uid, content):
             raise AssertionError("probe comment is disabled")
+
+        async def download_resource(self, resource_name):
+            assert resource_name == "resources/note1"
+            return b"attachment text\n"
 
         async def upsert_memo_reference_relation(self, *, source_memo_uid, related_memo_uid):
             self.relations.append((source_memo_uid, related_memo_uid))
@@ -61,6 +73,7 @@ async def test_worker_processes_memo_with_mock_client(tmp_path, monkeypatch):
     assert jobs[0].result["memo_uid"] == "abc123"
     assert jobs[0].result["ai_summary_memo_uid"] == "summary123"
     assert jobs[0].result["comment_created"] is False
+    assert jobs[0].result["attachments"][0]["status"] == "parsed"
     assert jobs[0].result["ai_plan"]["active_tags"] == ["#项目/个人AI知识库"]
     assert jobs[0].result["ai_plan"]["candidate_tags"][0]["path"] == "#项目/新方向"
     assert len(FakeClient.created_memos) == 1
@@ -81,6 +94,14 @@ async def test_worker_processes_memo_with_mock_client(tmp_path, monkeypatch):
     assert summaries[0].memos_uid == "summary123"
     assert summaries[0].status == "created"
     assert FakeClient.relations == [("abc123", "summary123")]
+    artifacts = store.list_artifacts(
+        workspace_id="default",
+        memo_uid="abc123",
+        kind="attachment_text",
+    )
+    assert len(artifacts) == 1
+    assert artifacts[0].resource_uid == "resources/note1"
+    assert artifacts[0].content_markdown == "attachment text\n"
 
 
 @pytest.mark.asyncio
@@ -117,6 +138,9 @@ async def test_worker_waits_for_user_when_memo_needs_clarification(tmp_path, mon
         async def create_comment(self, memo_uid, content):
             self.comments.append((memo_uid, content))
             return {"name": f"memos/{memo_uid}/comments/1", "content": content}
+
+        async def download_resource(self, resource_name):
+            raise AssertionError("short memo has no resources")
 
     monkeypatch.setattr("memosima.worker.runner.MemosClient", FakeClient)
 
@@ -172,6 +196,9 @@ async def test_worker_uses_llm_draft_when_model_key_is_configured(tmp_path, monk
 
         async def create_comment(self, memo_uid, content):
             raise AssertionError("clear LLM jobs must not create comments")
+
+        async def download_resource(self, resource_name):
+            raise AssertionError("LLM memo has no resources")
 
         async def upsert_memo_reference_relation(self, *, source_memo_uid, related_memo_uid):
             self.relations.append((source_memo_uid, related_memo_uid))
@@ -247,6 +274,9 @@ async def test_worker_uses_approved_business_tags_from_store(tmp_path, monkeypat
 
         async def create_comment(self, memo_uid, content):
             raise AssertionError("clear jobs must not create comments")
+
+        async def download_resource(self, resource_name):
+            raise AssertionError("approved tag memo has no resources")
 
         async def upsert_memo_reference_relation(self, *, source_memo_uid, related_memo_uid):
             self.relations.append((source_memo_uid, related_memo_uid))

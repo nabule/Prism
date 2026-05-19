@@ -160,3 +160,36 @@ def test_memo_records_can_be_listed_by_type_and_source(tmp_path):
     assert summaries[0].memos_uid == "summary123"
     assert summaries[0].source_memo_uid == "abc123"
     assert summaries[0].content_hash == "summary-hash"
+
+
+def test_artifact_upsert_and_list_flow(tmp_path):
+    store = Store(tmp_path / "sidecar.db")
+    store.migrate()
+    store.ensure_workspace("default")
+
+    created = store.upsert_artifact(
+        workspace_id="default",
+        memo_uid="abc123",
+        resource_uid="resources/file1",
+        kind="attachment_text",
+        content_markdown="hello\n",
+        metadata={"filename": "note.txt"},
+    )
+    updated = store.upsert_artifact(
+        workspace_id="default",
+        memo_uid="abc123",
+        resource_uid="resources/file1",
+        kind="attachment_text",
+        content_markdown="updated\n",
+        metadata={"filename": "note.txt", "size": 7},
+    )
+
+    assert created.id == updated.id
+    artifacts = store.list_artifacts(
+        workspace_id="default",
+        memo_uid="abc123",
+        kind="attachment_text",
+    )
+    assert len(artifacts) == 1
+    assert artifacts[0].content_markdown == "updated\n"
+    assert artifacts[0].metadata == {"filename": "note.txt", "size": 7}

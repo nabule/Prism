@@ -68,6 +68,18 @@ class BusinessTagRecord:
     updated_at: str
 
 
+@dataclass(frozen=True)
+class ArtifactRecord:
+    id: int
+    workspace_id: str
+    memo_uid: str
+    resource_uid: str | None
+    kind: str
+    content_markdown: str
+    metadata: dict[str, Any]
+    created_at: str
+
+
 class Store:
     def __init__(self, database_path: str | Path):
         self.database_path = Path(database_path)
@@ -165,6 +177,22 @@ class Store:
 
                 CREATE INDEX IF NOT EXISTS idx_business_tags_status_path
                   ON business_tags(status, path);
+
+                CREATE TABLE IF NOT EXISTS artifacts (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  workspace_id TEXT NOT NULL,
+                  memo_uid TEXT NOT NULL,
+                  resource_uid TEXT,
+                  kind TEXT NOT NULL,
+                  content_markdown TEXT NOT NULL,
+                  metadata_json TEXT NOT NULL,
+                  created_at TEXT NOT NULL,
+                  UNIQUE (workspace_id, memo_uid, resource_uid, kind),
+                  FOREIGN KEY (workspace_id) REFERENCES workspaces(id)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_artifacts_memo_kind
+                  ON artifacts(workspace_id, memo_uid, kind);
                 """
             )
 
@@ -545,6 +573,81 @@ class Store:
                 ).fetchall()
         return [_business_tag_from_row(row) for row in rows]
 
+    def upsert_artifact(
+        self,
+        *,
+        workspace_id: str,
+        memo_uid: str,
+        kind: str,
+        content_markdown: str,
+        resource_uid: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> ArtifactRecord:
+        now = utc_now()
+        metadata_json = json.dumps(metadata or {}, ensure_ascii=False, sort_keys=True)
+        with self.connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO artifacts (
+                  workspace_id, memo_uid, resource_uid, kind, content_markdown,
+                  metadata_json, created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(workspace_id, memo_uid, resource_uid, kind) DO UPDATE SET
+                  content_markdown = excluded.content_markdown,
+                  metadata_json = excluded.metadata_json
+                """,
+                (
+                    workspace_id,
+                    memo_uid,
+                    resource_uid,
+                    kind,
+                    content_markdown,
+                    metadata_json,
+                    now,
+                ),
+            )
+            row = connection.execute(
+                """
+                SELECT * FROM artifacts
+                WHERE workspace_id = ? AND memo_uid = ? AND resource_uid IS ?
+                  AND kind = ?
+                """,
+                (workspace_id, memo_uid, resource_uid, kind),
+            ).fetchone()
+        if row is None:
+            raise RuntimeError("Artifact upsert did not return a row")
+        return _artifact_from_row(row)
+
+    def list_artifacts(
+        self,
+        *,
+        workspace_id: str,
+        memo_uid: str | None = None,
+        kind: str | None = None,
+        limit: int = 100,
+    ) -> list[ArtifactRecord]:
+        conditions = ["workspace_id = ?"]
+        params: list[Any] = [workspace_id]
+        if memo_uid is not None:
+            conditions.append("memo_uid = ?")
+            params.append(memo_uid)
+        if kind is not None:
+            conditions.append("kind = ?")
+            params.append(kind)
+        params.append(limit)
+        with self.connect() as connection:
+            rows = connection.execute(
+                f"""
+                SELECT * FROM artifacts
+                WHERE {" AND ".join(conditions)}
+                ORDER BY created_at DESC, id DESC
+                LIMIT ?
+                """,
+                params,
+            ).fetchall()
+        return [_artifact_from_row(row) for row in rows]
+
 
 def _job_from_row(row: sqlite3.Row) -> Job:
     return Job(
@@ -602,4 +705,17 @@ def _business_tag_from_row(row: sqlite3.Row) -> BusinessTagRecord:
         source=str(row["source"]),
         created_at=str(row["created_at"]),
         updated_at=str(row["updated_at"]),
+    )
+
+
+def _artifact_from_row(row: sqlite3.Row) -> ArtifactRecord:
+    return ArtifactRecord(
+        id=int(row["id"]),
+        workspace_id=str(row["workspace_id"]),
+        memo_uid=str(row["memo_uid"]),
+        resource_uid=row["resource_uid"],
+        kind=str(row["kind"]),
+        content_markdown=str(row["content_markdown"]),
+        metadata=json.loads(row["metadata_json"]),
+        created_at=str(row["created_at"]),
     )

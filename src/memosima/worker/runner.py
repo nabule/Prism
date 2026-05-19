@@ -7,6 +7,12 @@ import json
 import logging
 import os
 
+from memosima.core.attachments import (
+    ParsedAttachment,
+    SkippedAttachment,
+    extract_attachment_resources,
+    parse_text_attachment,
+)
 from memosima.core.config import AppConfig, ModelsConfig
 from memosima.core.summary import build_summary_memo_content
 from memosima.core.taxonomy import OrganizationPlan, TaxonomyConfig
@@ -86,6 +92,12 @@ class Worker:
                 confidence=candidate.confidence,
             )
 
+        attachment_results = await self._process_attachments(
+            client=client,
+            workspace_id=job.workspace_id,
+            memo_uid=memo_uid,
+            memo=memo,
+        )
         if organization_plan.needs_clarification:
             comment = _clarification_comment(organization_plan.clarification_reason)
             await client.create_comment(memo_uid, comment)
@@ -94,6 +106,7 @@ class Worker:
                 "memo_uid": memo_uid,
                 "content_hash": content_hash,
                 "ai_plan": organization_plan.to_dict(),
+                "attachments": attachment_results,
                 "clarification_comment_created": True,
                 "clarification_comment": comment,
             }
@@ -111,6 +124,7 @@ class Worker:
                 "content_hash": content_hash,
                 "ai_plan": organization_plan.to_dict(),
                 "ai_source": "llm",
+                "attachments": attachment_results,
                 "clarification_comment_created": True,
                 "clarification_comment": comment,
             }
@@ -148,8 +162,63 @@ class Worker:
             "ai_summary_memo_uid": summary_memo_uid,
             "ai_plan": organization_plan.to_dict(),
             "ai_source": "llm" if llm_draft else "local",
+            "attachments": attachment_results,
             "comment_created": comment_created,
         }
+
+    async def _process_attachments(
+        self,
+        *,
+        client: MemosClient,
+        workspace_id: str,
+        memo_uid: str,
+        memo: dict[str, object],
+    ) -> list[dict[str, object]]:
+        results: list[dict[str, object]] = []
+        for resource in extract_attachment_resources(memo):
+            try:
+                data = await client.download_resource(resource.name)
+                parsed = parse_text_attachment(
+                    resource=resource,
+                    data=data,
+                    max_bytes=self.config.max_attachment_bytes,
+                    allowed_extensions=self.config.allowed_parse_extensions,
+                )
+                if isinstance(parsed, ParsedAttachment):
+                    artifact = self.store.upsert_artifact(
+                        workspace_id=workspace_id,
+                        memo_uid=memo_uid,
+                        resource_uid=resource.name,
+                        kind=parsed.kind,
+                        content_markdown=parsed.content_markdown,
+                        metadata=parsed.metadata,
+                    )
+                    results.append(
+                        {
+                            "resource": resource.name,
+                            "status": "parsed",
+                            "artifact_id": artifact.id,
+                            "kind": artifact.kind,
+                        }
+                    )
+                elif isinstance(parsed, SkippedAttachment):
+                    results.append(
+                        {
+                            "resource": resource.name,
+                            "status": "skipped",
+                            "reason": parsed.reason,
+                        }
+                    )
+            except Exception as exc:
+                LOGGER.warning("Attachment parse failed for memo %s resource %s: %s", memo_uid, resource.name, exc)
+                results.append(
+                    {
+                        "resource": resource.name,
+                        "status": "failed",
+                        "reason": str(exc),
+                    }
+                )
+        return results
 
     async def _build_llm_draft(
         self,

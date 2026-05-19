@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 from fastapi import FastAPI
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from httpx import ASGITransport, AsyncClient
 
 from memosima.memos.client import MemosClient, MemosClientError
@@ -101,6 +101,10 @@ async def test_memos_client_reads_memo_and_creates_comment(monkeypatch):
     async def delete_token(username: str, token_id: str):
         return {}
 
+    @app.get("/file/resources/{resource_id}")
+    async def download_resource(resource_id: str):
+        return Response(content=b"downloaded", media_type="text/plain")
+
     original_async_client = AsyncClient
 
     def fake_async_client(*args, **kwargs):
@@ -177,6 +181,7 @@ async def test_memos_client_reads_memo_and_creates_comment(monkeypatch):
         "token": "pat-token",
     }
     await client.delete_personal_access_token("users/test/personalAccessTokens/1")
+    assert await client.download_resource("resources/file1") == b"downloaded"
     assert seen_webhook_payloads == [
         {
             "url": "https://sidecar.example.com/webhooks/memos",
@@ -205,6 +210,7 @@ async def test_memos_client_reads_memo_and_creates_comment(monkeypatch):
         auth_header,
         None,
         None,
+        auth_header,
         auth_header,
         auth_header,
         auth_header,

@@ -44,6 +44,8 @@ class AppConfig:
     worker_poll_interval_seconds: float
     worker_max_attempts: int
     worker_create_probe_comment: bool
+    max_attachment_bytes: int
+    allowed_parse_extensions: tuple[str, ...]
 
     @classmethod
     def load(cls, path: str | Path = "config/app.yaml") -> "AppConfig":
@@ -55,6 +57,7 @@ class AppConfig:
         security = raw.get("security", {})
         memos = raw.get("memos", {})
         worker = raw.get("worker", {})
+        limits = raw.get("limits", {})
 
         admin_token_env = str(security.get("admin_token_env", "SIDECAR_ADMIN_TOKEN"))
         memos_base_url_env = memos.get("base_url_env", "MEMOS_BASE_URL")
@@ -77,6 +80,13 @@ class AppConfig:
             worker_poll_interval_seconds=float(worker.get("poll_interval_seconds", 2)),
             worker_max_attempts=int(worker.get("max_attempts", 3)),
             worker_create_probe_comment=bool(worker.get("create_probe_comment", False)),
+            max_attachment_bytes=int(limits.get("max_attachment_mb", 50)) * 1024 * 1024,
+            allowed_parse_extensions=_string_tuple(
+                limits.get(
+                    "allowed_parse_extensions",
+                    [".txt", ".md", ".docx", ".xlsx", ".pdf", ".drawio", ".drawio.svg", ".json"],
+                )
+            ),
         )
 
 
@@ -118,3 +128,9 @@ class ModelsConfig:
         if default_provider not in providers:
             raise ConfigError(f"Default provider is not configured: {default_provider}")
         return cls(default_provider=default_provider, providers=providers)
+
+
+def _string_tuple(value: Any) -> tuple[str, ...]:
+    if not isinstance(value, list):
+        raise ConfigError("Expected a list of strings")
+    return tuple(str(item) for item in value)

@@ -56,6 +56,31 @@ def test_job_claim_fail_and_retry_flow(tmp_path):
     assert retried.retry_count == 0
 
 
+def test_job_waiting_user_flow_can_be_retried(tmp_path):
+    store = Store(tmp_path / "sidecar.db")
+    store.migrate()
+    store.ensure_workspace("default")
+    job, _ = store.create_job(
+        workspace_id="default",
+        job_type="process_memo",
+        idempotency_key="memo:waiting",
+        payload={"memo_uid": "waiting"},
+    )
+
+    store.mark_job_waiting_user(job.id, {"memo_uid": "waiting", "status": "waiting_user"})
+
+    waiting = store.get_job(job.id)
+    assert waiting is not None
+    assert waiting.status == "waiting_user"
+    assert waiting.result == {"memo_uid": "waiting", "status": "waiting_user"}
+
+    retried = store.retry_job(job.id)
+    assert retried is not None
+    assert retried.status == "pending"
+    assert retried.error is None
+    assert retried.retry_count == 0
+
+
 def test_tag_candidate_upsert_list_and_review_flow(tmp_path):
     store = Store(tmp_path / "sidecar.db")
     store.migrate()

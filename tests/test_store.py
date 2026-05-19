@@ -54,3 +54,46 @@ def test_job_claim_fail_and_retry_flow(tmp_path):
     assert retried.status == "pending"
     assert retried.error is None
     assert retried.retry_count == 0
+
+
+def test_tag_candidate_upsert_list_and_review_flow(tmp_path):
+    store = Store(tmp_path / "sidecar.db")
+    store.migrate()
+    store.ensure_workspace("default")
+
+    created = store.upsert_tag_candidate(
+        workspace_id="default",
+        path="#项目/新方向",
+        parent_path="#项目",
+        reason="memo contains a tag outside the approved taxonomy",
+        source_memo_uid="abc123",
+        similar_tags=["#项目/个人AI知识库"],
+        confidence=0.5,
+    )
+    updated = store.upsert_tag_candidate(
+        workspace_id="default",
+        path="#项目/新方向",
+        parent_path="#项目",
+        reason="updated reason",
+        source_memo_uid="def456",
+        similar_tags=["#项目/个人AI知识库"],
+        confidence=0.7,
+    )
+
+    assert created.id == updated.id
+    candidates = store.list_tag_candidates(workspace_id="default")
+    assert len(candidates) == 1
+    assert candidates[0].status == "candidate"
+    assert candidates[0].reason == "updated reason"
+    assert candidates[0].source_memo_uid == "def456"
+
+    reviewed = store.review_tag_candidate(
+        candidate_id=created.id,
+        status="approved",
+        reviewer_note="纳入正式标签",
+    )
+
+    assert reviewed is not None
+    assert reviewed.status == "approved"
+    assert reviewed.reviewer_note == "纳入正式标签"
+    assert store.list_tag_candidates(workspace_id="default", status="candidate") == []

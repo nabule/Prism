@@ -67,6 +67,16 @@ class Worker:
             status="synced",
             content_hash=content_hash,
         )
+        for candidate in organization_plan.candidate_tags:
+            self.store.upsert_tag_candidate(
+                workspace_id=job.workspace_id,
+                path=candidate.path,
+                parent_path=candidate.parent_path,
+                reason=candidate.reason,
+                source_memo_uid=memo_uid,
+                similar_tags=list(candidate.similar_existing_tags),
+                confidence=candidate.confidence,
+            )
 
         comment_created = False
         if self.config.worker_create_probe_comment:

@@ -346,12 +346,13 @@
 - OpenRouter 默认模型配置为 `deepseek/deepseek-v4-flash:free`。
 - 开发运行、配置、API 探针和验收记录文档。
 - P2 第一片：标签树配置加载、本地整理草案生成、worker job result 输出 `ai_plan`。
+- P2 第二片：候选标签落库，提供 `/admin/tag-candidates` 查询、approve、reject 管理接口。
 
 自动化测试：
 
 ```text
 npx nx test sidecar
-18 passed
+20 passed
 ```
 
 阻塞项：

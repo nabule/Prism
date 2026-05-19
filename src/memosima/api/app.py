@@ -11,7 +11,7 @@ from memosima import __version__
 from memosima.api.security import require_admin
 from memosima.api.webhooks import build_idempotency_key, extract_memo_uid
 from memosima.core.config import AppConfig, ConfigError, ModelsConfig
-from memosima.db.store import Job, Store
+from memosima.db.store import Job, Store, TagCandidateRecord
 
 
 class WebhookAccepted(BaseModel):
@@ -37,6 +37,29 @@ class JobView(BaseModel):
 
 class JobsResponse(BaseModel):
     jobs: list[JobView]
+
+
+class TagCandidateView(BaseModel):
+    id: int
+    workspace_id: str
+    path: str
+    parent_path: str | None
+    status: str
+    reason: str
+    source_memo_uid: str | None
+    similar_tags: list[str]
+    confidence: float
+    reviewer_note: str | None
+    created_at: str
+    updated_at: str
+
+
+class TagCandidatesResponse(BaseModel):
+    candidates: list[TagCandidateView]
+
+
+class ReviewTagCandidateRequest(BaseModel):
+    note: str | None = Field(default=None, max_length=1000)
 
 
 class HealthResponse(BaseModel):
@@ -131,6 +154,62 @@ def create_app(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
         return _job_view(job)
 
+    @app.get(
+        "/admin/tag-candidates",
+        response_model=TagCandidatesResponse,
+        dependencies=[Depends(require_admin)],
+    )
+    async def list_tag_candidates(
+        status_filter: str | None = Query(default="candidate", alias="status"),
+        limit: int = Query(default=100, ge=1, le=500),
+    ) -> TagCandidatesResponse:
+        return TagCandidatesResponse(
+            candidates=[
+                _tag_candidate_view(candidate)
+                for candidate in store.list_tag_candidates(
+                    workspace_id=config.workspace_id,
+                    status=status_filter,
+                    limit=limit,
+                )
+            ]
+        )
+
+    @app.post(
+        "/admin/tag-candidates/{candidate_id}/approve",
+        response_model=TagCandidateView,
+        dependencies=[Depends(require_admin)],
+    )
+    async def approve_tag_candidate(
+        candidate_id: int,
+        review: ReviewTagCandidateRequest | None = None,
+    ) -> TagCandidateView:
+        candidate = store.review_tag_candidate(
+            candidate_id=candidate_id,
+            status="approved",
+            reviewer_note=review.note if review else None,
+        )
+        if candidate is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tag candidate not found")
+        return _tag_candidate_view(candidate)
+
+    @app.post(
+        "/admin/tag-candidates/{candidate_id}/reject",
+        response_model=TagCandidateView,
+        dependencies=[Depends(require_admin)],
+    )
+    async def reject_tag_candidate(
+        candidate_id: int,
+        review: ReviewTagCandidateRequest | None = None,
+    ) -> TagCandidateView:
+        candidate = store.review_tag_candidate(
+            candidate_id=candidate_id,
+            status="rejected",
+            reviewer_note=review.note if review else None,
+        )
+        if candidate is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tag candidate not found")
+        return _tag_candidate_view(candidate)
+
     return app
 
 
@@ -147,6 +226,23 @@ def _job_view(job: Job) -> JobView:
         retry_count=job.retry_count,
         created_at=job.created_at,
         updated_at=job.updated_at,
+    )
+
+
+def _tag_candidate_view(candidate: TagCandidateRecord) -> TagCandidateView:
+    return TagCandidateView(
+        id=candidate.id,
+        workspace_id=candidate.workspace_id,
+        path=candidate.path,
+        parent_path=candidate.parent_path,
+        status=candidate.status,
+        reason=candidate.reason,
+        source_memo_uid=candidate.source_memo_uid,
+        similar_tags=candidate.similar_tags,
+        confidence=candidate.confidence,
+        reviewer_note=candidate.reviewer_note,
+        created_at=candidate.created_at,
+        updated_at=candidate.updated_at,
     )
 
 

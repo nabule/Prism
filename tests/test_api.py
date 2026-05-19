@@ -56,3 +56,38 @@ def test_admin_jobs_requires_token_and_lists_jobs(tmp_path, monkeypatch):
     assert unauthorized.status_code == 401
     assert authorized.status_code == 200
     assert authorized.json()["jobs"][0]["status"] == "pending"
+
+
+def test_admin_tag_candidates_review_flow(tmp_path, monkeypatch):
+    app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
+    models_path = write_yaml(tmp_path / "models.yaml", models_config_text())
+    monkeypatch.setenv("SIDECAR_ADMIN_TOKEN", "admin-token")
+
+    app = create_app(str(app_path), str(models_path))
+    app.state.store.upsert_tag_candidate(
+        workspace_id="default",
+        path="#项目/新方向",
+        parent_path="#项目",
+        reason="memo contains a tag outside the approved taxonomy",
+        source_memo_uid="abc123",
+        similar_tags=["#项目/个人AI知识库"],
+    )
+    client = TestClient(app)
+
+    unauthorized = client.get("/admin/tag-candidates")
+    listed = client.get("/admin/tag-candidates", headers={"Authorization": "Bearer admin-token"})
+    candidate_id = listed.json()["candidates"][0]["id"]
+    approved = client.post(
+        f"/admin/tag-candidates/{candidate_id}/approve",
+        headers={"Authorization": "Bearer admin-token"},
+        json={"note": "纳入正式标签"},
+    )
+    remaining = client.get("/admin/tag-candidates", headers={"Authorization": "Bearer admin-token"})
+
+    assert unauthorized.status_code == 401
+    assert listed.status_code == 200
+    assert listed.json()["candidates"][0]["path"] == "#项目/新方向"
+    assert approved.status_code == 200
+    assert approved.json()["status"] == "approved"
+    assert approved.json()["reviewer_note"] == "纳入正式标签"
+    assert remaining.json()["candidates"] == []

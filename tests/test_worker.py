@@ -50,3 +50,7 @@ async def test_worker_processes_memo_with_mock_client(tmp_path, monkeypatch):
     assert jobs[0].result["comment_created"] is False
     assert jobs[0].result["ai_plan"]["active_tags"] == ["#项目/个人AI知识库"]
     assert jobs[0].result["ai_plan"]["candidate_tags"][0]["path"] == "#项目/新方向"
+    candidates = store.list_tag_candidates(workspace_id="default")
+    assert len(candidates) == 1
+    assert candidates[0].path == "#项目/新方向"
+    assert candidates[0].source_memo_uid == "abc123"

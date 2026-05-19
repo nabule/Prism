@@ -28,6 +28,22 @@ class Job:
     updated_at: str
 
 
+@dataclass(frozen=True)
+class TagCandidateRecord:
+    id: int
+    workspace_id: str
+    path: str
+    parent_path: str | None
+    status: str
+    reason: str
+    source_memo_uid: str | None
+    similar_tags: list[str]
+    confidence: float
+    reviewer_note: str | None
+    created_at: str
+    updated_at: str
+
+
 class Store:
     def __init__(self, database_path: str | Path):
         self.database_path = Path(database_path)
@@ -90,6 +106,26 @@ class Store:
 
                 CREATE INDEX IF NOT EXISTS idx_jobs_status_created
                   ON jobs(status, created_at);
+
+                CREATE TABLE IF NOT EXISTS tag_candidates (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  workspace_id TEXT NOT NULL,
+                  path TEXT NOT NULL,
+                  parent_path TEXT,
+                  status TEXT NOT NULL,
+                  reason TEXT NOT NULL,
+                  source_memo_uid TEXT,
+                  similar_tags_json TEXT NOT NULL,
+                  confidence REAL NOT NULL,
+                  reviewer_note TEXT,
+                  created_at TEXT NOT NULL,
+                  updated_at TEXT NOT NULL,
+                  UNIQUE (workspace_id, path),
+                  FOREIGN KEY (workspace_id) REFERENCES workspaces(id)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_tag_candidates_status_created
+                  ON tag_candidates(status, created_at);
                 """
             )
 
@@ -276,6 +312,114 @@ class Store:
                 ),
             )
 
+    def upsert_tag_candidate(
+        self,
+        *,
+        workspace_id: str,
+        path: str,
+        reason: str,
+        parent_path: str | None = None,
+        source_memo_uid: str | None = None,
+        similar_tags: list[str] | None = None,
+        confidence: float = 0.5,
+    ) -> TagCandidateRecord:
+        now = utc_now()
+        similar_tags_json = json.dumps(similar_tags or [], ensure_ascii=False, sort_keys=True)
+        with self.connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO tag_candidates (
+                  workspace_id, path, parent_path, status, reason, source_memo_uid,
+                  similar_tags_json, confidence, created_at, updated_at
+                )
+                VALUES (?, ?, ?, 'candidate', ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(workspace_id, path) DO UPDATE SET
+                  parent_path = excluded.parent_path,
+                  reason = excluded.reason,
+                  source_memo_uid = excluded.source_memo_uid,
+                  similar_tags_json = excluded.similar_tags_json,
+                  confidence = excluded.confidence,
+                  updated_at = excluded.updated_at
+                WHERE tag_candidates.status = 'candidate'
+                """,
+                (
+                    workspace_id,
+                    path,
+                    parent_path,
+                    reason,
+                    source_memo_uid,
+                    similar_tags_json,
+                    confidence,
+                    now,
+                    now,
+                ),
+            )
+            row = connection.execute(
+                """
+                SELECT * FROM tag_candidates
+                WHERE workspace_id = ? AND path = ?
+                """,
+                (workspace_id, path),
+            ).fetchone()
+        if row is None:
+            raise RuntimeError("Tag candidate upsert did not return a row")
+        return _tag_candidate_from_row(row)
+
+    def list_tag_candidates(
+        self,
+        *,
+        workspace_id: str,
+        status: str | None = None,
+        limit: int = 100,
+    ) -> list[TagCandidateRecord]:
+        with self.connect() as connection:
+            if status:
+                rows = connection.execute(
+                    """
+                    SELECT * FROM tag_candidates
+                    WHERE workspace_id = ? AND status = ?
+                    ORDER BY created_at DESC, id DESC
+                    LIMIT ?
+                    """,
+                    (workspace_id, status, limit),
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    """
+                    SELECT * FROM tag_candidates
+                    WHERE workspace_id = ?
+                    ORDER BY created_at DESC, id DESC
+                    LIMIT ?
+                    """,
+                    (workspace_id, limit),
+                ).fetchall()
+        return [_tag_candidate_from_row(row) for row in rows]
+
+    def review_tag_candidate(
+        self,
+        *,
+        candidate_id: int,
+        status: str,
+        reviewer_note: str | None = None,
+    ) -> TagCandidateRecord | None:
+        if status not in {"approved", "rejected"}:
+            raise ValueError(f"Unsupported tag candidate review status: {status}")
+        now = utc_now()
+        with self.connect() as connection:
+            connection.execute(
+                """
+                UPDATE tag_candidates
+                SET status = ?, reviewer_note = ?, updated_at = ?
+                WHERE id = ? AND status = 'candidate'
+                """,
+                (status, reviewer_note, now, candidate_id),
+            )
+            row = connection.execute(
+                "SELECT * FROM tag_candidates WHERE id = ?",
+                (candidate_id,),
+            ).fetchone()
+        return _tag_candidate_from_row(row) if row else None
+
 
 def _job_from_row(row: sqlite3.Row) -> Job:
     return Job(
@@ -288,6 +432,23 @@ def _job_from_row(row: sqlite3.Row) -> Job:
         result=json.loads(row["result_json"]) if row["result_json"] else None,
         error=row["error"],
         retry_count=int(row["retry_count"]),
+        created_at=str(row["created_at"]),
+        updated_at=str(row["updated_at"]),
+    )
+
+
+def _tag_candidate_from_row(row: sqlite3.Row) -> TagCandidateRecord:
+    return TagCandidateRecord(
+        id=int(row["id"]),
+        workspace_id=str(row["workspace_id"]),
+        path=str(row["path"]),
+        parent_path=row["parent_path"],
+        status=str(row["status"]),
+        reason=str(row["reason"]),
+        source_memo_uid=row["source_memo_uid"],
+        similar_tags=json.loads(row["similar_tags_json"]),
+        confidence=float(row["confidence"]),
+        reviewer_note=row["reviewer_note"],
         created_at=str(row["created_at"]),
         updated_at=str(row["updated_at"]),
     )

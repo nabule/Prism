@@ -21,6 +21,7 @@ security:
 memos:
   base_url_env: MEMOS_BASE_URL
   api_token_env: MEMOS_API_TOKEN
+  webhook_url_env: MEMOS_WEBHOOK_URL
   request_timeout_seconds: 5
 worker:
   poll_interval_seconds: 0.01
@@ -38,4 +39,3 @@ providers:
     api_key_env: OPENROUTER_API_KEY
     default_model: deepseek/deepseek-v4-flash:free
 """
-

@@ -38,6 +38,7 @@ class AppConfig:
     admin_token: str | None
     memos_base_url: str | None
     memos_api_token: str | None
+    memos_webhook_url: str | None
     memos_timeout_seconds: float
     worker_poll_interval_seconds: float
     worker_max_attempts: int
@@ -56,6 +57,7 @@ class AppConfig:
         admin_token_env = str(security.get("admin_token_env", "SIDECAR_ADMIN_TOKEN"))
         memos_base_url_env = memos.get("base_url_env", "MEMOS_BASE_URL")
         memos_api_token_env = memos.get("api_token_env", "MEMOS_API_TOKEN")
+        memos_webhook_url_env = memos.get("webhook_url_env", "MEMOS_WEBHOOK_URL")
         db_path = Path(str(database.get("path", "data/sidecar/sidecar.db")))
 
         return cls(
@@ -67,6 +69,7 @@ class AppConfig:
             admin_token=_env_value(admin_token_env),
             memos_base_url=_env_value(str(memos_base_url_env)) if memos_base_url_env else None,
             memos_api_token=_env_value(str(memos_api_token_env)) if memos_api_token_env else None,
+            memos_webhook_url=_env_value(str(memos_webhook_url_env)) if memos_webhook_url_env else None,
             memos_timeout_seconds=float(memos.get("request_timeout_seconds", 15)),
             worker_poll_interval_seconds=float(worker.get("poll_interval_seconds", 2)),
             worker_max_attempts=int(worker.get("max_attempts", 3)),
@@ -112,4 +115,3 @@ class ModelsConfig:
         if default_provider not in providers:
             raise ConfigError(f"Default provider is not configured: {default_provider}")
         return cls(default_provider=default_provider, providers=providers)
-

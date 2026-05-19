@@ -6,12 +6,13 @@ from memosima.core.config import AppConfig
 from memosima.db.store import Store
 from memosima.worker.runner import Worker
 
-from helpers import app_config_text, write_yaml
+from helpers import app_config_text, taxonomy_config_text, write_yaml
 
 
 @pytest.mark.asyncio
 async def test_worker_processes_memo_with_mock_client(tmp_path, monkeypatch):
     app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
+    write_yaml(tmp_path / "taxonomy.yaml", taxonomy_config_text())
     monkeypatch.setenv("MEMOS_BASE_URL", "http://memos.local")
     monkeypatch.setenv("MEMOS_API_TOKEN", "memos-token")
     config = AppConfig.load(app_path)
@@ -30,7 +31,10 @@ async def test_worker_processes_memo_with_mock_client(tmp_path, monkeypatch):
             pass
 
         async def get_memo(self, memo_uid):
-            return {"name": f"memos/{memo_uid}", "content": "hello"}
+            return {
+                "name": f"memos/{memo_uid}",
+                "content": "个人 AI 知识库开发记录 #AI知识库 #项目/新方向",
+            }
 
         async def create_comment(self, memo_uid, content):
             raise AssertionError("probe comment is disabled")
@@ -44,3 +48,5 @@ async def test_worker_processes_memo_with_mock_client(tmp_path, monkeypatch):
     assert jobs[0].status == "succeeded"
     assert jobs[0].result["memo_uid"] == "abc123"
     assert jobs[0].result["comment_created"] is False
+    assert jobs[0].result["ai_plan"]["active_tags"] == ["#项目/个人AI知识库"]
+    assert jobs[0].result["ai_plan"]["candidate_tags"][0]["path"] == "#项目/新方向"

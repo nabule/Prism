@@ -7,6 +7,7 @@ import json
 import logging
 
 from memosima.core.config import AppConfig
+from memosima.core.taxonomy import TaxonomyConfig
 from memosima.db.store import Job, Store
 from memosima.memos.client import MemosClient
 
@@ -56,6 +57,9 @@ class Worker:
         )
         memo = await client.get_memo(memo_uid)
         content_hash = _memo_hash(memo)
+        taxonomy = TaxonomyConfig.load(self.config.taxonomy_path)
+        content = memo.get("content")
+        organization_plan = taxonomy.build_organization_plan(content if isinstance(content, str) else "")
         self.store.upsert_memo(
             workspace_id=job.workspace_id,
             memos_uid=memo_uid,
@@ -72,6 +76,7 @@ class Worker:
         return {
             "memo_uid": memo_uid,
             "content_hash": content_hash,
+            "ai_plan": organization_plan.to_dict(),
             "comment_created": comment_created,
         }
 
@@ -105,4 +110,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

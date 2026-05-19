@@ -34,6 +34,7 @@ class AppConfig:
     public_base_url: str
     timezone: str
     database_path: Path
+    taxonomy_path: Path
     admin_token_env: str
     admin_token: str | None
     memos_base_url: str | None
@@ -50,6 +51,7 @@ class AppConfig:
         raw = _read_yaml(config_path)
         app = raw.get("app", {})
         database = raw.get("database", {})
+        taxonomy = raw.get("taxonomy", {})
         security = raw.get("security", {})
         memos = raw.get("memos", {})
         worker = raw.get("worker", {})
@@ -65,6 +67,7 @@ class AppConfig:
             public_base_url=str(app.get("public_base_url", "http://localhost:5230")),
             timezone=str(app.get("timezone", "Asia/Shanghai")),
             database_path=db_path,
+            taxonomy_path=Path(str(taxonomy.get("path", "config/taxonomy.yaml"))),
             admin_token_env=admin_token_env,
             admin_token=_env_value(admin_token_env),
             memos_base_url=_env_value(str(memos_base_url_env)) if memos_base_url_env else None,

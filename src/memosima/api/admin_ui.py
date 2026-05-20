@@ -47,6 +47,7 @@ ADMIN_UI_HTML = """<!doctype html>
       padding: 9px 10px;
     }
     textarea { min-height: 74px; resize: vertical; }
+    textarea.prompt { min-height: 180px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; font-size: .82rem; }
     button {
       background: var(--panel);
       color: var(--fg);
@@ -72,6 +73,16 @@ ADMIN_UI_HTML = """<!doctype html>
       white-space: pre-wrap;
       word-break: break-word;
     }
+    dialog {
+      width: min(900px, calc(100vw - 32px));
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--fg);
+      padding: 0;
+    }
+    dialog::backdrop { background: rgba(15, 23, 42, .45); }
+    dialog form { padding: 16px; }
     .grid { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 16px; align-items: start; }
     .stack { display: grid; gap: 16px; }
     .panel {
@@ -157,6 +168,19 @@ ADMIN_UI_HTML = """<!doctype html>
         <h2>详情</h2>
         <pre id="detailOutput">选择任务或标签查看详情</pre>
       </div>
+
+      <div class="panel">
+        <h2>默认提示词</h2>
+        <div class="toolbar">
+          <button id="refreshPromptsButton" type="button">刷新</button>
+          <button id="savePromptsButton" class="primary" type="button">保存默认</button>
+        </div>
+        <label for="promptSystem">System</label>
+        <textarea id="promptSystem" class="prompt" spellcheck="false"></textarea>
+        <label for="promptUser" style="margin-top: 10px;">User</label>
+        <textarea id="promptUser" class="prompt" spellcheck="false"></textarea>
+        <div class="muted">可用占位符：{active_tags}、{local_plan_json}、{content}</div>
+      </div>
     </section>
 
     <section class="stack">
@@ -235,6 +259,21 @@ ADMIN_UI_HTML = """<!doctype html>
   </div>
 </main>
 
+<dialog id="promptDialog">
+  <form method="dialog">
+    <h2>临时提示词</h2>
+    <label for="overrideSystem">System</label>
+    <textarea id="overrideSystem" class="prompt" spellcheck="false"></textarea>
+    <label for="overrideUser" style="margin-top: 10px;">User</label>
+    <textarea id="overrideUser" class="prompt" spellcheck="false"></textarea>
+    <div class="muted">该提示词只用于本次重试，不会保存为默认值。</div>
+    <div class="actions" style="justify-content: flex-end; margin-top: 14px;">
+      <button type="submit" value="cancel">取消</button>
+      <button class="primary" type="submit" value="confirm">使用本次</button>
+    </div>
+  </form>
+</dialog>
+
 <script>
 const storageKey = "memosima.adminToken";
 const tokenInput = document.getElementById("tokenInput");
@@ -243,6 +282,12 @@ const detailOutput = document.getElementById("detailOutput");
 const healthOutput = document.getElementById("healthOutput");
 const jobsBody = document.getElementById("jobsBody");
 const candidatesBody = document.getElementById("candidatesBody");
+const promptSystem = document.getElementById("promptSystem");
+const promptUser = document.getElementById("promptUser");
+const promptDialog = document.getElementById("promptDialog");
+const overrideSystem = document.getElementById("overrideSystem");
+const overrideUser = document.getElementById("overrideUser");
+let promptDialogResolve = null;
 
 function setNotice(message, kind = "") {
   globalNotice.textContent = message;
@@ -328,6 +373,33 @@ async function loadJobs() {
   }
 }
 
+async function loadPrompts() {
+  try {
+    const data = await requestJson("/admin/prompts");
+    promptSystem.value = data.organize_memo.system;
+    promptUser.value = data.organize_memo.user;
+    setNotice("默认提示词已刷新", "ok");
+    return data.organize_memo;
+  } catch (error) {
+    setNotice(String(error.message || error), "error");
+    return null;
+  }
+}
+
+async function savePrompts() {
+  try {
+    const data = await requestJson("/admin/prompts/organize-memo", {
+      method: "PUT",
+      body: JSON.stringify({ system: promptSystem.value, user: promptUser.value })
+    });
+    promptSystem.value = data.system;
+    promptUser.value = data.user;
+    setNotice("默认提示词已保存", "ok");
+  } catch (error) {
+    setNotice(String(error.message || error), "error");
+  }
+}
+
 function renderJobRow(job) {
   const tr = document.createElement("tr");
   tr.append(
@@ -341,19 +413,52 @@ function renderJobRow(job) {
   actions.className = "actions";
   actions.append(button("详情", "", () => showDetail(job)));
   if (job.status === "failed" || job.status === "waiting_user") {
-    actions.append(button("重试", "primary", async () => {
-      try {
-        const data = await requestJson(`/admin/jobs/${job.id}/retry`, { method: "POST" });
-        showDetail(data);
-        await loadJobs();
-      } catch (error) {
-        setNotice(String(error.message || error), "error");
-      }
-    }));
+    actions.append(button("重试", "primary", () => retryJob(job)));
   }
   tr.append(actions);
   return tr;
 }
+
+async function retryJob(job) {
+  try {
+    let payload = null;
+    if (window.confirm("是否临时修改本次重试使用的提示词？")) {
+      const prompt = await loadPrompts();
+      if (!prompt) return;
+      const override = await openPromptDialog(prompt);
+      if (!override) return;
+      payload = { prompt_override: override };
+    }
+    const data = await requestJson(`/admin/jobs/${job.id}/retry`, {
+      method: "POST",
+      body: payload ? JSON.stringify(payload) : null
+    });
+    showDetail(data);
+    await loadJobs();
+  } catch (error) {
+    setNotice(String(error.message || error), "error");
+  }
+}
+
+function openPromptDialog(prompt) {
+  overrideSystem.value = prompt.system;
+  overrideUser.value = prompt.user;
+  promptDialog.returnValue = "";
+  promptDialog.showModal();
+  return new Promise((resolve) => {
+    promptDialogResolve = resolve;
+  });
+}
+
+promptDialog.addEventListener("close", () => {
+  if (!promptDialogResolve) return;
+  if (promptDialog.returnValue === "confirm") {
+    promptDialogResolve({ system: overrideSystem.value, user: overrideUser.value });
+  } else {
+    promptDialogResolve(null);
+  }
+  promptDialogResolve = null;
+});
 
 async function loadCandidates() {
   try {
@@ -417,12 +522,15 @@ document.getElementById("clearTokenButton").addEventListener("click", () => {
 document.getElementById("refreshHealthButton").addEventListener("click", loadHealth);
 document.getElementById("refreshJobsButton").addEventListener("click", loadJobs);
 document.getElementById("refreshCandidatesButton").addEventListener("click", loadCandidates);
+document.getElementById("refreshPromptsButton").addEventListener("click", loadPrompts);
+document.getElementById("savePromptsButton").addEventListener("click", savePrompts);
 
 tokenInput.value = localStorage.getItem(storageKey) || "";
 loadHealth();
 if (token()) {
   loadJobs();
   loadCandidates();
+  loadPrompts();
 }
 </script>
 </body>

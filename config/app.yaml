@@ -6,6 +6,8 @@ database:
   path: data/sidecar/sidecar.db
 taxonomy:
   path: config/taxonomy.yaml
+prompts:
+  path: config/prompts.yaml
 security:
   admin_token_env: SIDECAR_ADMIN_TOKEN
 memos:

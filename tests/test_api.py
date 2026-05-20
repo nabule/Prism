@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 
 from memosima.api.app import create_app
 
-from helpers import app_config_text, models_config_text, write_yaml
+from helpers import app_config_text, models_config_text, prompts_config_text, write_yaml
 
 
 def test_health_reports_model_without_exposing_key(tmp_path, monkeypatch):
@@ -58,6 +58,58 @@ def test_admin_jobs_requires_token_and_lists_jobs(tmp_path, monkeypatch):
     assert authorized.json()["jobs"][0]["status"] == "pending"
 
 
+def test_admin_prompts_can_be_read_and_updated(tmp_path, monkeypatch):
+    app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
+    models_path = write_yaml(tmp_path / "models.yaml", models_config_text())
+    write_yaml(tmp_path / "prompts.yaml", prompts_config_text())
+    monkeypatch.setenv("SIDECAR_ADMIN_TOKEN", "admin-token")
+
+    client = TestClient(create_app(str(app_path), str(models_path)))
+    listed = client.get("/admin/prompts", headers={"Authorization": "Bearer admin-token"})
+    updated = client.put(
+        "/admin/prompts/organize-memo",
+        headers={"Authorization": "Bearer admin-token"},
+        json={"system": "新的系统提示 {active_tags}", "user": "新的用户提示 {content}"},
+    )
+    listed_again = client.get("/admin/prompts", headers={"Authorization": "Bearer admin-token"})
+
+    assert listed.status_code == 200
+    assert "测试系统提示词" in listed.json()["organize_memo"]["system"]
+    assert updated.status_code == 200
+    assert updated.json()["system"] == "新的系统提示 {active_tags}"
+    assert listed_again.json()["organize_memo"]["user"] == "新的用户提示 {content}"
+
+
+def test_admin_retry_job_can_store_temporary_prompt_override(tmp_path, monkeypatch):
+    app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
+    models_path = write_yaml(tmp_path / "models.yaml", models_config_text())
+    monkeypatch.setenv("SIDECAR_ADMIN_TOKEN", "admin-token")
+
+    app = create_app(str(app_path), str(models_path))
+    job, _ = app.state.store.create_job(
+        workspace_id="default",
+        job_type="process_memo",
+        idempotency_key="memo:prompt-retry",
+        payload={"memo_uid": "prompt-retry"},
+    )
+    app.state.store.mark_job_failed(job.id, "boom", max_attempts=1)
+    client = TestClient(app)
+
+    response = client.post(
+        f"/admin/jobs/{job.id}/retry",
+        headers={"Authorization": "Bearer admin-token"},
+        json={"prompt_override": {"system": "临时系统 {active_tags}", "user": "临时用户 {content}"}},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "pending"
+    assert data["payload"]["llm_prompt_override"] == {
+        "system": "临时系统 {active_tags}",
+        "user": "临时用户 {content}",
+    }
+
+
 def test_admin_ui_returns_debug_page_without_exposing_token(tmp_path, monkeypatch):
     app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
     models_path = write_yaml(tmp_path / "models.yaml", models_config_text())
@@ -72,6 +124,7 @@ def test_admin_ui_returns_debug_page_without_exposing_token(tmp_path, monkeypatc
     assert "Memosima Admin" in response.text
     assert "/admin/jobs" in response.text
     assert "/admin/tag-candidates" in response.text
+    assert "/admin/prompts" in response.text
     assert "admin-token" not in response.text
     assert "secret-key" not in response.text
 

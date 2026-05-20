@@ -24,7 +24,7 @@ services:
     environment:
       MEMOS_BASE_URL: http://memos:5230
     volumes:
-      - ./config:/app/config:ro
+      - ./config:/app/config
       - ./data/sidecar:/app/data/sidecar
       - ./logs:/app/logs
     command: uvicorn memosima.api.app:create_app --factory --host 0.0.0.0 --port 8080
@@ -41,7 +41,7 @@ services:
     environment:
       MEMOS_BASE_URL: http://memos:5230
     volumes:
-      - ./config:/app/config:ro
+      - ./config:/app/config
       - ./data/sidecar:/app/data/sidecar
       - ./logs:/app/logs
     command: memosima-worker

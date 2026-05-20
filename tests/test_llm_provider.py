@@ -5,6 +5,7 @@ from fastapi import FastAPI, Request
 from httpx import ASGITransport, AsyncClient
 
 from memosima.core.config import ModelsConfig
+from memosima.core.prompts import PromptTemplate
 from memosima.core.taxonomy import TaxonomyConfig
 from memosima.llm.provider import OpenAICompatibleClient
 
@@ -56,6 +57,10 @@ async def test_openai_compatible_client_parses_structured_draft(tmp_path, monkey
         content="整理个人 AI 知识库开发记录 #AI知识库",
         taxonomy=taxonomy,
         local_plan=local_plan,
+        prompt_template=PromptTemplate(
+            system="自定义系统提示\n{active_tags}",
+            user="自定义用户提示\n{local_plan_json}\n{content}",
+        ),
     )
 
     assert draft.summary == "结构化摘要"
@@ -72,5 +77,8 @@ async def test_openai_compatible_client_parses_structured_draft(tmp_path, monkey
     assert payload["model"] == "deepseek/deepseek-v4-flash:free"
     assert payload["response_format"] == {"type": "json_object"}
     messages = payload["messages"]
-    assert "active_tags" in messages[0]["content"]
-    assert "candidate_tags" in messages[0]["content"]
+    assert messages[0]["content"].startswith("自定义系统提示")
+    assert messages[1]["content"].startswith("自定义用户提示")
+    assert "#项目/个人AI知识库" in messages[0]["content"]
+    assert "active_tags" in messages[1]["content"]
+    assert "整理个人 AI 知识库开发记录" in messages[1]["content"]

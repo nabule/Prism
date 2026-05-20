@@ -42,6 +42,7 @@
     <li>内置 <code>/admin/ui</code> 调试管理页面，可查看任务、重试任务和审核候选标签。</li>
     <li>候选标签创建、审核、审核后 active 生效。</li>
     <li>AI 可从正文自动生成 tag 建议；未审核的新 tag 只进入候选列表。</li>
+    <li>AI 提示词可配置；支持保存默认提示词，也支持任务重试时临时覆盖。</li>
     <li>待澄清评论和 <code>waiting_user</code> 任务状态。</li>
     <li><code>.txt</code>、<code>.md</code> 附件解析到 <code>artifacts</code> 表。</li>
   </ul>
@@ -72,7 +73,7 @@
   <h2>3. 打开调试管理页面</h2>
   <p>浏览器打开：</p>
   <pre><code>http://localhost:8080/admin/ui</code></pre>
-  <p>页面用于调试 Sidecar：查看健康状态、查询任务、筛选任务状态、重试 <code>failed</code> 或 <code>waiting_user</code> 任务、查看候选标签并执行通过/拒绝。页面不会从服务器端读取 token；需要手动输入 <code>SIDECAR_ADMIN_TOKEN</code>，保存后只写入当前浏览器的 <code>localStorage</code>。</p>
+  <p>页面用于调试 Sidecar：查看健康状态、查询任务、筛选任务状态、重试 <code>failed</code> 或 <code>waiting_user</code> 任务、查看候选标签并执行通过/拒绝，以及编辑默认 AI 提示词。页面不会从服务器端读取 token；需要手动输入 <code>SIDECAR_ADMIN_TOKEN</code>，保存后只写入当前浏览器的 <code>localStorage</code>。</p>
 
   <h2>4. 创建或更新 Memos PAT</h2>
   <p>可以用探针创建 PAT，并写到临时文件。命令输出默认不会显示 token 原文。</p>
@@ -99,6 +100,7 @@
   <h2>7. AI 自动生成 tag</h2>
   <p>配置 <code>OPENROUTER_API_KEY</code> 后，worker 会请求默认模型从 memo 正文中识别标签。AI 返回的 <code>active_tags</code> 只有已存在于正式标签集合时才会被直接使用；AI 发现的新标签会写入 <code>candidate_tags</code> 并进入审核列表，不会自动激活。</p>
   <p>正式标签集合来自 <code>config/taxonomy.yaml</code> 中的 active 业务标签，以及已经通过审核写入 SQLite <code>business_tags</code> 表的标签。没有配置模型 key 时，系统仍会保留原有的显式 <code>#tag</code> 本地识别和模板整理。</p>
+  <p>默认提示词来自 <code>config/prompts.yaml</code>。在调试管理页面的“默认提示词”区域点击“保存默认”会写回该文件；点击任务“重试”时选择临时修改，只会把提示词写入当前任务 payload 的 <code>llm_prompt_override</code>，不会修改默认文件。提示词可使用 <code>{active_tags}</code>、<code>{local_plan_json}</code>、<code>{content}</code> 占位符。</p>
 
   <h2>8. 候选标签审核</h2>
   <p>memo 中出现未审核业务标签，或 AI 从正文提出新业务标签时，会进入候选标签列表。可以在 <code>/admin/ui</code> 中审核，也可以调用 API。</p>

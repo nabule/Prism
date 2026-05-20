@@ -59,9 +59,13 @@ class OpenAICompatibleClient:
                 {"role": "system", "content": rendered_prompt.system},
                 {"role": "user", "content": rendered_prompt.user},
             ],
-            "temperature": 0.2,
-            "response_format": {"type": "json_object"},
+            "temperature": self.provider.temperature,
         }
+        if self.provider.max_tokens is not None:
+            payload["max_tokens"] = self.provider.max_tokens
+        if self.provider.response_format:
+            payload["response_format"] = {"type": self.provider.response_format}
+        payload.update(self.provider.extra_body)
         response = await self._request("POST", "/chat/completions", json=payload)
         return _parse_draft_response(response)
 

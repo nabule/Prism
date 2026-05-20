@@ -16,7 +16,7 @@ from helpers import models_config_text, taxonomy_config_text, write_yaml
 async def test_openai_compatible_client_parses_structured_draft(tmp_path, monkeypatch):
     models_path = write_yaml(tmp_path / "models.yaml", models_config_text())
     taxonomy_path = write_yaml(tmp_path / "taxonomy.yaml", taxonomy_config_text())
-    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    monkeypatch.setenv("", "test-key")
     models = ModelsConfig.load(models_path)
     provider = models.providers[models.default_provider]
     taxonomy = TaxonomyConfig.load(taxonomy_path)
@@ -24,7 +24,7 @@ async def test_openai_compatible_client_parses_structured_draft(tmp_path, monkey
     app = FastAPI()
     seen: dict[str, object] = {}
 
-    @app.post("/api/v1/chat/completions")
+    @app.post("/largemodel//api/v3/chat/completions")
     async def chat_completions(request: Request):
         seen["authorization"] = request.headers.get("authorization")
         seen["payload"] = await request.json()
@@ -74,8 +74,11 @@ async def test_openai_compatible_client_parses_structured_draft(tmp_path, monkey
     assert seen["authorization"] == " ".join(["Bearer", "test-key"])
     payload = seen["payload"]
     assert isinstance(payload, dict)
-    assert payload["model"] == "deepseek/deepseek-v4-flash:free"
+    assert payload["model"] == ""
+    assert payload["temperature"] == 0.1
+    assert payload["max_tokens"] == 1000
     assert payload["response_format"] == {"type": "json_object"}
+    assert payload["chat_template_kwargs"] == {"enable_thinking": False}
     messages = payload["messages"]
     assert messages[0]["content"].startswith("自定义系统提示")
     assert messages[1]["content"].startswith("自定义用户提示")

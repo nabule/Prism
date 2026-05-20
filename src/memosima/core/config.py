@@ -99,6 +99,10 @@ class ProviderConfig:
     base_url: str
     api_key_env: str
     default_model: str
+    temperature: float
+    max_tokens: int | None
+    response_format: str | None
+    extra_body: dict[str, Any]
     api_key_present: bool
 
 
@@ -120,11 +124,18 @@ class ModelsConfig:
             if not isinstance(value, dict):
                 raise ConfigError(f"Provider config must be a mapping: {name}")
             api_key_env = str(value.get("api_key_env", ""))
+            extra_body = value.get("extra_body", {})
+            if not isinstance(extra_body, dict):
+                raise ConfigError(f"Provider extra_body must be a mapping: {name}")
             providers[str(name)] = ProviderConfig(
                 name=str(name),
                 base_url=str(value.get("base_url", "")),
                 api_key_env=api_key_env,
                 default_model=str(value.get("default_model", "")),
+                temperature=float(value.get("temperature", 0.2)),
+                max_tokens=_optional_int(value.get("max_tokens")),
+                response_format=_optional_string(value.get("response_format", "json_object")),
+                extra_body=dict(extra_body),
                 api_key_present=bool(os.getenv(api_key_env)) if api_key_env else False,
             )
 
@@ -137,3 +148,16 @@ def _string_tuple(value: Any) -> tuple[str, ...]:
     if not isinstance(value, list):
         raise ConfigError("Expected a list of strings")
     return tuple(str(item) for item in value)
+
+
+def _optional_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    return int(value)
+
+
+def _optional_string(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None

@@ -7,17 +7,21 @@ from memosima.core.taxonomy import TaxonomyConfig
 from helpers import app_config_text, models_config_text, prompts_config_text, taxonomy_config_text, write_yaml
 
 
-def test_models_config_uses_openrouter_free_model(tmp_path, monkeypatch):
-    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+def test_models_config_uses__provider_by_default(tmp_path, monkeypatch):
+    monkeypatch.setenv("", "test-key")
     models_path = write_yaml(tmp_path / "models.yaml", models_config_text())
 
     config = ModelsConfig.load(models_path)
 
     provider = config.providers[config.default_provider]
-    assert config.default_provider == "openrouter"
-    assert provider.base_url == "https://openrouter.ai/api/v1"
-    assert provider.api_key_env == "OPENROUTER_API_KEY"
-    assert provider.default_model == "deepseek/deepseek-v4-flash:free"
+    assert config.default_provider == ""
+    assert provider.base_url == ""
+    assert provider.api_key_env == ""
+    assert provider.default_model == ""
+    assert provider.temperature == 0.1
+    assert provider.max_tokens == 1000
+    assert provider.response_format == "json_object"
+    assert provider.extra_body == {"chat_template_kwargs": {"enable_thinking": False}}
     assert provider.api_key_present is True
 
 

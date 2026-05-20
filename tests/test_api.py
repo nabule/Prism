@@ -11,15 +11,15 @@ def test_health_reports_model_without_exposing_key(tmp_path, monkeypatch):
     app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
     models_path = write_yaml(tmp_path / "models.yaml", models_config_text())
     monkeypatch.setenv("SIDECAR_ADMIN_TOKEN", "admin-token")
-    monkeypatch.setenv("OPENROUTER_API_KEY", "secret-key")
+    monkeypatch.setenv("", "secret-key")
 
     client = TestClient(create_app(str(app_path), str(models_path)))
     response = client.get("/health")
 
     assert response.status_code == 200
     data = response.json()
-    assert data["models_default_provider"] == "openrouter"
-    assert data["models_default_model"] == "deepseek/deepseek-v4-flash:free"
+    assert data["models_default_provider"] == ""
+    assert data["models_default_model"] == ""
     assert data["models_api_key_present"] is True
     assert "secret-key" not in response.text
 
@@ -114,7 +114,7 @@ def test_admin_ui_returns_debug_page_without_exposing_token(tmp_path, monkeypatc
     app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
     models_path = write_yaml(tmp_path / "models.yaml", models_config_text())
     monkeypatch.setenv("SIDECAR_ADMIN_TOKEN", "admin-token")
-    monkeypatch.setenv("OPENROUTER_API_KEY", "secret-key")
+    monkeypatch.setenv("", "secret-key")
 
     client = TestClient(create_app(str(app_path), str(models_path)))
     response = client.get("/admin/ui")

@@ -15,11 +15,19 @@ class LLMClientError(RuntimeError):
     pass
 
 
+class LLMTagCandidate(BaseModel):
+    path: str = Field(min_length=2, max_length=120)
+    reason: str = Field(min_length=1, max_length=500)
+    confidence: float = Field(default=0.5, ge=0, le=1)
+
+
 class LLMOrganizationDraft(BaseModel):
     title: str = Field(min_length=1, max_length=120)
     summary: str = Field(min_length=1, max_length=2000)
     key_points: list[str] = Field(default_factory=list, max_length=20)
     todos: list[str] = Field(default_factory=list, max_length=20)
+    active_tags: list[str] = Field(default_factory=list, max_length=20)
+    candidate_tags: list[LLMTagCandidate] = Field(default_factory=list, max_length=20)
     needs_clarification: bool = False
     clarification_question: str | None = Field(default=None, max_length=1000)
 
@@ -104,9 +112,11 @@ def _system_prompt(taxonomy: TaxonomyConfig) -> str:
     return "\n".join(
         [
             "你是个人知识库整理助手。请只输出 JSON 对象，不要输出 Markdown 代码块。",
-            "必须优先使用已有标签，不要在 JSON 中创造未审核标签。",
+            "必须优先从已有正式标签中选择 active_tags。",
+            "只有正文确实需要且没有合适正式标签时，才在 candidate_tags 中提出新标签；不要把新标签放入 active_tags。",
             "如果内容指代不明或缺少关键信息，将 needs_clarification 设为 true，并给出 clarification_question。",
-            "JSON 字段：title, summary, key_points, todos, needs_clarification, clarification_question。",
+            "JSON 字段：title, summary, key_points, todos, active_tags, candidate_tags, needs_clarification, clarification_question。",
+            "candidate_tags 每项字段：path, reason, confidence。标签 path 必须以 # 开头，不含空格。",
             "已有正式标签：",
             active_tags,
         ]

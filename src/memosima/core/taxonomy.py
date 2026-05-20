@@ -171,6 +171,15 @@ class TaxonomyConfig:
             else None,
         )
 
+    def normalize_tag(self, value: Any) -> str:
+        return _normalize_tag(value)
+
+    def parent_tag(self, tag: str) -> str | None:
+        return _parent_tag(tag)
+
+    def similar_tags(self, tag: str) -> tuple[str, ...]:
+        return _similar_tags(tag, self.active_tag_paths)
+
 
 def _normalize_tag(value: Any) -> str:
     text = str(value or "").strip()

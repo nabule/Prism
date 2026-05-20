@@ -36,7 +36,9 @@
     <li>Memos webhook 接入和 SQLite 任务系统。</li>
     <li>AI 整理 memo 创建，支持 OpenRouter/OpenAI-compatible LLM 和本地模板回退。</li>
     <li>Memos 原生 <code>REFERENCE</code> relation 关联原始 memo 与 AI memo。</li>
+    <li>内置 <code>/admin/ui</code> 调试管理页面，用于查看任务、重试任务和审核候选标签。</li>
     <li>候选标签审核和审核后 active 生效。</li>
+    <li>LLM 可从正文自动建议正式标签和候选标签；新标签仍需人工审核。</li>
     <li>待澄清评论和 <code>waiting_user</code> 状态。</li>
     <li><code>.txt</code>、<code>.md</code> 附件解析为 artifact。</li>
   </ul>
@@ -46,6 +48,7 @@
   <pre><code>cp .env.example .env
 npx nx run sidecar:up
 curl http://localhost:8080/health</code></pre>
+  <p>调试管理页面：<code>http://localhost:8080/admin/ui</code>。页面不会读取服务器端密钥，需要手动输入 <code>SIDECAR_ADMIN_TOKEN</code>，并只保存在当前浏览器的 <code>localStorage</code>。</p>
 
   <h2>常用命令</h2>
   <pre><code>npx nx test sidecar

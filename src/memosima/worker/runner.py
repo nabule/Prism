@@ -15,7 +15,7 @@ from memosima.core.attachments import (
 )
 from memosima.core.config import AppConfig, ModelsConfig
 from memosima.core.summary import build_summary_memo_content
-from memosima.core.taxonomy import OrganizationPlan, TaxonomyConfig
+from memosima.core.taxonomy import OrganizationPlan, TagCandidate, TaxonomyConfig
 from memosima.db.store import Job, Store
 from memosima.llm.provider import LLMOrganizationDraft, OpenAICompatibleClient
 from memosima.memos.client import MemosClient
@@ -128,6 +128,22 @@ class Worker:
                 "clarification_comment_created": True,
                 "clarification_comment": comment,
             }
+        if llm_draft:
+            organization_plan = self._merge_llm_tags(
+                taxonomy=taxonomy,
+                local_plan=organization_plan,
+                llm_draft=llm_draft,
+            )
+            for candidate in organization_plan.candidate_tags:
+                self.store.upsert_tag_candidate(
+                    workspace_id=job.workspace_id,
+                    path=candidate.path,
+                    parent_path=candidate.parent_path,
+                    reason=candidate.reason,
+                    source_memo_uid=memo_uid,
+                    similar_tags=list(candidate.similar_existing_tags),
+                    confidence=candidate.confidence,
+                )
 
         summary_content = build_summary_memo_content(
             source_memo_uid=memo_uid,
@@ -244,6 +260,75 @@ class Worker:
             local_plan=organization_plan,
         )
 
+    def _merge_llm_tags(
+        self,
+        *,
+        taxonomy: TaxonomyConfig,
+        local_plan: OrganizationPlan,
+        llm_draft: LLMOrganizationDraft,
+    ) -> OrganizationPlan:
+        active_tags = list(local_plan.active_tags)
+        candidates = list(local_plan.candidate_tags)
+        disabled_tags = list(local_plan.disabled_tags)
+        active_tag_paths = set(taxonomy.active_tag_paths)
+        disabled_tag_paths = set(taxonomy.disabled)
+        candidate_paths = {candidate.path for candidate in candidates}
+
+        def add_candidate(path: str, reason: str, confidence: float) -> None:
+            nonlocal candidate_paths
+            if path in candidate_paths or path in active_tag_paths or path.startswith("#系统/"):
+                return
+            candidates.append(
+                TagCandidate(
+                    path=path,
+                    parent_path=taxonomy.parent_tag(path),
+                    reason=reason,
+                    similar_existing_tags=taxonomy.similar_tags(path),
+                    confidence=confidence,
+                )
+            )
+            candidate_paths.add(path)
+
+        for raw_tag in llm_draft.active_tags:
+            try:
+                tag = taxonomy.normalize_tag(raw_tag)
+            except Exception:
+                continue
+            tag = taxonomy.aliases.get(tag, tag)
+            if tag in disabled_tag_paths:
+                disabled_tags.append(tag)
+            elif tag in active_tag_paths:
+                active_tags.append(tag)
+            elif not tag.startswith("#系统/"):
+                add_candidate(tag, "AI suggested this tag from memo content but it is not approved", 0.6)
+
+        for llm_candidate in llm_draft.candidate_tags:
+            try:
+                tag = taxonomy.normalize_tag(llm_candidate.path)
+            except Exception:
+                continue
+            tag = taxonomy.aliases.get(tag, tag)
+            if tag in disabled_tag_paths:
+                disabled_tags.append(tag)
+            elif tag in active_tag_paths:
+                active_tags.append(tag)
+            else:
+                add_candidate(tag, llm_candidate.reason, llm_candidate.confidence)
+
+        system_tags = list(local_plan.system_tags)
+        if candidates:
+            candidate_system_tag = taxonomy.system_tags.get("tag_candidate", "#系统/标签待审核")
+            system_tags.append(candidate_system_tag)
+
+        return OrganizationPlan(
+            system_tags=tuple(_dedupe(system_tags)),
+            active_tags=tuple(_dedupe(active_tags)),
+            candidate_tags=tuple(candidates),
+            disabled_tags=tuple(_dedupe(disabled_tags)),
+            needs_clarification=local_plan.needs_clarification,
+            clarification_reason=local_plan.clarification_reason,
+        )
+
     def _load_taxonomy(self, workspace_id: str) -> TaxonomyConfig:
         taxonomy = TaxonomyConfig.load(self.config.taxonomy_path)
         approved_tags = [
@@ -267,6 +352,16 @@ def _extract_memo_uid(memo: dict[str, object]) -> str:
 def _clarification_comment(reason: str | None) -> str:
     message = reason or "内容需要进一步澄清。"
     return f"Memosima 需要补充信息后再整理：{message}"
+
+
+def _dedupe(values: list[str] | tuple[str, ...]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        if value not in seen:
+            seen.add(value)
+            result.append(value)
+    return result
 
 
 async def _run(args: argparse.Namespace) -> None:

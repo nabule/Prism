@@ -208,7 +208,7 @@ async def test_worker_uses_llm_draft_when_model_key_is_configured(tmp_path, monk
         def __init__(self, *args, **kwargs):
             pass
 
-        async def organize_memo(self, *, content, taxonomy, local_plan):
+        async def organize_memo(self, *, content, taxonomy, local_plan, prompt_template):
             return LLMOrganizationDraft(
                 title="整理记录",
                 summary="LLM 结构化摘要",
@@ -234,6 +234,87 @@ async def test_worker_uses_llm_draft_when_model_key_is_configured(tmp_path, monk
     assert "- 关键点一" in FakeMemosClient.created_memos[0]
     assert "- 后续任务一" in FakeMemosClient.created_memos[0]
     assert "#项目/个人AI知识库" in FakeMemosClient.created_memos[0]
+
+
+@pytest.mark.asyncio
+async def test_worker_uses_temporary_prompt_override_from_job_payload(tmp_path, monkeypatch):
+    app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
+    models_path = write_yaml(tmp_path / "models.yaml", models_config_text())
+    write_yaml(tmp_path / "taxonomy.yaml", taxonomy_config_text())
+    monkeypatch.setenv("MEMOS_BASE_URL", "http://memos.local")
+    monkeypatch.setenv("MEMOS_API_TOKEN", "memos-token")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    config = AppConfig.load(app_path)
+    models = ModelsConfig.load(models_path)
+    store = Store(config.database_path)
+    store.migrate()
+    store.ensure_workspace("default")
+    store.create_job(
+        workspace_id="default",
+        job_type="process_memo",
+        idempotency_key="memo:prompt-override",
+        payload={
+            "memo_uid": "prompt-override",
+            "llm_prompt_override": {
+                "system": "临时系统提示 {active_tags}",
+                "user": "临时用户提示 {content}",
+            },
+        },
+    )
+
+    class FakeMemosClient:
+        created_memos: list[str] = []
+
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def get_memo(self, memo_uid):
+            return {"name": f"memos/{memo_uid}", "content": "整理个人 AI 知识库开发记录"}
+
+        async def create_memo(self, content):
+            self.created_memos.append(content)
+            return {"name": "memos/summary-prompt-override", "content": content}
+
+        async def create_comment(self, memo_uid, content):
+            raise AssertionError("clear prompt override jobs must not create comments")
+
+        async def download_resource(self, resource_name):
+            raise AssertionError("prompt override memo has no resources")
+
+        async def upsert_memo_reference_relation(self, *, source_memo_uid, related_memo_uid):
+            return {}
+
+    class FakeLLMClient:
+        seen_prompt_system = ""
+        seen_prompt_user = ""
+
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def organize_memo(self, *, content, taxonomy, local_plan, prompt_template):
+            rendered = prompt_template.render(
+                {
+                    "active_tags": "\n".join(f"- {tag}" for tag in taxonomy.active_tag_paths),
+                    "local_plan_json": "{}",
+                    "content": content,
+                }
+            )
+            FakeLLMClient.seen_prompt_system = rendered.system
+            FakeLLMClient.seen_prompt_user = rendered.user
+            return LLMOrganizationDraft(
+                title="临时提示整理",
+                summary="使用临时提示词",
+                needs_clarification=False,
+            )
+
+    monkeypatch.setattr("memosima.worker.runner.MemosClient", FakeMemosClient)
+    monkeypatch.setattr("memosima.worker.runner.OpenAICompatibleClient", FakeLLMClient)
+
+    processed = await Worker(config, store, models).run_once()
+
+    assert processed is True
+    assert FakeLLMClient.seen_prompt_system.startswith("临时系统提示")
+    assert FakeLLMClient.seen_prompt_user == "临时用户提示 整理个人 AI 知识库开发记录"
 
 
 @pytest.mark.asyncio
@@ -284,7 +365,7 @@ async def test_worker_merges_ai_generated_tags_from_body(tmp_path, monkeypatch):
         def __init__(self, *args, **kwargs):
             pass
 
-        async def organize_memo(self, *, content, taxonomy, local_plan):
+        async def organize_memo(self, *, content, taxonomy, local_plan, prompt_template):
             return LLMOrganizationDraft(
                 title="AI 标签整理",
                 summary="AI 从正文识别知识库开发主题",

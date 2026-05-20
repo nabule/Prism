@@ -12,6 +12,7 @@ from memosima.api.admin_ui import ADMIN_UI_HTML
 from memosima.api.security import require_admin
 from memosima.api.webhooks import build_idempotency_key, extract_memo_uid
 from memosima.core.config import AppConfig, ConfigError, ModelsConfig
+from memosima.core.prompts import PromptTemplate, PromptsConfig, load_prompts_or_default
 from memosima.db.store import Job, Store, TagCandidateRecord
 
 
@@ -61,6 +62,19 @@ class TagCandidatesResponse(BaseModel):
 
 class ReviewTagCandidateRequest(BaseModel):
     note: str | None = Field(default=None, max_length=1000)
+
+
+class PromptTemplateView(BaseModel):
+    system: str = Field(min_length=1, max_length=12000)
+    user: str = Field(min_length=1, max_length=12000)
+
+
+class PromptsResponse(BaseModel):
+    organize_memo: PromptTemplateView
+
+
+class RetryJobRequest(BaseModel):
+    prompt_override: PromptTemplateView | None = None
 
 
 class HealthResponse(BaseModel):
@@ -148,13 +162,35 @@ def create_app(
     ) -> JobsResponse:
         return JobsResponse(jobs=[_job_view(job) for job in store.list_jobs(status=status_filter, limit=limit)])
 
+    @app.get(
+        "/admin/prompts",
+        response_model=PromptsResponse,
+        dependencies=[Depends(require_admin)],
+    )
+    async def get_prompts() -> PromptsResponse:
+        prompts = load_prompts_or_default(config.prompts_path)
+        return PromptsResponse(organize_memo=_prompt_view(prompts.organize_memo))
+
+    @app.put(
+        "/admin/prompts/organize-memo",
+        response_model=PromptTemplateView,
+        dependencies=[Depends(require_admin)],
+    )
+    async def update_organize_memo_prompt(prompt: PromptTemplateView) -> PromptTemplateView:
+        updated = PromptTemplate(system=prompt.system, user=prompt.user)
+        PromptsConfig(organize_memo=updated).save(config.prompts_path)
+        return _prompt_view(updated)
+
     @app.post(
         "/admin/jobs/{job_id}/retry",
         response_model=JobView,
         dependencies=[Depends(require_admin)],
     )
-    async def retry_job(job_id: int) -> JobView:
-        job = store.retry_job(job_id)
+    async def retry_job(job_id: int, retry: RetryJobRequest | None = None) -> JobView:
+        payload_patch = None
+        if retry and retry.prompt_override:
+            payload_patch = {"llm_prompt_override": retry.prompt_override.model_dump()}
+        job = store.retry_job_with_payload(job_id, payload_patch)
         if job is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
         return _job_view(job)
@@ -249,6 +285,10 @@ def _tag_candidate_view(candidate: TagCandidateRecord) -> TagCandidateView:
         created_at=candidate.created_at,
         updated_at=candidate.updated_at,
     )
+
+
+def _prompt_view(prompt: PromptTemplate) -> PromptTemplateView:
+    return PromptTemplateView(system=prompt.system, user=prompt.user)
 
 
 def main() -> None:

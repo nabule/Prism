@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from memosima.core.config import AppConfig, ModelsConfig
+from memosima.core.prompts import PromptsConfig
 from memosima.core.taxonomy import TaxonomyConfig
 
-from helpers import app_config_text, models_config_text, taxonomy_config_text, write_yaml
+from helpers import app_config_text, models_config_text, prompts_config_text, taxonomy_config_text, write_yaml
 
 
 def test_models_config_uses_openrouter_free_model(tmp_path, monkeypatch):
@@ -24,6 +25,7 @@ def test_app_config_reads_secret_values_from_environment(tmp_path, monkeypatch):
     db_path = tmp_path / "sidecar.db"
     app_path = write_yaml(tmp_path / "app.yaml", app_config_text(db_path))
     taxonomy_path = write_yaml(tmp_path / "taxonomy.yaml", taxonomy_config_text())
+    prompts_path = write_yaml(tmp_path / "prompts.yaml", prompts_config_text())
     monkeypatch.setenv("SIDECAR_ADMIN_TOKEN", "admin-token")
     monkeypatch.setenv("MEMOS_BASE_URL", "http://memos.local")
     monkeypatch.setenv("MEMOS_API_TOKEN", "memos-token")
@@ -33,12 +35,31 @@ def test_app_config_reads_secret_values_from_environment(tmp_path, monkeypatch):
 
     assert config.database_path == db_path
     assert config.taxonomy_path == taxonomy_path
+    assert config.prompts_path == prompts_path
     assert config.admin_token == "admin-token"
     assert config.memos_base_url == "http://memos.local"
     assert config.memos_api_token == "memos-token"
     assert config.memos_webhook_url == "https://sidecar.example.com/webhooks/memos"
     assert config.max_attachment_bytes == 1024 * 1024
     assert config.allowed_parse_extensions == (".txt", ".md")
+
+
+def test_prompts_config_loads_and_renders_template(tmp_path):
+    prompts_path = write_yaml(tmp_path / "prompts.yaml", prompts_config_text())
+
+    config = PromptsConfig.load(prompts_path)
+    rendered = config.organize_memo.render(
+        {
+            "active_tags": "- #项目/个人AI知识库",
+            "local_plan_json": '{"active_tags":[]}',
+            "content": "原始内容",
+        }
+    )
+
+    assert "测试系统提示词" in rendered.system
+    assert "- #项目/个人AI知识库" in rendered.system
+    assert '{"active_tags":[]}' in rendered.user
+    assert "原始内容" in rendered.user
 
 
 def test_taxonomy_config_builds_local_organization_plan(tmp_path):

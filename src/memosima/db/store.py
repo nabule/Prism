@@ -342,15 +342,20 @@ class Store:
             )
 
     def retry_job(self, job_id: int) -> Job | None:
+        return self.retry_job_with_payload(job_id)
+
+    def retry_job_with_payload(self, job_id: int, payload_patch: dict[str, Any] | None = None) -> Job | None:
         now = utc_now()
         with self.connect() as connection:
+            row = connection.execute("SELECT payload_json FROM jobs WHERE id = ?", (job_id,)).fetchone()
+            payload_json: str | None = None
+            if row is not None and payload_patch:
+                payload = json.loads(row["payload_json"])
+                payload.update(payload_patch)
+                payload_json = json.dumps(payload, ensure_ascii=False, sort_keys=True)
             connection.execute(
-                """
-                UPDATE jobs
-                SET status = 'pending', error = NULL, retry_count = 0, updated_at = ?
-                WHERE id = ? AND status IN ('failed', 'waiting_user')
-                """,
-                (now, job_id),
+                _retry_job_sql(payload_json is not None),
+                (now, payload_json, job_id) if payload_json is not None else (now, job_id),
             )
             row = connection.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
         return _job_from_row(row) if row else None
@@ -663,6 +668,21 @@ def _job_from_row(row: sqlite3.Row) -> Job:
         created_at=str(row["created_at"]),
         updated_at=str(row["updated_at"]),
     )
+
+
+def _retry_job_sql(update_payload: bool) -> str:
+    if update_payload:
+        return """
+                UPDATE jobs
+                SET status = 'pending', error = NULL, retry_count = 0,
+                    updated_at = ?, payload_json = ?
+                WHERE id = ? AND status IN ('failed', 'waiting_user')
+                """
+    return """
+                UPDATE jobs
+                SET status = 'pending', error = NULL, retry_count = 0, updated_at = ?
+                WHERE id = ? AND status IN ('failed', 'waiting_user')
+                """
 
 
 def _memo_from_row(row: sqlite3.Row) -> MemoRecord:

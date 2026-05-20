@@ -18,6 +18,8 @@ database:
   path: {db_path}
 taxonomy:
   path: {db_path.parent / "taxonomy.yaml"}
+prompts:
+  path: {db_path.parent / "prompts.yaml"}
 security:
   admin_token_env: SIDECAR_ADMIN_TOKEN
 memos:
@@ -34,6 +36,19 @@ limits:
   allowed_parse_extensions:
     - .txt
     - .md
+"""
+
+
+def prompts_config_text() -> str:
+    return """
+organize_memo:
+  system: |-
+    测试系统提示词
+    {active_tags}
+  user: |-
+    测试用户提示词
+    {local_plan_json}
+    {content}
 """
 
 

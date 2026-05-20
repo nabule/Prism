@@ -8,6 +8,7 @@ import httpx
 from pydantic import BaseModel, Field, ValidationError
 
 from memosima.core.config import ProviderConfig
+from memosima.core.prompts import PromptTemplate, default_organize_memo_prompt
 from memosima.core.taxonomy import OrganizationPlan, TaxonomyConfig
 
 
@@ -44,12 +45,19 @@ class OpenAICompatibleClient:
         content: str,
         taxonomy: TaxonomyConfig,
         local_plan: OrganizationPlan,
+        prompt_template: PromptTemplate | None = None,
     ) -> LLMOrganizationDraft:
+        rendered_prompt = _render_prompt(
+            content=content,
+            taxonomy=taxonomy,
+            local_plan=local_plan,
+            prompt_template=prompt_template or default_organize_memo_prompt(),
+        )
         payload = {
             "model": self.provider.default_model,
             "messages": [
-                {"role": "system", "content": _system_prompt(taxonomy)},
-                {"role": "user", "content": _user_prompt(content, local_plan)},
+                {"role": "system", "content": rendered_prompt.system},
+                {"role": "user", "content": rendered_prompt.user},
             ],
             "temperature": 0.2,
             "response_format": {"type": "json_object"},
@@ -107,33 +115,20 @@ def _parse_draft_response(response: dict[str, Any]) -> LLMOrganizationDraft:
         raise LLMClientError("LLM JSON does not match organization schema") from exc
 
 
-def _system_prompt(taxonomy: TaxonomyConfig) -> str:
+def _render_prompt(
+    *,
+    content: str,
+    taxonomy: TaxonomyConfig,
+    local_plan: OrganizationPlan,
+    prompt_template: PromptTemplate,
+):
     active_tags = "\n".join(f"- {tag}" for tag in taxonomy.active_tag_paths) or "- 无"
-    return "\n".join(
-        [
-            "你是个人知识库整理助手。请只输出 JSON 对象，不要输出 Markdown 代码块。",
-            "必须优先从已有正式标签中选择 active_tags。",
-            "只有正文确实需要且没有合适正式标签时，才在 candidate_tags 中提出新标签；不要把新标签放入 active_tags。",
-            "如果内容指代不明或缺少关键信息，将 needs_clarification 设为 true，并给出 clarification_question。",
-            "JSON 字段：title, summary, key_points, todos, active_tags, candidate_tags, needs_clarification, clarification_question。",
-            "candidate_tags 每项字段：path, reason, confidence。标签 path 必须以 # 开头，不含空格。",
-            "已有正式标签：",
-            active_tags,
-        ]
-    )
-
-
-def _user_prompt(content: str, local_plan: OrganizationPlan) -> str:
-    return "\n".join(
-        [
-            "请整理以下 memo，并遵守本地标签治理草案。",
-            "",
-            "本地标签治理草案：",
-            json.dumps(local_plan.to_dict(), ensure_ascii=False, sort_keys=True),
-            "",
-            "原始 memo：",
-            content,
-        ]
+    return prompt_template.render(
+        {
+            "active_tags": active_tags,
+            "local_plan_json": json.dumps(local_plan.to_dict(), ensure_ascii=False, sort_keys=True),
+            "content": content,
+        }
     )
 
 

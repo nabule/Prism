@@ -35,6 +35,7 @@ class AppConfig:
     timezone: str
     database_path: Path
     taxonomy_path: Path
+    prompts_path: Path
     admin_token_env: str
     admin_token: str | None
     memos_base_url: str | None
@@ -54,6 +55,7 @@ class AppConfig:
         app = raw.get("app", {})
         database = raw.get("database", {})
         taxonomy = raw.get("taxonomy", {})
+        prompts = raw.get("prompts", {})
         security = raw.get("security", {})
         memos = raw.get("memos", {})
         worker = raw.get("worker", {})
@@ -71,6 +73,7 @@ class AppConfig:
             timezone=str(app.get("timezone", "Asia/Shanghai")),
             database_path=db_path,
             taxonomy_path=Path(str(taxonomy.get("path", "config/taxonomy.yaml"))),
+            prompts_path=Path(str(prompts.get("path", "config/prompts.yaml"))),
             admin_token_env=admin_token_env,
             admin_token=_env_value(admin_token_env),
             memos_base_url=_env_value(str(memos_base_url_env)) if memos_base_url_env else None,

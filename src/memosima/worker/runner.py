@@ -14,6 +14,7 @@ from memosima.core.attachments import (
     parse_text_attachment,
 )
 from memosima.core.config import AppConfig, ModelsConfig
+from memosima.core.prompts import PromptTemplate, load_prompts_or_default
 from memosima.core.summary import build_summary_memo_content
 from memosima.core.taxonomy import OrganizationPlan, TagCandidate, TaxonomyConfig
 from memosima.db.store import Job, Store
@@ -111,6 +112,7 @@ class Worker:
                 "clarification_comment": comment,
             }
         llm_draft = await self._build_llm_draft(
+            job=job,
             source_content=source_content,
             taxonomy=taxonomy,
             organization_plan=organization_plan,
@@ -239,6 +241,7 @@ class Worker:
     async def _build_llm_draft(
         self,
         *,
+        job: Job,
         source_content: str,
         taxonomy: TaxonomyConfig,
         organization_plan: OrganizationPlan,
@@ -258,7 +261,17 @@ class Worker:
             content=source_content,
             taxonomy=taxonomy,
             local_plan=organization_plan,
+            prompt_template=self._load_prompt_template(job),
         )
+
+    def _load_prompt_template(self, job: Job) -> PromptTemplate:
+        override = job.payload.get("llm_prompt_override")
+        if isinstance(override, dict):
+            system = str(override.get("system", "")).strip()
+            user = str(override.get("user", "")).strip()
+            if system and user:
+                return PromptTemplate(system=system, user=user)
+        return load_prompts_or_default(self.config.prompts_path).organize_memo
 
     def _merge_llm_tags(
         self,

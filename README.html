@@ -39,6 +39,7 @@
     <li>内置 <code>/admin/ui</code> 调试管理页面，用于查看任务、重试任务和审核候选标签。</li>
     <li>候选标签审核和审核后 active 生效。</li>
     <li>LLM 可从正文自动建议正式标签和候选标签；新标签仍需人工审核。</li>
+    <li>LLM 提示词从 <code>config/prompts.yaml</code> 加载，管理页面可保存默认提示词，也可在重试时临时覆盖。</li>
     <li>待澄清评论和 <code>waiting_user</code> 状态。</li>
     <li><code>.txt</code>、<code>.md</code> 附件解析为 artifact。</li>
   </ul>
@@ -48,7 +49,7 @@
   <pre><code>cp .env.example .env
 npx nx run sidecar:up
 curl http://localhost:8080/health</code></pre>
-  <p>调试管理页面：<code>http://localhost:8080/admin/ui</code>。页面不会读取服务器端密钥，需要手动输入 <code>SIDECAR_ADMIN_TOKEN</code>，并只保存在当前浏览器的 <code>localStorage</code>。</p>
+  <p>调试管理页面：<code>http://localhost:8080/admin/ui</code>。页面不会读取服务器端密钥，需要手动输入 <code>SIDECAR_ADMIN_TOKEN</code>，并只保存在当前浏览器的 <code>localStorage</code>。页面也可以编辑默认 LLM 提示词，或在重试任务时只临时覆盖当前任务使用的提示词。</p>
 
   <h2>常用命令</h2>
   <pre><code>npx nx test sidecar

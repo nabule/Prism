@@ -58,6 +58,24 @@ def test_admin_jobs_requires_token_and_lists_jobs(tmp_path, monkeypatch):
     assert authorized.json()["jobs"][0]["status"] == "pending"
 
 
+def test_admin_ui_returns_debug_page_without_exposing_token(tmp_path, monkeypatch):
+    app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
+    models_path = write_yaml(tmp_path / "models.yaml", models_config_text())
+    monkeypatch.setenv("SIDECAR_ADMIN_TOKEN", "admin-token")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "secret-key")
+
+    client = TestClient(create_app(str(app_path), str(models_path)))
+    response = client.get("/admin/ui")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert "Memosima Admin" in response.text
+    assert "/admin/jobs" in response.text
+    assert "/admin/tag-candidates" in response.text
+    assert "admin-token" not in response.text
+    assert "secret-key" not in response.text
+
+
 def test_admin_tag_candidates_review_flow(tmp_path, monkeypatch):
     app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
     models_path = write_yaml(tmp_path / "models.yaml", models_config_text())

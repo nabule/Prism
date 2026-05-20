@@ -74,7 +74,8 @@ providers:
     api_key_env: OPENROUTER_API_KEY
     default_model: deepseek/deepseek-v4-flash:free
 </code></pre>
-<p>worker 会读取默认 provider，并在对应 <code>api_key_env</code> 环境变量存在时发起 OpenAI-compatible <code>/chat/completions</code> 调用。模型输出必须是 JSON 对象，Sidecar 会校验 <code>title</code>、<code>summary</code>、<code>key_points</code>、<code>todos</code>、<code>needs_clarification</code> 和 <code>clarification_question</code> 字段。没有配置 key 时不调用 LLM，自动回退到本地模板整理。</p>
+<p>worker 会读取默认 provider，并在对应 <code>api_key_env</code> 环境变量存在时发起 OpenAI-compatible <code>/chat/completions</code> 调用。模型输出必须是 JSON 对象，Sidecar 会校验 <code>title</code>、<code>summary</code>、<code>key_points</code>、<code>todos</code>、<code>active_tags</code>、<code>candidate_tags</code>、<code>needs_clarification</code> 和 <code>clarification_question</code> 字段。没有配置 key 时不调用 LLM，自动回退到本地模板整理。</p>
+<p><code>active_tags</code> 只能使用已有正式标签；如果模型把未知标签放入 <code>active_tags</code>，Sidecar 会把它降级为候选标签。<code>candidate_tags</code> 用于 AI 从正文提出的新标签建议，每项包含 <code>path</code>、<code>reason</code> 和 <code>confidence</code>。新标签不会自动激活，必须通过候选标签审核。</p>
 <h2>taxonomy.yaml</h2>
 <p><code>config/taxonomy.yaml</code> 保存系统标签、初始业务标签、别名和禁用标签。路径由 <code>config/app.yaml</code> 中的 <code>taxonomy.path</code> 指定。</p>
 <p>当前 P2 本地整理草案会读取该配置：</p>
@@ -86,6 +87,7 @@ providers:
 </ul>
 <p>worker 会把解析结果写入 job <code>result.ai_plan</code>。内容明确时会用 <code>system_tags.ai_summary</code> 创建 AI 整理 memo；内容过短或包含问号时会用 <code>system_tags.pending_clarification</code> 标记草案，在原 memo 下写澄清评论，并把任务置为 <code>waiting_user</code>。</p>
 <p>候选标签持久化后会进入 Sidecar SQLite 的 <code>tag_candidates</code> 表，可通过 <code>/admin/tag-candidates</code> 查询，并通过 <code>/admin/tag-candidates/{id}/approve</code> 或 <code>/admin/tag-candidates/{id}/reject</code> 审核。审核通过后会同步写入 <code>business_tags</code> 表并标记为 <code>active</code>，worker 后续会把这些标签与 <code>config/taxonomy.yaml</code> 中的 active 标签合并使用。当前审核结果不会自动改写 <code>config/taxonomy.yaml</code>。</p>
+<p>也可以打开 <code>http://localhost:8080/admin/ui</code> 使用调试管理页面审核候选标签。该页面要求手动输入 <code>SIDECAR_ADMIN_TOKEN</code>，token 只保存在当前浏览器，不会由服务端注入页面。</p>
 <h2>limits</h2>
 <p><code>limits.max_attachment_mb</code> 控制单个附件解析大小上限。<code>limits.allowed_parse_extensions</code> 控制允许进入解析流程的扩展名。</p>
 <p>当前已实现 <code>.txt</code> 和 <code>.md</code> 的安全文本解析；<code>.docx</code>、<code>.xlsx</code>、<code>.pdf</code>、<code>.drawio</code>、<code>.drawio.svg</code> 和 <code>.json</code> 仍保留在配置中，后续接入专用解析器前会被跳过，不会主动执行未知格式内容。</p>

@@ -4,10 +4,11 @@ import argparse
 from typing import Any
 
 import uvicorn
-from fastapi import Depends, FastAPI, HTTPException, Query, Request, status
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, status
 from pydantic import BaseModel, Field
 
 from memosima import __version__
+from memosima.api.admin_ui import ADMIN_UI_HTML
 from memosima.api.security import require_admin
 from memosima.api.webhooks import build_idempotency_key, extract_memo_uid
 from memosima.core.config import AppConfig, ConfigError, ModelsConfig
@@ -108,6 +109,10 @@ def create_app(
             models_default_model=provider.default_model,
             models_api_key_present=provider.api_key_present,
         )
+
+    @app.get("/admin/ui", include_in_schema=False)
+    async def admin_ui() -> Response:
+        return Response(content=ADMIN_UI_HTML, media_type="text/html; charset=utf-8")
 
     @app.post("/webhooks/memos", response_model=WebhookAccepted, status_code=status.HTTP_202_ACCEPTED)
     async def memos_webhook(request: Request) -> WebhookAccepted:

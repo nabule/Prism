@@ -34,6 +34,8 @@ async def test_openai_compatible_client_parses_structured_draft(tmp_path, monkey
                         "content": (
                             '{"title":"整理记录","summary":"结构化摘要",'
                             '"key_points":["要点一"],"todos":["待办一"],'
+                            '"active_tags":["#项目/个人AI知识库"],'
+                            '"candidate_tags":[{"path":"#项目/新方向","reason":"正文主题明确","confidence":0.82}],'
                             '"needs_clarification":false,"clarification_question":null}'
                         )
                     }
@@ -59,9 +61,16 @@ async def test_openai_compatible_client_parses_structured_draft(tmp_path, monkey
     assert draft.summary == "结构化摘要"
     assert draft.key_points == ["要点一"]
     assert draft.todos == ["待办一"]
+    assert draft.active_tags == ["#项目/个人AI知识库"]
+    assert len(draft.candidate_tags) == 1
+    assert draft.candidate_tags[0].path == "#项目/新方向"
+    assert draft.candidate_tags[0].confidence == 0.82
     assert draft.needs_clarification is False
     assert seen["authorization"] == " ".join(["Bearer", "test-key"])
     payload = seen["payload"]
     assert isinstance(payload, dict)
     assert payload["model"] == "deepseek/deepseek-v4-flash:free"
     assert payload["response_format"] == {"type": "json_object"}
+    messages = payload["messages"]
+    assert "active_tags" in messages[0]["content"]
+    assert "candidate_tags" in messages[0]["content"]

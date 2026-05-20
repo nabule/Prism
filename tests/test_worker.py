@@ -214,6 +214,7 @@ async def test_worker_uses_llm_draft_when_model_key_is_configured(tmp_path, monk
                 summary="LLM 结构化摘要",
                 key_points=["关键点一"],
                 todos=["后续任务一"],
+                active_tags=["#项目/个人AI知识库"],
                 needs_clarification=False,
             )
 
@@ -232,6 +233,101 @@ async def test_worker_uses_llm_draft_when_model_key_is_configured(tmp_path, monk
     assert "LLM 结构化摘要" in FakeMemosClient.created_memos[0]
     assert "- 关键点一" in FakeMemosClient.created_memos[0]
     assert "- 后续任务一" in FakeMemosClient.created_memos[0]
+    assert "#项目/个人AI知识库" in FakeMemosClient.created_memos[0]
+
+
+@pytest.mark.asyncio
+async def test_worker_merges_ai_generated_tags_from_body(tmp_path, monkeypatch):
+    app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
+    models_path = write_yaml(tmp_path / "models.yaml", models_config_text())
+    write_yaml(tmp_path / "taxonomy.yaml", taxonomy_config_text())
+    monkeypatch.setenv("MEMOS_BASE_URL", "http://memos.local")
+    monkeypatch.setenv("MEMOS_API_TOKEN", "memos-token")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    config = AppConfig.load(app_path)
+    models = ModelsConfig.load(models_path)
+    store = Store(config.database_path)
+    store.migrate()
+    store.ensure_workspace("default")
+    store.create_job(
+        workspace_id="default",
+        job_type="process_memo",
+        idempotency_key="memo:ai-tags",
+        payload={"memo_uid": "ai-tags"},
+    )
+
+    class FakeMemosClient:
+        created_memos: list[str] = []
+        relations: list[tuple[str, str]] = []
+
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def get_memo(self, memo_uid):
+            return {"name": f"memos/{memo_uid}", "content": "今天继续整理个人 AI 知识库，准备新增调试后台"}
+
+        async def create_memo(self, content):
+            self.created_memos.append(content)
+            return {"name": "memos/summary-ai-tags", "content": content}
+
+        async def create_comment(self, memo_uid, content):
+            raise AssertionError("clear AI tag jobs must not create comments")
+
+        async def download_resource(self, resource_name):
+            raise AssertionError("AI tag memo has no resources")
+
+        async def upsert_memo_reference_relation(self, *, source_memo_uid, related_memo_uid):
+            self.relations.append((source_memo_uid, related_memo_uid))
+            return {}
+
+    class FakeLLMClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def organize_memo(self, *, content, taxonomy, local_plan):
+            return LLMOrganizationDraft(
+                title="AI 标签整理",
+                summary="AI 从正文识别知识库开发主题",
+                key_points=[],
+                todos=[],
+                active_tags=["#项目/个人AI知识库", "#项目/未知正式标签"],
+                candidate_tags=[
+                    {
+                        "path": "#项目/调试后台",
+                        "reason": "正文提到新增调试后台",
+                        "confidence": 0.9,
+                    },
+                    {
+                        "path": "#杂项",
+                        "reason": "禁用标签应被记录为 disabled",
+                        "confidence": 0.8,
+                    },
+                ],
+                needs_clarification=False,
+            )
+
+    monkeypatch.setattr("memosima.worker.runner.MemosClient", FakeMemosClient)
+    monkeypatch.setattr("memosima.worker.runner.OpenAICompatibleClient", FakeLLMClient)
+
+    processed = await Worker(config, store, models).run_once()
+
+    assert processed is True
+    job = store.list_jobs()[0]
+    assert job.status == "succeeded"
+    assert job.result["ai_source"] == "llm"
+    assert job.result["ai_plan"]["active_tags"] == ["#项目/个人AI知识库"]
+    candidate_paths = [candidate["path"] for candidate in job.result["ai_plan"]["candidate_tags"]]
+    assert candidate_paths == ["#项目/未知正式标签", "#项目/调试后台"]
+    assert job.result["ai_plan"]["disabled_tags"] == ["#杂项"]
+    candidates = store.list_tag_candidates(workspace_id="default", status="candidate")
+    assert [candidate.path for candidate in candidates] == ["#项目/调试后台", "#项目/未知正式标签"]
+    assert candidates[0].reason == "正文提到新增调试后台"
+    assert candidates[0].confidence == 0.9
+    assert "#项目/个人AI知识库" in FakeMemosClient.created_memos[0]
+    assert "#项目/调试后台" in FakeMemosClient.created_memos[0]
+    assert "#项目/未知正式标签" in FakeMemosClient.created_memos[0]
+    assert "#杂项" in FakeMemosClient.created_memos[0]
+    assert FakeMemosClient.relations == [("ai-tags", "summary-ai-tags")]
 
 
 @pytest.mark.asyncio

@@ -371,12 +371,17 @@ async def test_worker_merges_ai_generated_tags_from_body(tmp_path, monkeypatch):
                 summary="AI 从正文识别知识库开发主题",
                 key_points=[],
                 todos=[],
-                active_tags=["#项目/个人AI知识库", "#项目/未知正式标签"],
+                active_tags=["#项目/个人AI知识库", "#个人AI知识库", "#项目/未知正式标签"],
                 candidate_tags=[
                     {
                         "path": "#项目/调试后台",
                         "reason": "正文提到新增调试后台",
                         "confidence": 0.9,
+                    },
+                    {
+                        "path": "#其他/调试后台",
+                        "reason": "不同层级同名候选应被跳过",
+                        "confidence": 0.8,
                     },
                     {
                         "path": "#杂项",

@@ -307,11 +307,14 @@ def create_app(
         candidate_id: int,
         review: ReviewTagCandidateRequest | None = None,
     ) -> TagCandidateView:
-        candidate = store.review_tag_candidate(
-            candidate_id=candidate_id,
-            status="approved",
-            reviewer_note=review.note if review else None,
-        )
+        try:
+            candidate = store.review_tag_candidate(
+                candidate_id=candidate_id,
+                status="approved",
+                reviewer_note=review.note if review else None,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
         if candidate is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tag candidate not found")
         return _tag_candidate_view(candidate)

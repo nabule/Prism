@@ -88,6 +88,7 @@ Memos 负责快速记录，Sidecar 负责后台整理、生成摘要和标签建
     </tbody>
   </table>
   <p>AI 返回的 <code>active_tags</code> 只有命中正式标签集合时才会直接使用。AI 提出的新标签会进入 <code>candidate_tags</code>，不会自动变成正式标签。</p>
+  <p>同名业务标签不能同时出现在不同层级。比如系统已有 <code>#项目/数管</code> 时，用户只写 <code>#数管</code>，后台会归一到已有正式标签；AI 也不能再新增 <code>#其他/数管</code> 这类同名候选。</p>
 
   <h2>6. 手动写标签</h2>
   <p>可以在 Memos 正文中直接写标签：</p>

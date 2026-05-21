@@ -102,6 +102,7 @@
 
   <h2>7. AI 自动生成 tag</h2>
   <p>配置 <code>OPENROUTER_API_KEY</code> 后，worker 会请求默认模型从 memo 正文中识别标签。AI 返回的 <code>active_tags</code> 只有已存在于正式标签集合时才会被直接使用；AI 发现的新标签会写入 <code>candidate_tags</code> 并进入审核列表，不会自动激活。</p>
+  <p>业务标签要求不同层级的最后一级名称唯一。例如已有正式标签 <code>#项目/数管</code> 时，后台自动整理遇到 <code>#数管</code> 或 AI 提出 <code>#其他/数管</code>，都会归一或拦截，不会再生成同名不同级别的新标签。</p>
   <p>默认模型连接参数来自 <code>config/models.yaml</code>。当前默认 provider 为 OpenRouter <code>google/gemma-3-27b-it</code>，同时保留、OpenAI、DeepSeek 等 provider 模板。<code>base_url</code>、<code>default_model</code>、<code>temperature</code>、<code>max_tokens</code>、<code>response_format</code> 和厂商扩展 <code>extra_body</code> 都可在该文件修改；<code>max_tokens</code> 留空时不发送输出 token 限制，Sidecar 不主动截断输入正文。真实 key 只放在本地 <code>.env</code> 或部署环境变量中，不提交到 git。</p>
   <p>正式标签集合来自 <code>config/taxonomy.yaml</code> 中的 active 业务标签，以及已经通过审核写入 SQLite <code>business_tags</code> 表的标签。没有配置模型 key 时，系统仍会保留原有的显式 <code>#tag</code> 本地识别和模板整理。</p>
   <p>默认提示词来自 <code>config/prompts.yaml</code>。在调试管理页面的“默认提示词”区域点击“保存默认”会写回该文件；点击任务“重试”时选择临时修改，只会把提示词写入当前任务 payload 的 <code>llm_prompt_override</code>，不会修改默认文件。提示词可使用 <code>{active_tags}</code>、<code>{local_plan_json}</code>、<code>{content}</code> 占位符。</p>

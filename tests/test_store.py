@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from memosima.db.store import Store
 
 
@@ -127,6 +129,34 @@ def test_tag_candidate_upsert_list_and_review_flow(tmp_path):
     assert active_tags[0].path == "#项目/新方向"
     assert active_tags[0].status == "active"
     assert active_tags[0].source == "candidate_review"
+
+
+def test_tag_candidate_leaf_is_unique_across_levels(tmp_path):
+    store = Store(tmp_path / "sidecar.db")
+    store.migrate()
+    store.ensure_workspace("default")
+
+    created = store.upsert_tag_candidate(
+        workspace_id="default",
+        path="#项目/数管",
+        parent_path="#项目",
+        reason="first candidate",
+    )
+    duplicate_leaf = store.upsert_tag_candidate(
+        workspace_id="default",
+        path="#数管",
+        reason="same leaf candidate",
+    )
+
+    assert duplicate_leaf.id == created.id
+    assert store.review_tag_candidate(candidate_id=created.id, status="approved") is not None
+    with pytest.raises(ValueError, match="Tag leaf conflicts"):
+        store.upsert_tag_candidate(
+            workspace_id="default",
+            path="#其他/数管",
+            parent_path="#其他",
+            reason="same leaf as active tag",
+        )
 
 
 def test_memo_records_can_be_listed_by_type_and_source(tmp_path):

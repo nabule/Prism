@@ -475,6 +475,31 @@ class Store:
         now = utc_now()
         similar_tags_json = json.dumps(similar_tags or [], ensure_ascii=False, sort_keys=True)
         with self.connect() as connection:
+            leaf = _tag_leaf(path)
+            active_conflict = connection.execute(
+                """
+                SELECT * FROM business_tags
+                WHERE workspace_id = ? AND status = 'active'
+                ORDER BY path ASC
+                """,
+                (workspace_id,),
+            ).fetchall()
+            for row in active_conflict:
+                if row["path"] != path and _tag_leaf(row["path"]) == leaf:
+                    raise ValueError(f"Tag leaf conflicts with active tag: {row['path']}")
+
+            candidate_conflict = connection.execute(
+                """
+                SELECT * FROM tag_candidates
+                WHERE workspace_id = ? AND status = 'candidate'
+                ORDER BY created_at ASC, id ASC
+                """,
+                (workspace_id,),
+            ).fetchall()
+            for row in candidate_conflict:
+                if row["path"] != path and _tag_leaf(row["path"]) == leaf:
+                    return _tag_candidate_from_row(row)
+
             connection.execute(
                 """
                 INSERT INTO tag_candidates (
@@ -568,6 +593,17 @@ class Store:
                 (candidate_id,),
             ).fetchone()
             if row is not None and status == "approved" and row["status"] == "approved":
+                active_conflict = connection.execute(
+                    """
+                    SELECT path FROM business_tags
+                    WHERE workspace_id = ? AND status = 'active'
+                    ORDER BY path ASC
+                    """,
+                    (row["workspace_id"],),
+                ).fetchall()
+                for active_row in active_conflict:
+                    if active_row["path"] != row["path"] and _tag_leaf(active_row["path"]) == _tag_leaf(row["path"]):
+                        raise ValueError(f"Tag leaf conflicts with active tag: {active_row['path']}")
                 connection.execute(
                     """
                     INSERT INTO business_tags (
@@ -774,3 +810,7 @@ def _artifact_from_row(row: sqlite3.Row) -> ArtifactRecord:
         metadata=json.loads(row["metadata_json"]),
         created_at=str(row["created_at"]),
     )
+
+
+def _tag_leaf(path: str) -> str:
+    return path.rsplit("/", maxsplit=1)[-1].removeprefix("#")

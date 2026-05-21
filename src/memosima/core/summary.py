@@ -25,7 +25,7 @@ def build_summary_memo_content(
     lines = [
         f"{ai_summary_tag} {' '.join(tag for tag in tags if tag != ai_summary_tag)}".strip(),
         "",
-        "## AI 整理草案",
+        f"## AI整理：{_summary_title(source_content, llm_draft)}",
         "",
         f"来源 memo：memos/{source_memo_uid}",
         "",
@@ -94,6 +94,14 @@ def _summary_text(content: str) -> str:
     if len(text) <= 120:
         return text
     return f"{text[:117]}..."
+
+
+def _summary_title(content: str, llm_draft: LLMOrganizationDraft | None) -> str:
+    if llm_draft and llm_draft.title.strip():
+        title = llm_draft.title.strip()
+    else:
+        title = _summary_text(content)
+    return title.removeprefix("AI整理：").removeprefix("AI整理").strip() or "未命名"
 
 
 def _excerpt(content: str) -> str:

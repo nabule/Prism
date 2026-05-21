@@ -114,11 +114,18 @@ providers:
 <p>worker 会读取默认 provider，并在对应 <code>api_key_env</code> 环境变量存在时发起 OpenAI-compatible <code>/chat/completions</code> 调用。<code>base_url</code>、<code>default_model</code>、<code>temperature</code>、<code>max_tokens</code>、<code>response_format</code> 和 <code>extra_body</code> 都从 <code>config/models.yaml</code> 读取。<code>max_tokens</code> 留空时不会向模型请求发送输出 token 限制；Sidecar 也不会主动截断输入正文。<code>extra_body</code> 会原样合并到请求 JSON，适合配置厂商扩展参数。模型输出必须是 JSON 对象，Sidecar 会校验 <code>title</code>、<code>summary</code>、<code>key_points</code>、<code>todos</code>、<code>active_tags</code>、<code>candidate_tags</code>、<code>needs_clarification</code> 和 <code>clarification_question</code> 字段。没有配置 key 时不调用 LLM，自动回退到本地模板整理。</p>
 <p><code>active_tags</code> 只能使用已有正式标签；如果模型把未知标签放入 <code>active_tags</code>，Sidecar 会把它降级为候选标签。<code>candidate_tags</code> 用于 AI 从正文提出的新标签建议，每项包含 <code>path</code>、<code>reason</code> 和 <code>confidence</code>。新标签不会自动激活，必须通过候选标签审核。</p>
 <h2>prompts.yaml</h2>
-<p><code>config/prompts.yaml</code> 保存所有 LLM 调用点的默认提示词。当前调用点为 <code>organize_memo</code>，包含 <code>system</code> 和 <code>user</code> 两段模板。模板支持以下占位符：</p>
+<p><code>config/prompts.yaml</code> 保存所有 LLM 调用点的默认提示词。当前调用点包括 <code>organize_memo</code> 和 <code>tag_summary</code>，每个调用点都包含 <code>system</code> 和 <code>user</code> 两段模板。</p>
+<p><code>organize_memo</code> 用于单条 memo 的 AI 整理，支持以下占位符：</p>
 <ul>
 <li><code>{active_tags}</code>：当前工作区可直接使用的正式标签列表。</li>
 <li><code>{local_plan_json}</code>：本地标签治理草案 JSON。</li>
 <li><code>{content}</code>：原始 memo 正文。</li>
+</ul>
+<p><code>tag_summary</code> 用于按某一标签生成整体总结，支持以下占位符：</p>
+<ul>
+<li><code>{tag}</code>：要整理的标签。</li>
+<li><code>{memo_count}</code>：参与整理的 memo 数量。</li>
+<li><code>{memos_markdown}</code>：匹配该标签的 memo 列表，已转换为 Markdown。</li>
 </ul>
 <p>管理页面 <code>/admin/ui</code> 的“保存默认”会写回 <code>config/prompts.yaml</code>；任务重试时选择临时修改，只会写入该任务 payload 的 <code>llm_prompt_override</code>。Compose 已将 <code>./config</code> 以可写方式挂载到 Sidecar 容器，便于从管理页面保存默认提示词。</p>
 <h2>taxonomy.yaml</h2>

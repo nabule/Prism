@@ -66,6 +66,15 @@ def test_prompts_config_loads_and_renders_template(tmp_path):
     assert "- #项目/个人AI知识库" in rendered.system
     assert '{"active_tags":[]}' in rendered.user
     assert "原始内容" in rendered.user
+    tag_rendered = config.tag_summary.render(
+        {
+            "tag": "#项目/个人AI知识库",
+            "memo_count": "2",
+            "memos_markdown": "- memo",
+        }
+    )
+    assert "测试标签总结系统提示词" in tag_rendered.system
+    assert "#项目/个人AI知识库" in tag_rendered.user
 
 
 def test_taxonomy_config_builds_local_organization_plan(tmp_path):

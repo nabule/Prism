@@ -78,6 +78,26 @@ def test_admin_prompts_can_be_read_and_updated(tmp_path, monkeypatch):
     assert updated.status_code == 200
     assert updated.json()["system"] == "新的系统提示 {active_tags}"
     assert listed_again.json()["organize_memo"]["user"] == "新的用户提示 {content}"
+    assert "测试标签总结系统提示词" in listed_again.json()["tag_summary"]["system"]
+
+
+def test_admin_tag_summary_prompt_can_be_updated(tmp_path, monkeypatch):
+    app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
+    models_path = write_yaml(tmp_path / "models.yaml", models_config_text())
+    write_yaml(tmp_path / "prompts.yaml", prompts_config_text())
+    monkeypatch.setenv("SIDECAR_ADMIN_TOKEN", "admin-token")
+
+    client = TestClient(create_app(str(app_path), str(models_path)))
+    updated = client.put(
+        "/admin/prompts/tag-summary",
+        headers={"Authorization": "Bearer admin-token"},
+        json={"system": "标签总结系统", "user": "标签总结用户 {tag} {memos_markdown}"},
+    )
+    listed = client.get("/admin/prompts", headers={"Authorization": "Bearer admin-token"})
+
+    assert updated.status_code == 200
+    assert updated.json()["system"] == "标签总结系统"
+    assert listed.json()["tag_summary"]["user"] == "标签总结用户 {tag} {memos_markdown}"
 
 
 def test_admin_retry_job_can_store_temporary_prompt_override(tmp_path, monkeypatch):
@@ -162,3 +182,74 @@ def test_admin_tag_candidates_review_flow(tmp_path, monkeypatch):
     assert approved.json()["status"] == "approved"
     assert approved.json()["reviewer_note"] == "纳入正式标签"
     assert remaining.json()["candidates"] == []
+
+
+def test_admin_tag_summary_creates_summary_memo(tmp_path, monkeypatch):
+    app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
+    models_path = write_yaml(tmp_path / "models.yaml", models_config_text())
+    write_yaml(tmp_path / "prompts.yaml", prompts_config_text())
+    monkeypatch.setenv("SIDECAR_ADMIN_TOKEN", "admin-token")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    monkeypatch.setenv("MEMOS_BASE_URL", "http://memos.local")
+    monkeypatch.setenv("MEMOS_API_TOKEN", "memos-token")
+
+    class FakeMemosClient:
+        created_memos: list[str] = []
+
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def list_memos(self, *, page_size, page_token=None, filter_text=None):
+            assert page_size == 20
+            assert page_token is None
+            assert filter_text is None
+            return {
+                "memos": [
+                    {
+                        "name": "memos/source1",
+                        "createTime": "2026-05-21T03:00:00Z",
+                        "content": "个人 AI 知识库推进记录 #项目/个人AI知识库",
+                        "tags": ["项目/个人AI知识库"],
+                    },
+                    {
+                        "name": "memos/other",
+                        "content": "其他记录",
+                        "tags": ["其他"],
+                    },
+                ]
+            }
+
+        async def create_memo(self, content):
+            self.created_memos.append(content)
+            return {"name": "memos/tag-summary-1", "content": content}
+
+    class FakeLLMClient:
+        seen_memos_markdown = ""
+
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def summarize_tag(self, *, tag, memos_markdown, memo_count, prompt_template):
+            FakeLLMClient.seen_memos_markdown = memos_markdown
+            assert tag == "#项目/个人AI知识库"
+            assert memo_count == 1
+            return "## 总览\n\n个人 AI 知识库正在推进。"
+
+    monkeypatch.setattr("memosima.api.app.MemosClient", FakeMemosClient)
+    monkeypatch.setattr("memosima.api.app.OpenAICompatibleClient", FakeLLMClient)
+
+    client = TestClient(create_app(str(app_path), str(models_path)))
+    response = client.post(
+        "/admin/tag-summaries",
+        headers={"Authorization": "Bearer admin-token"},
+        json={"tag": "#项目/个人AI知识库", "limit": 20},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["summary_memo_uid"] == "tag-summary-1"
+    assert data["memo_count"] == 1
+    assert "#系统/标签总结 #项目/个人AI知识库" in data["content"]
+    assert "memos/source1" in data["content"]
+    assert "memos/other" not in FakeLLMClient.seen_memos_markdown
+    assert FakeMemosClient.created_memos == [data["content"]]

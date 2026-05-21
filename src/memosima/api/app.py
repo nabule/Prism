@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 from typing import Any
 
 import uvicorn
@@ -14,7 +15,7 @@ from memosima.api.security import require_admin
 from memosima.api.webhooks import build_idempotency_key, extract_memo_uid
 from memosima.core.config import AppConfig, ConfigError, ModelsConfig
 from memosima.core.prompts import PromptTemplate, PromptsConfig, load_prompts_or_default
-from memosima.db.store import Job, Store, TagCandidateRecord
+from memosima.db.store import Job, MemoRecord, Store, TagCandidateRecord
 from memosima.llm.provider import OpenAICompatibleClient
 from memosima.memos.client import MemosClient
 
@@ -230,7 +231,13 @@ def create_app(
             api_token=config.memos_api_token,
             timeout_seconds=config.memos_timeout_seconds,
         )
-        memos = await _list_memos_for_tag(memos_client, tag=request.tag, limit=request.limit)
+        memos = await _list_memos_for_tag(
+            memos_client,
+            store=store,
+            workspace_id=config.workspace_id,
+            tag=request.tag,
+            limit=request.limit,
+        )
         if not memos:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No memos found for tag")
 
@@ -384,18 +391,39 @@ def _memos_tag(tag: str) -> str:
 def _memo_matches_tag(memo: dict[str, Any], tag: str) -> bool:
     normalized = _memos_tag(tag)
     tags = memo.get("tags")
-    if isinstance(tags, list) and normalized in {str(item).lstrip("#") for item in tags}:
+    if isinstance(tags, list) and any(_tag_path_matches(str(item), normalized) for item in tags):
         return True
     content = memo.get("content")
-    return isinstance(content, str) and f"#{normalized}" in content
+    return isinstance(content, str) and any(_tag_path_matches(item, normalized) for item in _extract_content_tags(content))
 
 
-async def _list_memos_for_tag(memos_client: MemosClient, *, tag: str, limit: int) -> list[dict[str, Any]]:
+def _tag_path_matches(candidate: str, normalized_tag: str) -> bool:
+    normalized_candidate = _memos_tag(candidate)
+    return normalized_candidate == normalized_tag or normalized_candidate.startswith(f"{normalized_tag}/")
+
+
+def _extract_content_tags(content: str) -> list[str]:
+    return re.findall(r"#[0-9A-Za-z_\-\u4e00-\u9fff/]+", content)
+
+
+async def _list_memos_for_tag(
+    memos_client: MemosClient,
+    *,
+    store: Store,
+    workspace_id: str,
+    tag: str,
+    limit: int,
+) -> list[dict[str, Any]]:
     matched: list[dict[str, Any]] = []
+    matched_by_uid: dict[str, dict[str, Any]] = {}
+    source_uids_from_summaries: list[str] = []
     page_token: str | None = None
     scanned = 0
     page_size = min(max(limit, 20), 100)
     max_scan = max(limit * 5, page_size)
+    summary_sources = _summary_sources_by_uid(
+        store.list_memos(workspace_id=workspace_id, memo_type="ai_summary", limit=max_scan * 2)
+    )
 
     while len(matched) < limit and scanned < max_scan:
         response = await memos_client.list_memos(page_size=page_size, page_token=page_token)
@@ -404,10 +432,18 @@ async def _list_memos_for_tag(memos_client: MemosClient, *, tag: str, limit: int
             raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Memos returned invalid response")
 
         for memo in raw_memos:
-            if isinstance(memo, dict) and not _is_sidecar_generated_memo(memo):
+            if isinstance(memo, dict):
                 scanned += 1
-                if _memo_matches_tag(memo, tag):
-                    matched.append(memo)
+                memo_uid = _memo_uid_from_name(memo.get("name"))
+                if _is_sidecar_generated_memo(memo):
+                    if memo_uid and _memo_matches_tag(memo, tag):
+                        source_uid = summary_sources.get(memo_uid)
+                        if source_uid:
+                            source_uids_from_summaries.append(source_uid)
+                    continue
+                if memo_uid:
+                    matched_by_uid[memo_uid] = memo
+                if _memo_matches_tag(memo, tag) and memo_uid and _append_unique_memo(matched, memo, limit):
                     if len(matched) >= limit:
                         break
 
@@ -416,7 +452,30 @@ async def _list_memos_for_tag(memos_client: MemosClient, *, tag: str, limit: int
             break
         page_token = next_page_token
 
+    for source_uid in source_uids_from_summaries:
+        if len(matched) >= limit:
+            break
+        memo = matched_by_uid.get(source_uid)
+        if memo is not None:
+            _append_unique_memo(matched, memo, limit)
+
     return matched
+
+
+def _summary_sources_by_uid(records: list[MemoRecord]) -> dict[str, str]:
+    return {record.memos_uid: record.source_memo_uid for record in records if record.source_memo_uid}
+
+
+def _append_unique_memo(memos: list[dict[str, Any]], memo: dict[str, Any], limit: int) -> bool:
+    uid = _memo_uid_from_name(memo.get("name"))
+    if not uid:
+        return False
+    if any(_memo_uid_from_name(item.get("name")) == uid for item in memos):
+        return False
+    if len(memos) >= limit:
+        return False
+    memos.append(memo)
+    return True
 
 
 def _is_sidecar_generated_memo(memo: dict[str, Any]) -> bool:
@@ -433,10 +492,10 @@ def _is_sidecar_generated_memo(memo: dict[str, Any]) -> bool:
 def _memos_markdown(memos: list[dict[str, Any]]) -> str:
     blocks: list[str] = []
     for index, memo in enumerate(memos, start=1):
-        name = str(memo.get("name", ""))
+        name = str(memo.get("name", "")).removeprefix("memos/")
         create_time = str(memo.get("createTime", ""))
         content = str(memo.get("content", "")).strip()
-        blocks.append(f"### {index}. {name}\n\n创建时间：{create_time}\n\n{content}")
+        blocks.append(f"### {index}. memo UID：{name}\n\n创建时间：{create_time}\n\n{content}")
     return "\n\n---\n\n".join(blocks)
 
 
@@ -445,10 +504,15 @@ def _tag_summary_memo_content(*, tag: str, summary: str, memos: list[dict[str, A
     return (
         f"#系统/标签总结 {tag}\n\n"
         f"# {tag} 整体总结\n\n"
-        f"{summary.strip()}\n\n"
+        f"{_sanitize_memo_name_references(summary.strip())}\n\n"
         "## 相关 memo UID\n\n"
         f"{references}\n"
     )
+
+
+def _sanitize_memo_name_references(text: str) -> str:
+    without_links = re.sub(r"\[([^\]]+)\]\(memos/([^)]+)\)", r"\1（memo UID：\2）", text)
+    return re.sub(r"\bmemos/([0-9A-Za-z]+)", r"memo UID：\1", without_links)
 
 
 def _memo_uids_from_memos(memos: list[dict[str, Any]]) -> list[str]:

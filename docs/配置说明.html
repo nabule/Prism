@@ -112,7 +112,7 @@ providers:
     extra_body: {}
 </code></pre>
 <p>worker 会读取默认 provider，并在对应 <code>api_key_env</code> 环境变量存在时发起 OpenAI-compatible <code>/chat/completions</code> 调用。<code>base_url</code>、<code>default_model</code>、<code>temperature</code>、<code>max_tokens</code>、<code>response_format</code> 和 <code>extra_body</code> 都从 <code>config/models.yaml</code> 读取。<code>max_tokens</code> 留空时不会向模型请求发送输出 token 限制；Sidecar 也不会主动截断输入正文。<code>extra_body</code> 会原样合并到请求 JSON，适合配置厂商扩展参数。模型输出必须是 JSON 对象，Sidecar 会校验 <code>title</code>、<code>summary</code>、<code>key_points</code>、<code>todos</code>、<code>active_tags</code>、<code>candidate_tags</code>、<code>needs_clarification</code> 和 <code>clarification_question</code> 字段。没有配置 key 时不调用 LLM，自动回退到本地模板整理。</p>
-<p><code>active_tags</code> 只能使用已有正式标签；如果模型把未知标签放入 <code>active_tags</code>，Sidecar 会把它降级为候选标签。<code>candidate_tags</code> 用于 AI 从正文提出的新标签建议，每项包含 <code>path</code>、<code>reason</code> 和 <code>confidence</code>。新标签不会自动激活，必须通过候选标签审核。</p>
+<p><code>active_tags</code> 只能使用已有正式标签；如果模型把未知标签放入 <code>active_tags</code>，Sidecar 会把它降级为候选标签。<code>candidate_tags</code> 用于 AI 从正文提出的新标签建议，每项包含 <code>path</code>、<code>reason</code> 和 <code>confidence</code>。新标签不会自动激活，必须通过候选标签审核。业务标签还要求最后一级名称全局唯一：已有 <code>#项目/数管</code> 时，<code>#数管</code> 和 <code>#其他/数管</code> 都不能再作为新的业务标签。</p>
 <h2>prompts.yaml</h2>
 <p><code>config/prompts.yaml</code> 保存所有 LLM 调用点的默认提示词。当前调用点包括 <code>organize_memo</code> 和 <code>tag_summary</code>，每个调用点都包含 <code>system</code> 和 <code>user</code> 两段模板。</p>
 <p><code>organize_memo</code> 用于单条 memo 的 AI 整理，支持以下占位符：</p>
@@ -137,6 +137,7 @@ providers:
 <li><code>aliases</code>：把常用别名映射到正式业务标签。</li>
 <li><code>disabled</code>：禁用标签，命中后不会进入正式标签或候选标签。</li>
 </ul>
+<p>业务标签按路径表达层级，但唯一性按最后一级名称检查。例如 <code>#项目/数管</code> 的最后一级是 <code>数管</code>；配置、运行期审核和 AI 自动候选都不允许再出现 <code>#数管</code> 或 <code>#其他/数管</code>。如果用户在 memo 中写了 <code>#数管</code>，且系统中唯一匹配的正式标签是 <code>#项目/数管</code>，后台会归一为该正式标签。</p>
 <p>worker 会把解析结果写入 job <code>result.ai_plan</code>。内容明确时会用 <code>system_tags.ai_summary</code> 创建 AI 整理 memo；内容过短或包含问号时会用 <code>system_tags.pending_clarification</code> 标记草案，在原 memo 下写澄清评论，并把任务置为 <code>waiting_user</code>。</p>
 <p>候选标签持久化后会进入 Sidecar SQLite 的 <code>tag_candidates</code> 表，可通过 <code>/admin/tag-candidates</code> 查询，并通过 <code>/admin/tag-candidates/{id}/approve</code> 或 <code>/admin/tag-candidates/{id}/reject</code> 审核。审核通过后会同步写入 <code>business_tags</code> 表并标记为 <code>active</code>，worker 后续会把这些标签与 <code>config/taxonomy.yaml</code> 中的 active 标签合并使用。当前审核结果不会自动改写 <code>config/taxonomy.yaml</code>。</p>
 <p>也可以打开 <code>http://localhost:8080/admin/ui</code> 使用调试管理页面审核候选标签。该页面要求手动输入 <code>SIDECAR_ADMIN_TOKEN</code>，token 只保存在当前浏览器，不会由服务端注入页面。</p>

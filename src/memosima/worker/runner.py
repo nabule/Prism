@@ -124,16 +124,7 @@ class Worker:
             status="synced",
             content_hash=content_hash,
         )
-        for candidate in organization_plan.candidate_tags:
-            self.store.upsert_tag_candidate(
-                workspace_id=job.workspace_id,
-                path=candidate.path,
-                parent_path=candidate.parent_path,
-                reason=candidate.reason,
-                source_memo_uid=memo_uid,
-                similar_tags=list(candidate.similar_existing_tags),
-                confidence=candidate.confidence,
-            )
+        self._upsert_tag_candidates(job.workspace_id, memo_uid, organization_plan.candidate_tags)
 
         attachment_results = await self._process_attachments(
             client=client,
@@ -178,16 +169,7 @@ class Worker:
                 local_plan=organization_plan,
                 llm_draft=llm_draft,
             )
-            for candidate in organization_plan.candidate_tags:
-                self.store.upsert_tag_candidate(
-                    workspace_id=job.workspace_id,
-                    path=candidate.path,
-                    parent_path=candidate.parent_path,
-                    reason=candidate.reason,
-                    source_memo_uid=memo_uid,
-                    similar_tags=list(candidate.similar_existing_tags),
-                    confidence=candidate.confidence,
-                )
+            self._upsert_tag_candidates(job.workspace_id, memo_uid, organization_plan.candidate_tags)
 
         summary_content = build_summary_memo_content(
             source_memo_uid=memo_uid,
@@ -326,12 +308,17 @@ class Worker:
         candidates = list(local_plan.candidate_tags)
         disabled_tags = list(local_plan.disabled_tags)
         active_tag_paths = set(taxonomy.active_tag_paths)
-        disabled_tag_paths = set(taxonomy.disabled)
         candidate_paths = {candidate.path for candidate in candidates}
+        candidate_leafs = {_tag_leaf(candidate.path) for candidate in candidates}
 
         def add_candidate(path: str, reason: str, confidence: float) -> None:
-            nonlocal candidate_paths
-            if path in candidate_paths or path in active_tag_paths or path.startswith("#系统/"):
+            nonlocal candidate_paths, candidate_leafs
+            if (
+                path in candidate_paths
+                or path in active_tag_paths
+                or _tag_leaf(path) in candidate_leafs
+                or path.startswith("#系统/")
+            ):
                 return
             candidates.append(
                 TagCandidate(
@@ -343,29 +330,28 @@ class Worker:
                 )
             )
             candidate_paths.add(path)
+            candidate_leafs.add(_tag_leaf(path))
 
         for raw_tag in llm_draft.active_tags:
             try:
-                tag = taxonomy.normalize_tag(raw_tag)
+                tag, status = taxonomy.resolve_business_tag(raw_tag)
             except Exception:
                 continue
-            tag = taxonomy.aliases.get(tag, tag)
-            if tag in disabled_tag_paths:
+            if status == "disabled":
                 disabled_tags.append(tag)
-            elif tag in active_tag_paths:
+            elif status == "active":
                 active_tags.append(tag)
             elif not tag.startswith("#系统/"):
                 add_candidate(tag, "AI suggested this tag from memo content but it is not approved", 0.6)
 
         for llm_candidate in llm_draft.candidate_tags:
             try:
-                tag = taxonomy.normalize_tag(llm_candidate.path)
+                tag, status = taxonomy.resolve_business_tag(llm_candidate.path)
             except Exception:
                 continue
-            tag = taxonomy.aliases.get(tag, tag)
-            if tag in disabled_tag_paths:
+            if status == "disabled":
                 disabled_tags.append(tag)
-            elif tag in active_tag_paths:
+            elif status == "active":
                 active_tags.append(tag)
             else:
                 add_candidate(tag, llm_candidate.reason, llm_candidate.confidence)
@@ -390,6 +376,26 @@ class Worker:
             tag.path for tag in self.store.list_business_tags(workspace_id=workspace_id, status="active")
         ]
         return taxonomy.with_active_tags(approved_tags)
+
+    def _upsert_tag_candidates(
+        self,
+        workspace_id: str,
+        memo_uid: str,
+        candidates: tuple[TagCandidate, ...],
+    ) -> None:
+        for candidate in candidates:
+            try:
+                self.store.upsert_tag_candidate(
+                    workspace_id=workspace_id,
+                    path=candidate.path,
+                    parent_path=candidate.parent_path,
+                    reason=candidate.reason,
+                    source_memo_uid=memo_uid,
+                    similar_tags=list(candidate.similar_existing_tags),
+                    confidence=candidate.confidence,
+                )
+            except ValueError:
+                LOGGER.info("Skipping tag candidate with non-unique leaf: %s", candidate.path)
 
 
 def _memo_hash(memo: dict[str, object]) -> str:
@@ -436,6 +442,10 @@ def _dedupe(values: list[str] | tuple[str, ...]) -> list[str]:
             seen.add(value)
             result.append(value)
     return result
+
+
+def _tag_leaf(tag: str) -> str:
+    return tag.rsplit("/", maxsplit=1)[-1].removeprefix("#")
 
 
 async def _run(args: argparse.Namespace) -> None:

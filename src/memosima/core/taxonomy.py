@@ -102,31 +102,47 @@ class TaxonomyConfig:
             raise ConfigError("taxonomy disabled must be a list")
         disabled = tuple(_normalize_tag(item) for item in raw_disabled)
 
-        return cls(
+        taxonomy = cls(
             system_tags={str(key): _normalize_tag(value) for key, value in system_tags.items()},
             business_tags=tuple(business_tags),
             aliases=aliases,
             disabled=disabled,
         )
+        taxonomy.validate_unique_business_leaves()
+        return taxonomy
 
     @property
     def active_tag_paths(self) -> tuple[str, ...]:
         return tuple(tag.path for tag in self.business_tags if tag.status == "active")
 
+    def validate_unique_business_leaves(self) -> None:
+        seen: dict[str, str] = {}
+        for path in [*self.active_tag_paths, *self.disabled]:
+            leaf = _tag_leaf(path)
+            existing = seen.get(leaf)
+            if existing and existing != path:
+                raise ConfigError(f"Duplicate business tag leaf across levels: {existing} and {path}")
+            seen[leaf] = path
+
     def with_active_tags(self, tag_paths: list[str] | tuple[str, ...]) -> "TaxonomyConfig":
         existing = {tag.path for tag in self.business_tags}
+        existing_leafs = {_tag_leaf(tag.path) for tag in self.business_tags if tag.status == "active"}
         business_tags = list(self.business_tags)
         for path in tag_paths:
             normalized = _normalize_tag(path)
-            if normalized not in existing:
+            leaf = _tag_leaf(normalized)
+            if normalized not in existing and leaf not in existing_leafs:
                 business_tags.append(BusinessTag(path=normalized, status="active"))
                 existing.add(normalized)
-        return TaxonomyConfig(
+                existing_leafs.add(leaf)
+        taxonomy = TaxonomyConfig(
             system_tags=self.system_tags,
             business_tags=tuple(business_tags),
             aliases=self.aliases,
             disabled=self.disabled,
         )
+        taxonomy.validate_unique_business_leaves()
+        return taxonomy
 
     def build_organization_plan(self, content: str) -> OrganizationPlan:
         raw_tags = _extract_tags(content)
@@ -137,21 +153,30 @@ class TaxonomyConfig:
         active: list[str] = []
         disabled: list[str] = []
         candidates: list[TagCandidate] = []
+        candidate_leafs: set[str] = set()
+
+        def add_candidate(tag: str, reason: str) -> None:
+            leaf = _tag_leaf(tag)
+            if leaf in candidate_leafs:
+                return
+            candidates.append(
+                TagCandidate(
+                    path=tag,
+                    parent_path=_parent_tag(tag),
+                    reason=reason,
+                    similar_existing_tags=_similar_tags(tag, self.active_tag_paths),
+                )
+            )
+            candidate_leafs.add(leaf)
+
         for raw_tag in raw_tags:
-            tag = self.aliases.get(raw_tag, raw_tag)
-            if tag in self.disabled:
+            tag, status = self.resolve_business_tag(raw_tag)
+            if status == "disabled":
                 disabled.append(tag)
-            elif tag in self.active_tag_paths:
+            elif status == "active":
                 active.append(tag)
             elif not tag.startswith("#系统/"):
-                candidates.append(
-                    TagCandidate(
-                        path=tag,
-                        parent_path=_parent_tag(tag),
-                        reason="memo contains a tag outside the approved taxonomy",
-                        similar_existing_tags=_similar_tags(tag, self.active_tag_paths),
-                    )
-                )
+                add_candidate(tag, "memo contains a tag outside the approved taxonomy")
 
         needs_clarification = _needs_clarification(content)
         system_tags = [system_original]
@@ -173,6 +198,20 @@ class TaxonomyConfig:
 
     def normalize_tag(self, value: Any) -> str:
         return _normalize_tag(value)
+
+    def resolve_business_tag(self, value: Any) -> tuple[str, str]:
+        tag = self.aliases.get(_normalize_tag(value), _normalize_tag(value))
+        if tag in self.disabled:
+            return tag, "disabled"
+        if tag in self.active_tag_paths:
+            return tag, "active"
+        active_leaf_match = _same_leaf_tag(tag, self.active_tag_paths)
+        if active_leaf_match:
+            return active_leaf_match, "active"
+        disabled_leaf_match = _same_leaf_tag(tag, self.disabled)
+        if disabled_leaf_match:
+            return disabled_leaf_match, "disabled"
+        return tag, "unknown"
 
     def parent_tag(self, tag: str) -> str | None:
         return _parent_tag(tag)
@@ -204,8 +243,23 @@ def _parent_tag(tag: str) -> str | None:
     return tag.rsplit("/", maxsplit=1)[0]
 
 
+def _tag_leaf(tag: str) -> str:
+    return tag.rsplit("/", maxsplit=1)[-1].removeprefix("#")
+
+
+def _same_leaf_tag(tag: str, candidates: tuple[str, ...]) -> str | None:
+    leaf = _tag_leaf(tag)
+    for candidate in candidates:
+        if _tag_leaf(candidate) == leaf:
+            return candidate
+    return None
+
+
 def _similar_tags(tag: str, active_tags: tuple[str, ...]) -> tuple[str, ...]:
     parent = _parent_tag(tag)
+    same_leaf = tuple(candidate for candidate in active_tags if _tag_leaf(candidate) == _tag_leaf(tag))
+    if same_leaf:
+        return same_leaf[:3]
     if not parent:
         return ()
     return tuple(candidate for candidate in active_tags if candidate.startswith(f"{parent}/"))[:3]

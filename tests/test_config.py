@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from memosima.core.config import AppConfig, ModelsConfig
+import pytest
+
+from memosima.core.config import AppConfig, ConfigError, ModelsConfig
 from memosima.core.prompts import PromptsConfig
 from memosima.core.taxonomy import TaxonomyConfig
 
@@ -91,6 +93,51 @@ def test_taxonomy_config_builds_local_organization_plan(tmp_path):
     assert plan.candidate_tags[0].path == "#项目/新方向"
     assert plan.candidate_tags[0].parent_path == "#项目"
     assert plan.needs_clarification is False
+
+
+def test_taxonomy_keeps_business_tag_leaf_unique_across_levels(tmp_path):
+    taxonomy_path = write_yaml(
+        tmp_path / "taxonomy.yaml",
+        """
+system_tags:
+  original: "#系统/原始记录"
+  pending_clarification: "#系统/待澄清"
+  tag_candidate: "#系统/标签待审核"
+business_tags:
+  - path: "#项目/个人AI知识库"
+    status: active
+  - path: "#项目/数管"
+    status: active
+aliases: []
+disabled: []
+""",
+    )
+    taxonomy = TaxonomyConfig.load(taxonomy_path)
+
+    plan = taxonomy.build_organization_plan("数管项目记录 #数管 #其他/数管")
+
+    assert plan.active_tags == ("#项目/数管",)
+    assert plan.candidate_tags == ()
+
+
+def test_taxonomy_rejects_duplicate_business_tag_leaf_across_levels(tmp_path):
+    taxonomy_path = write_yaml(
+        tmp_path / "taxonomy.yaml",
+        """
+system_tags:
+  original: "#系统/原始记录"
+business_tags:
+  - path: "#项目/数管"
+    status: active
+  - path: "#数管"
+    status: active
+aliases: []
+disabled: []
+""",
+    )
+
+    with pytest.raises(ConfigError, match="Duplicate business tag leaf"):
+        TaxonomyConfig.load(taxonomy_path)
 
 
 def test_taxonomy_config_marks_short_or_question_content_as_waiting_user(tmp_path):

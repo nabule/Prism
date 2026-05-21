@@ -233,7 +233,9 @@ def _extract_tags(content: str) -> tuple[str, ...]:
     tags: list[str] = []
     for token in content.replace("\n", " ").split():
         if token.startswith("#"):
-            tags.append(token.rstrip(".,;:!?，。；：！？）)"))
+            tag = token.rstrip(".,;:!?，。；：！？）)")
+            if tag.strip("#"):
+                tags.append(tag)
     return tuple(_dedupe(tags))
 
 

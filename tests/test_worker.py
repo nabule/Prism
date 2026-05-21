@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from memosima.core.attachments import ParsedAttachment
 from memosima.core.config import AppConfig, ModelsConfig
 from memosima.core.taxonomy import TaxonomyConfig
 from memosima.db.store import Store
@@ -415,6 +416,118 @@ async def test_worker_merges_ai_generated_tags_from_body(tmp_path, monkeypatch):
     assert "#项目/未知正式标签" in FakeMemosClient.created_memos[0]
     assert "#杂项" in FakeMemosClient.created_memos[0]
     assert FakeMemosClient.relations == [("ai-tags", "summary-ai-tags")]
+
+
+@pytest.mark.asyncio
+async def test_worker_parses_document_attachment_before_calling_llm(tmp_path, monkeypatch):
+    app_path = write_yaml(
+        tmp_path / "app.yaml",
+        app_config_text(tmp_path / "sidecar.db")
+        + """
+document_parser:
+  provider: mineru
+  token_env: MINERU_API_TOKEN
+limits:
+  max_attachment_mb: 1
+  allowed_parse_extensions:
+    - .txt
+    - .md
+    - .docx
+""",
+    )
+    models_path = write_yaml(tmp_path / "models.yaml", models_config_text())
+    write_yaml(tmp_path / "taxonomy.yaml", taxonomy_config_text())
+    monkeypatch.setenv("MEMOS_BASE_URL", "http://memos.local")
+    monkeypatch.setenv("MEMOS_API_TOKEN", "memos-token")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    config = AppConfig.load(app_path)
+    models = ModelsConfig.load(models_path)
+    store = Store(config.database_path)
+    store.migrate()
+    store.ensure_workspace("default")
+    store.create_job(
+        workspace_id="default",
+        job_type="process_memo",
+        idempotency_key="memo:docx",
+        payload={"memo_uid": "docx"},
+    )
+
+    class FakeMemosClient:
+        created_memos: list[str] = []
+        relations: list[tuple[str, str]] = []
+
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def get_memo(self, memo_uid):
+            return {
+                "name": f"memos/{memo_uid}",
+                "content": "见附件",
+                "resources": [
+                    {
+                        "name": "resources/doc1",
+                        "filename": "方案.docx",
+                        "contentType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    }
+                ],
+            }
+
+        async def create_memo(self, content):
+            self.created_memos.append(content)
+            return {"name": "memos/summary-docx", "content": content}
+
+        async def create_comment(self, memo_uid, content):
+            raise AssertionError("document markdown should make the memo clear enough")
+
+        async def download_resource(self, resource_name):
+            assert resource_name == "resources/doc1"
+            return b"docx-bytes"
+
+        async def upsert_memo_reference_relation(self, *, source_memo_uid, related_memo_uid):
+            self.relations.append((source_memo_uid, related_memo_uid))
+            return {}
+
+    class FakeDocumentParser:
+        async def parse(self, *, resource, data):
+            return ParsedAttachment(
+                resource=resource,
+                kind="attachment_document",
+                content_markdown="# 项目方案\n\n正文来自 Word 附件，主题是个人 AI 知识库。",
+                metadata={"provider": "mineru", "filename": resource.filename},
+            )
+
+    class FakeLLMClient:
+        seen_content = ""
+
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def organize_memo(self, *, content, taxonomy, local_plan, prompt_template):
+            FakeLLMClient.seen_content = content
+            return LLMOrganizationDraft(
+                title="文档整理",
+                summary="附件已转成 Markdown 后参与整理",
+                active_tags=["#项目/个人AI知识库"],
+                needs_clarification=False,
+            )
+
+    monkeypatch.setattr("memosima.worker.runner.MemosClient", FakeMemosClient)
+    monkeypatch.setattr("memosima.worker.runner.OpenAICompatibleClient", FakeLLMClient)
+    monkeypatch.setattr("memosima.worker.runner.create_document_parser", lambda config: FakeDocumentParser())
+
+    processed = await Worker(config, store, models).run_once()
+
+    assert processed is True
+    job = store.list_jobs()[0]
+    assert job.status == "succeeded"
+    assert job.result["attachments"][0]["status"] == "parsed"
+    assert job.result["attachments"][0]["kind"] == "attachment_document"
+    assert "## 附件：方案.docx" in FakeLLMClient.seen_content
+    assert "正文来自 Word 附件" in FakeLLMClient.seen_content
+    artifacts = store.list_artifacts(workspace_id="default", memo_uid="docx", kind="attachment_document")
+    assert len(artifacts) == 1
+    assert artifacts[0].content_markdown.startswith("# 项目方案")
+    assert "附件已转成 Markdown 后参与整理" in FakeMemosClient.created_memos[0]
 
 
 def test_worker_limits_ai_generated_tag_count(tmp_path):

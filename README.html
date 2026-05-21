@@ -41,9 +41,9 @@
     <li>LLM 可从正文自动建议正式标签和候选标签；新标签仍需人工审核。</li>
     <li>LLM 提示词从 <code>config/prompts.yaml</code> 加载，管理页面可保存默认提示词，也可在重试时临时覆盖。</li>
     <li>待澄清评论和 <code>waiting_user</code> 状态。</li>
-    <li><code>.txt</code>、<code>.md</code> 附件解析为 artifact。</li>
+    <li><code>.txt</code>、<code>.md</code> 附件解析为 artifact；Word、Excel、PPT、PDF 附件可通过 MinerU 在线服务转成 Markdown 后进入同一 AI 整理流程。</li>
   </ul>
-  <p class="note">未完成范围：docx/xlsx/pdf/drawio/Mind Elixir 专用解析、向量索引、问答、自动文档、备份恢复。</p>
+  <p class="note">未完成范围：drawio/Mind Elixir 专用解析、向量索引、问答、自动文档、备份恢复。</p>
 
   <h2>快速开始</h2>
   <pre><code>cp .env.example .env

@@ -11,9 +11,11 @@ from memosima.core.attachments import (
     ParsedAttachment,
     SkippedAttachment,
     extract_attachment_resources,
+    is_document_attachment,
     parse_text_attachment,
 )
 from memosima.core.config import AppConfig, ModelsConfig
+from memosima.core.document_parsers import create_document_parser
 from memosima.core.prompts import PromptTemplate, load_prompts_or_default
 from memosima.core.summary import build_summary_memo_content
 from memosima.core.taxonomy import OrganizationPlan, TagCandidate, TaxonomyConfig
@@ -115,8 +117,7 @@ class Worker:
         content_hash = _memo_hash(memo)
         taxonomy = self._load_taxonomy(job.workspace_id)
         content = memo.get("content")
-        source_content = content if isinstance(content, str) else ""
-        organization_plan = taxonomy.build_organization_plan(source_content)
+        memo_content = content if isinstance(content, str) else ""
         self.store.upsert_memo(
             workspace_id=job.workspace_id,
             memos_uid=memo_uid,
@@ -124,14 +125,17 @@ class Worker:
             status="synced",
             content_hash=content_hash,
         )
-        self._upsert_tag_candidates(job.workspace_id, memo_uid, organization_plan.candidate_tags)
 
-        attachment_results = await self._process_attachments(
+        attachment_results, attachment_markdowns = await self._process_attachments(
             client=client,
             workspace_id=job.workspace_id,
             memo_uid=memo_uid,
             memo=memo,
         )
+        source_content = _build_source_content(memo_content, attachment_markdowns)
+        organization_plan = taxonomy.build_organization_plan(source_content)
+        self._upsert_tag_candidates(job.workspace_id, memo_uid, organization_plan.candidate_tags)
+
         if organization_plan.needs_clarification:
             comment = _clarification_comment(organization_plan.clarification_reason)
             await client.create_comment(memo_uid, comment)
@@ -215,8 +219,10 @@ class Worker:
         workspace_id: str,
         memo_uid: str,
         memo: dict[str, object],
-    ) -> list[dict[str, object]]:
+    ) -> tuple[list[dict[str, object]], list[str]]:
         results: list[dict[str, object]] = []
+        markdowns: list[str] = []
+        document_parser = create_document_parser(self.config)
         for resource in extract_attachment_resources(memo):
             try:
                 data = await client.download_resource(resource.name)
@@ -226,6 +232,19 @@ class Worker:
                     max_bytes=self.config.max_attachment_bytes,
                     allowed_extensions=self.config.allowed_parse_extensions,
                 )
+                if isinstance(parsed, SkippedAttachment) and _should_parse_with_document_parser(parsed):
+                    if document_parser is None:
+                        parsed = SkippedAttachment(
+                            resource,
+                            "document_parser_not_configured",
+                            {
+                                **parsed.metadata,
+                                "parser_provider": self.config.document_parser_provider,
+                                "token_env": self.config.document_parser_token_env,
+                            },
+                        )
+                    else:
+                        parsed = await document_parser.parse(resource=resource, data=data)
                 if isinstance(parsed, ParsedAttachment):
                     artifact = self.store.upsert_artifact(
                         workspace_id=workspace_id,
@@ -243,6 +262,7 @@ class Worker:
                             "kind": artifact.kind,
                         }
                     )
+                    markdowns.append(_format_attachment_markdown(resource.filename, parsed.content_markdown))
                 elif isinstance(parsed, SkippedAttachment):
                     results.append(
                         {
@@ -260,7 +280,7 @@ class Worker:
                         "reason": str(exc),
                     }
                 )
-        return results
+        return results, markdowns
 
     async def _build_llm_draft(
         self,
@@ -462,6 +482,20 @@ def _dedupe(values: list[str] | tuple[str, ...]) -> list[str]:
 
 def _tag_leaf(tag: str) -> str:
     return tag.rsplit("/", maxsplit=1)[-1].removeprefix("#")
+
+
+def _build_source_content(memo_content: str, attachment_markdowns: list[str]) -> str:
+    parts = [memo_content.strip()] if memo_content.strip() else []
+    parts.extend(markdown.strip() for markdown in attachment_markdowns if markdown.strip())
+    return "\n\n".join(parts)
+
+
+def _format_attachment_markdown(filename: str, markdown: str) -> str:
+    return f"## 附件：{filename}\n\n{markdown.strip()}"
+
+
+def _should_parse_with_document_parser(skipped: SkippedAttachment) -> bool:
+    return skipped.reason == "parser_not_implemented" and is_document_attachment(skipped.resource)
 
 
 async def _run(args: argparse.Namespace) -> None:

@@ -51,6 +51,17 @@ class AppConfig:
     allowed_parse_extensions: tuple[str, ...]
     max_ai_active_tags: int
     max_ai_candidate_tags: int
+    document_parser_provider: str
+    document_parser_token_env: str
+    document_parser_base_url: str
+    document_parser_timeout_seconds: float
+    document_parser_poll_interval_seconds: float
+    document_parser_max_polls: int
+    mineru_model_version: str
+    mineru_language: str
+    mineru_enable_table: bool
+    mineru_enable_formula: bool
+    mineru_is_ocr: bool
 
     @classmethod
     def load(cls, path: str | Path = "config/app.yaml") -> "AppConfig":
@@ -64,6 +75,7 @@ class AppConfig:
         memos = raw.get("memos", {})
         worker = raw.get("worker", {})
         limits = raw.get("limits", {})
+        document_parser = raw.get("document_parser", {})
 
         admin_token_env = str(security.get("admin_token_env", "SIDECAR_ADMIN_TOKEN"))
         memos_base_url_env = memos.get("base_url_env", "MEMOS_BASE_URL")
@@ -93,11 +105,35 @@ class AppConfig:
             allowed_parse_extensions=_string_tuple(
                 limits.get(
                     "allowed_parse_extensions",
-                    [".txt", ".md", ".docx", ".xlsx", ".pdf", ".drawio", ".drawio.svg", ".json"],
+                    [
+                        ".txt",
+                        ".md",
+                        ".doc",
+                        ".docx",
+                        ".xls",
+                        ".xlsx",
+                        ".ppt",
+                        ".pptx",
+                        ".pdf",
+                        ".drawio",
+                        ".drawio.svg",
+                        ".json",
+                    ],
                 )
             ),
             max_ai_active_tags=int(limits.get("max_ai_active_tags", 5)),
             max_ai_candidate_tags=int(limits.get("max_ai_candidate_tags", 2)),
+            document_parser_provider=str(document_parser.get("provider", "mineru")),
+            document_parser_token_env=str(document_parser.get("token_env", "MINERU_API_TOKEN")),
+            document_parser_base_url=str(document_parser.get("base_url", "https://mineru.net")),
+            document_parser_timeout_seconds=float(document_parser.get("timeout_seconds", 60)),
+            document_parser_poll_interval_seconds=float(document_parser.get("poll_interval_seconds", 3)),
+            document_parser_max_polls=int(document_parser.get("max_polls", 60)),
+            mineru_model_version=str(document_parser.get("mineru_model_version", "vlm")),
+            mineru_language=str(document_parser.get("language", "ch")),
+            mineru_enable_table=bool(document_parser.get("enable_table", True)),
+            mineru_enable_formula=bool(document_parser.get("enable_formula", True)),
+            mineru_is_ocr=bool(document_parser.get("is_ocr", False)),
         )
 
 

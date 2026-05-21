@@ -88,6 +88,10 @@ def parse_text_attachment(
     )
 
 
+def is_document_attachment(resource: AttachmentResource) -> bool:
+    return _extension(resource.filename) in {".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".pdf"}
+
+
 def _plain_text_to_markdown(text: str) -> str:
     return "\n".join(line.rstrip() for line in text.splitlines()).strip()
 

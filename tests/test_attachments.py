@@ -4,6 +4,7 @@ from memosima.core.attachments import (
     ParsedAttachment,
     SkippedAttachment,
     extract_attachment_resources,
+    is_document_attachment,
     parse_text_attachment,
 )
 
@@ -55,3 +56,19 @@ def test_parse_text_attachment_accepts_txt_and_skips_unsupported():
 
     assert isinstance(skipped, SkippedAttachment)
     assert skipped.reason == "file_too_large"
+
+
+def test_document_attachment_extensions_are_detected():
+    resources = extract_attachment_resources(
+        {
+            "resources": [
+                {"name": "resources/doc1", "filename": "需求.docx"},
+                {"name": "resources/sheet1", "filename": "数据.xlsx"},
+                {"name": "resources/slides1", "filename": "汇报.pptx"},
+                {"name": "resources/pdf1", "filename": "报告.pdf"},
+                {"name": "resources/text1", "filename": "note.md"},
+            ]
+        }
+    )
+
+    assert [is_document_attachment(resource) for resource in resources] == [True, True, True, True, False]

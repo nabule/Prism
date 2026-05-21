@@ -195,6 +195,7 @@ def test_admin_tag_summary_creates_summary_memo(tmp_path, monkeypatch):
 
     class FakeMemosClient:
         created_memos: list[str] = []
+        relations: list[tuple[str, str]] = []
 
         def __init__(self, *args, **kwargs):
             pass
@@ -222,6 +223,10 @@ def test_admin_tag_summary_creates_summary_memo(tmp_path, monkeypatch):
         async def create_memo(self, content):
             self.created_memos.append(content)
             return {"name": "memos/tag-summary-1", "content": content}
+
+        async def upsert_memo_reference_relation(self, *, source_memo_uid, related_memo_uid):
+            self.relations.append((source_memo_uid, related_memo_uid))
+            return {}
 
     class FakeLLMClient:
         seen_memos_markdown = ""
@@ -253,3 +258,4 @@ def test_admin_tag_summary_creates_summary_memo(tmp_path, monkeypatch):
     assert "memos/source1" in data["content"]
     assert "memos/other" not in FakeLLMClient.seen_memos_markdown
     assert FakeMemosClient.created_memos == [data["content"]]
+    assert FakeMemosClient.relations == [("tag-summary-1", "source1")]

@@ -119,7 +119,7 @@ curl -X PUT -H &quot;Authorization: Bearer&lt;空格&gt;$SIDECAR_ADMIN_TOKEN&quo
   -d &#39;{&quot;tag&quot;:&quot;#项目/个人AI知识库&quot;,&quot;limit&quot;:50}&#39; \
   &quot;http://localhost:8080/admin/tag-summaries&quot;
 </code></pre>
-<p>该接口会读取最近的 Memos 列表，在 Sidecar 本地按标签匹配，调用默认模型生成 Markdown 总结，并在 Memos 中创建带有 <code>#系统/标签总结</code> 和目标标签的新 memo。默认提示词使用 <code>config/prompts.yaml</code> 的 <code>tag_summary</code>，支持 <code>{tag}</code>、<code>{memo_count}</code> 和 <code>{memos_markdown}</code> 占位符。</p>
+<p>该接口会读取最近的 Memos 列表，在 Sidecar 本地按标签匹配，调用默认模型生成 Markdown 总结，并在 Memos 中创建带有 <code>#系统/标签总结</code> 和目标标签的新 memo。创建成功后，Sidecar 会把总结 memo 通过 Memos 原生 <code>REFERENCE</code> relation 引用到每条参与整理的 memo，便于在 Memos 界面点击回看来源。默认提示词使用 <code>config/prompts.yaml</code> 的 <code>tag_summary</code>，支持 <code>{tag}</code>、<code>{memo_count}</code> 和 <code>{memos_markdown}</code> 占位符。</p>
 <h2>测试</h2>
 <pre><code class="language-bash">npx nx test sidecar
 </code></pre>
@@ -145,7 +145,7 @@ curl -X PUT -H &quot;Authorization: Bearer&lt;空格&gt;$SIDECAR_ADMIN_TOKEN&quo
 <li><code>type=original</code>：原始 Memos memo，同步状态为 <code>synced</code>。</li>
 <li><code>type=ai_summary</code>：AI 整理 memo，<code>source_memo_uid</code> 指向原始 memo，状态为 <code>created</code>。</li>
 </ul>
-<p>worker 创建 AI 整理 memo 后，会同时写入 Memos 原生 relation：原始 memo <code>REFERENCE</code> 到 AI 整理 memo。Sidecar 本地 <code>memos.source_memo_uid</code> 仍保留，作为本地查询和恢复时的冗余关联。</p>
+<p>worker 创建 AI 整理 memo 后，会同时写入 Memos 原生 relation：原始 memo <code>REFERENCE</code> 到 AI 整理 memo。标签整体总结创建后，也会写入原生 relation：总结 memo <code>REFERENCE</code> 到参与整理的来源 memos。Sidecar 本地 <code>memos.source_memo_uid</code> 仍保留，作为本地查询和恢复时的冗余关联。</p>
 <p>当 <code>needs_clarification=true</code> 时，worker 不会创建 AI 整理 memo，而是在原 memo 下创建澄清评论，并把任务状态置为 <code>waiting_user</code>。补充原始 memo 内容后，可以通过现有重试接口重新处理：</p>
 <pre><code class="language-bash">curl -X POST -H &quot;Authorization: Bearer&lt;空格&gt;$SIDECAR_ADMIN_TOKEN&quot; \
   &quot;http://localhost:8080/admin/jobs/1/retry&quot;

@@ -290,6 +290,20 @@ async def test_memos_client_skips_reference_cycles(monkeypatch):
                 "type": "REFERENCE",
             }
         ],
+        "existing-target": [
+            {
+                "memo": {"name": "memos/existing-target"},
+                "relatedMemo": {"name": "memos/existing-source"},
+                "type": "REFERENCE",
+            }
+        ],
+        "existing-source": [
+            {
+                "memo": {"name": "memos/existing-target"},
+                "relatedMemo": {"name": "memos/existing-source"},
+                "type": "REFERENCE",
+            }
+        ],
         "c": [
             {
                 "memo": {"name": "memos/c"},
@@ -335,6 +349,19 @@ async def test_memos_client_skips_reference_cycles(monkeypatch):
     }
     assert await client.upsert_memo_reference_relation(source_memo_uid="a", related_memo_uid="c") == {
         "relations": [],
+        "nextPageToken": "",
+    }
+    assert await client.upsert_memo_reference_relation(
+        source_memo_uid="existing-source",
+        related_memo_uid="existing-target",
+    ) == {
+        "relations": [
+            {
+                "memo": {"name": "memos/existing-target"},
+                "relatedMemo": {"name": "memos/existing-source"},
+                "type": "REFERENCE",
+            }
+        ],
         "nextPageToken": "",
     }
     assert seen_relation_payloads == []

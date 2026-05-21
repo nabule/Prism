@@ -265,7 +265,8 @@ def test_admin_tag_summary_creates_summary_memo(tmp_path, monkeypatch):
     assert data["summary_memo_uid"] == "tag-summary-1"
     assert data["memo_count"] == 1
     assert "#系统/标签总结 #项目/个人AI知识库" in data["content"]
-    assert "memos/source1" in data["content"]
+    assert "source1" in data["content"]
+    assert "memos/source1" not in data["content"]
     assert "memos/other" not in FakeLLMClient.seen_memos_markdown
     assert "memos/ai-summary" not in FakeLLMClient.seen_memos_markdown
     assert "memos/tag-summary" not in FakeLLMClient.seen_memos_markdown

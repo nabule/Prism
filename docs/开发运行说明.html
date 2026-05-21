@@ -145,7 +145,7 @@ curl -X PUT -H &quot;Authorization: Bearer&lt;空格&gt;$SIDECAR_ADMIN_TOKEN&quo
 <li><code>type=original</code>：原始 Memos memo，同步状态为 <code>synced</code>。</li>
 <li><code>type=ai_summary</code>：AI 整理 memo，<code>source_memo_uid</code> 指向原始 memo，状态为 <code>created</code>。</li>
 </ul>
-<p>worker 创建 AI 整理 memo 后，会同时写入 Memos 原生 relation：原始 memo <code>REFERENCE</code> 到 AI 整理 memo。标签整体总结创建后，也会写入原生 relation：总结 memo <code>REFERENCE</code> 到参与整理的来源 memos。所有 relation 写入统一经过 <code>MemosClient.upsert_memo_reference_relation</code>，会跳过自引用、已有重复引用、反向引用，以及从目标 memo 沿 <code>REFERENCE</code> 链路可回到源 memo 的多跳循环引用。Sidecar 本地 <code>memos.source_memo_uid</code> 仍保留，作为本地查询和恢复时的冗余关联。</p>
+<p>worker 创建 AI 整理 memo 后，会同时写入 Memos 原生 relation：AI 整理 memo <code>REFERENCE</code> 到原始 memo。标签整体总结创建后，也会写入原生 relation：总结 memo <code>REFERENCE</code> 到参与整理的来源 memos。生成内容中只展示来源 UID，不再写入裸 <code>memos/{uid}</code> 文本，避免正文引用和原生 relation 叠加形成双向跳转。所有 relation 写入统一经过 <code>MemosClient.upsert_memo_reference_relation</code>，会跳过自引用、已有重复引用、反向引用，以及从目标 memo 沿 <code>REFERENCE</code> 链路可回到源 memo 的多跳循环引用。Sidecar 本地 <code>memos.source_memo_uid</code> 仍保留，作为本地查询和恢复时的冗余关联。</p>
 <p>当 <code>needs_clarification=true</code> 时，worker 不会创建 AI 整理 memo，而是在原 memo 下创建澄清评论，并把任务状态置为 <code>waiting_user</code>。补充原始 memo 内容后，可以通过现有重试接口重新处理：</p>
 <pre><code class="language-bash">curl -X POST -H &quot;Authorization: Bearer&lt;空格&gt;$SIDECAR_ADMIN_TOKEN&quot; \
   &quot;http://localhost:8080/admin/jobs/1/retry&quot;

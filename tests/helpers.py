@@ -51,6 +51,14 @@ organize_memo:
     测试用户提示词
     {local_plan_json}
     {content}
+tag_summary:
+  system: |-
+    测试标签总结系统提示词
+  user: |-
+    测试标签总结用户提示词
+    {tag}
+    {memo_count}
+    {memos_markdown}
 """
 
 

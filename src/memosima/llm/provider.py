@@ -69,6 +69,35 @@ class OpenAICompatibleClient:
         response = await self._request("POST", "/chat/completions", json=payload)
         return _parse_draft_response(response)
 
+    async def summarize_tag(
+        self,
+        *,
+        tag: str,
+        memos_markdown: str,
+        memo_count: int,
+        prompt_template: PromptTemplate,
+    ) -> str:
+        rendered_prompt = prompt_template.render(
+            {
+                "tag": tag,
+                "memo_count": str(memo_count),
+                "memos_markdown": memos_markdown,
+            }
+        )
+        payload = {
+            "model": self.provider.default_model,
+            "messages": [
+                {"role": "system", "content": rendered_prompt.system},
+                {"role": "user", "content": rendered_prompt.user},
+            ],
+            "temperature": self.provider.temperature,
+        }
+        if self.provider.max_tokens is not None:
+            payload["max_tokens"] = self.provider.max_tokens
+        payload.update(self.provider.extra_body)
+        response = await self._request("POST", "/chat/completions", json=payload)
+        return _parse_text_response(response)
+
     async def _request(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -117,6 +146,22 @@ def _parse_draft_response(response: dict[str, Any]) -> LLMOrganizationDraft:
         return LLMOrganizationDraft.model_validate(raw)
     except ValidationError as exc:
         raise LLMClientError("LLM JSON does not match organization schema") from exc
+
+
+def _parse_text_response(response: dict[str, Any]) -> str:
+    choices = response.get("choices")
+    if not isinstance(choices, list) or not choices:
+        raise LLMClientError("LLM response is missing choices")
+    first = choices[0]
+    if not isinstance(first, dict):
+        raise LLMClientError("LLM response choice has unexpected shape")
+    message = first.get("message")
+    if not isinstance(message, dict):
+        raise LLMClientError("LLM response is missing message")
+    content = message.get("content")
+    if not isinstance(content, str) or not content.strip():
+        raise LLMClientError("LLM response is missing message content")
+    return content.strip()
 
 
 def _render_prompt(

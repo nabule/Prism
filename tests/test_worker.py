@@ -491,7 +491,7 @@ async def test_worker_polling_enqueues_new_original_memos(tmp_path, monkeypatch)
         def __init__(self, *args, **kwargs):
             pass
 
-        async def list_memos(self, *, page_size):
+        async def list_memos(self, *, page_size, page_token=None, filter_text=None):
             return {
                 "memos": [
                     {
@@ -505,6 +505,12 @@ async def test_worker_polling_enqueues_new_original_memos(tmp_path, monkeypatch)
                         "updateTime": "2026-05-21T03:19:00Z",
                         "content": "#系统/AI整理\n\nAI memo",
                         "tags": ["系统/AI整理"],
+                    },
+                    {
+                        "name": "memos/tag-summary",
+                        "updateTime": "2026-05-21T03:18:00Z",
+                        "content": "#系统/标签总结 #项目/个人AI知识库\n\n标签整体总结",
+                        "tags": ["系统/标签总结", "项目/个人AI知识库"],
                     },
                 ]
             }
@@ -548,7 +554,7 @@ async def test_worker_polling_skips_already_synced_memos(tmp_path, monkeypatch):
         def __init__(self, *args, **kwargs):
             pass
 
-        async def list_memos(self, *, page_size):
+        async def list_memos(self, *, page_size, page_token=None, filter_text=None):
             return {
                 "memos": [
                     {

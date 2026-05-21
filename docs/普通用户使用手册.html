@@ -42,7 +42,7 @@
     </thead>
     <tbody>
       <tr><td>Memos Web 或客户端</td><td>日常记录、查看原始 memo、查看 AI 生成的整理 memo。这是普通用户的主要入口。</td></tr>
-      <tr><td>Memosima 管理页面 <code>/admin/ui</code></td><td>调试、查看后台任务、重试失败任务、审核 AI 提出的候选标签。普通记录不需要打开它。</td></tr>
+      <tr><td>Memosima 管理页面 <code>/admin/ui</code></td><td>调试、查看后台任务、重试失败任务、审核 AI 提出的候选标签、按标签生成整体总结。普通记录不需要打开它。</td></tr>
     </tbody>
   </table>
   <p class="note">管理员需要先部署好 Memosima、配置 Memos 访问 token 和模型 key。普通用户不需要接触 API key、Docker 或命令行。本地部署默认由 Sidecar 主动轮询 Memos，不需要公网 webhook。</p>
@@ -138,7 +138,10 @@ Memos 负责快速记录，Sidecar 负责后台整理、生成摘要和标签建
   <h3>普通用户使用客户端还是 Web？</h3>
   <p>日常记录使用 Memos 客户端或 Memos Web 都可以。Memosima 的 Web 管理页面主要用于调试、任务重试和标签审核，不是日常记录入口。</p>
 
-  <h2>12. 更多文档</h2>
+  <h2>12. 如何查看某个标签的整体总结</h2>
+  <p>管理员可以在 <code>/admin/ui</code> 的“标签总结”区域输入一个标签，例如 <code>#项目/个人AI知识库</code>，点击“生成总结”。系统会把该标签下最近的零散 memos 整理成一条新的 Memos memo，并带上 <code>#系统/标签总结</code> 和原标签。普通用户随后在 Memos Web 或客户端里搜索该标签即可查看整体展示。</p>
+
+  <h2>13. 更多文档</h2>
   <ul>
     <li><a href="../README.html">项目入口</a></li>
     <li><a href="使用手册.html">部署与管理使用手册</a></li>

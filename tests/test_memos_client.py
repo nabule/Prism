@@ -36,11 +36,13 @@ async def test_memos_client_reads_memo_and_creates_comment(monkeypatch):
         return {"name": f"memos/{memo_uid}", "content": "hello"}
 
     @app.get("/api/v1/memos")
-    async def list_memos(pageSize: int):
+    async def list_memos(pageSize: int, pageToken: str | None = None, filter: str | None = None):
         return {
             "memos": [{"name": "memos/abc", "content": "hello"}],
             "nextPageToken": "",
             "pageSize": pageSize,
+            "pageToken": pageToken,
+            "filter": filter,
         }
 
     @app.post("/api/v1/memos")
@@ -146,6 +148,19 @@ async def test_memos_client_reads_memo_and_creates_comment(monkeypatch):
         "memos": [{"name": "memos/abc", "content": "hello"}],
         "nextPageToken": "",
         "pageSize": 10,
+        "pageToken": None,
+        "filter": None,
+    }
+    assert await client.list_memos(
+        page_size=10,
+        page_token="next",
+        filter_text='tag == "项目/个人AI知识库"',
+    ) == {
+        "memos": [{"name": "memos/abc", "content": "hello"}],
+        "nextPageToken": "",
+        "pageSize": 10,
+        "pageToken": "next",
+        "filter": 'tag == "项目/个人AI知识库"',
     }
     assert await client.create_memo("created") == {"name": "memos/new", "content": "created"}
     assert await client.create_comment("abc", "comment") == {
@@ -223,6 +238,7 @@ async def test_memos_client_reads_memo_and_creates_comment(monkeypatch):
         auth_header,
         None,
         None,
+        auth_header,
         auth_header,
         auth_header,
         auth_header,

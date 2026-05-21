@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 from typing import Any
 
 import uvicorn
@@ -14,6 +15,8 @@ from memosima.api.webhooks import build_idempotency_key, extract_memo_uid
 from memosima.core.config import AppConfig, ConfigError, ModelsConfig
 from memosima.core.prompts import PromptTemplate, PromptsConfig, load_prompts_or_default
 from memosima.db.store import Job, Store, TagCandidateRecord
+from memosima.llm.provider import OpenAICompatibleClient
+from memosima.memos.client import MemosClient
 
 
 class WebhookAccepted(BaseModel):
@@ -71,10 +74,23 @@ class PromptTemplateView(BaseModel):
 
 class PromptsResponse(BaseModel):
     organize_memo: PromptTemplateView
+    tag_summary: PromptTemplateView
 
 
 class RetryJobRequest(BaseModel):
     prompt_override: PromptTemplateView | None = None
+
+
+class TagSummaryRequest(BaseModel):
+    tag: str = Field(min_length=2, max_length=120)
+    limit: int = Field(default=50, ge=1, le=200)
+
+
+class TagSummaryResponse(BaseModel):
+    tag: str
+    memo_count: int
+    summary_memo_uid: str
+    content: str
 
 
 class HealthResponse(BaseModel):
@@ -169,7 +185,10 @@ def create_app(
     )
     async def get_prompts() -> PromptsResponse:
         prompts = load_prompts_or_default(config.prompts_path)
-        return PromptsResponse(organize_memo=_prompt_view(prompts.organize_memo))
+        return PromptsResponse(
+            organize_memo=_prompt_view(prompts.organize_memo),
+            tag_summary=_prompt_view(prompts.tag_summary),
+        )
 
     @app.put(
         "/admin/prompts/organize-memo",
@@ -178,8 +197,67 @@ def create_app(
     )
     async def update_organize_memo_prompt(prompt: PromptTemplateView) -> PromptTemplateView:
         updated = PromptTemplate(system=prompt.system, user=prompt.user)
-        PromptsConfig(organize_memo=updated).save(config.prompts_path)
+        prompts = load_prompts_or_default(config.prompts_path)
+        PromptsConfig(organize_memo=updated, tag_summary=prompts.tag_summary).save(config.prompts_path)
         return _prompt_view(updated)
+
+    @app.put(
+        "/admin/prompts/tag-summary",
+        response_model=PromptTemplateView,
+        dependencies=[Depends(require_admin)],
+    )
+    async def update_tag_summary_prompt(prompt: PromptTemplateView) -> PromptTemplateView:
+        updated = PromptTemplate(system=prompt.system, user=prompt.user)
+        prompts = load_prompts_or_default(config.prompts_path)
+        PromptsConfig(organize_memo=prompts.organize_memo, tag_summary=updated).save(config.prompts_path)
+        return _prompt_view(updated)
+
+    @app.post(
+        "/admin/tag-summaries",
+        response_model=TagSummaryResponse,
+        dependencies=[Depends(require_admin)],
+    )
+    async def create_tag_summary(request: TagSummaryRequest) -> TagSummaryResponse:
+        if not config.memos_base_url or not config.memos_api_token:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Memos is not configured")
+        provider = models.providers[models.default_provider]
+        api_key = os.getenv(provider.api_key_env)
+        if not api_key:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="LLM key is not configured")
+
+        memos_client = MemosClient(
+            base_url=config.memos_base_url,
+            api_token=config.memos_api_token,
+            timeout_seconds=config.memos_timeout_seconds,
+        )
+        memos = await _list_memos_for_tag(memos_client, tag=request.tag, limit=request.limit)
+        if not memos:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No memos found for tag")
+
+        memos_markdown = _memos_markdown(memos)
+        prompts = load_prompts_or_default(config.prompts_path)
+        llm_client = OpenAICompatibleClient(
+            provider=provider,
+            api_key=api_key,
+            timeout_seconds=config.memos_timeout_seconds,
+        )
+        summary = await llm_client.summarize_tag(
+            tag=request.tag,
+            memos_markdown=memos_markdown,
+            memo_count=len(memos),
+            prompt_template=prompts.tag_summary,
+        )
+        content = _tag_summary_memo_content(tag=request.tag, summary=summary, memos=memos)
+        created = await memos_client.create_memo(content)
+        summary_uid = _memo_uid_from_name(created.get("name"))
+        if not summary_uid:
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Memos summary response missing name")
+        return TagSummaryResponse(
+            tag=request.tag,
+            memo_count=len(memos),
+            summary_memo_uid=summary_uid,
+            content=content,
+        )
 
     @app.post(
         "/admin/jobs/{job_id}/retry",
@@ -289,6 +367,75 @@ def _tag_candidate_view(candidate: TagCandidateRecord) -> TagCandidateView:
 
 def _prompt_view(prompt: PromptTemplate) -> PromptTemplateView:
     return PromptTemplateView(system=prompt.system, user=prompt.user)
+
+
+def _memos_tag(tag: str) -> str:
+    return tag.strip().removeprefix("#")
+
+
+def _memo_matches_tag(memo: dict[str, Any], tag: str) -> bool:
+    normalized = _memos_tag(tag)
+    tags = memo.get("tags")
+    if isinstance(tags, list) and normalized in {str(item).lstrip("#") for item in tags}:
+        return True
+    content = memo.get("content")
+    return isinstance(content, str) and f"#{normalized}" in content
+
+
+async def _list_memos_for_tag(memos_client: MemosClient, *, tag: str, limit: int) -> list[dict[str, Any]]:
+    matched: list[dict[str, Any]] = []
+    page_token: str | None = None
+    scanned = 0
+    page_size = min(max(limit, 20), 100)
+    max_scan = max(limit * 5, page_size)
+
+    while len(matched) < limit and scanned < max_scan:
+        response = await memos_client.list_memos(page_size=page_size, page_token=page_token)
+        raw_memos = response.get("memos", [])
+        if not isinstance(raw_memos, list):
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Memos returned invalid response")
+
+        for memo in raw_memos:
+            if isinstance(memo, dict):
+                scanned += 1
+                if _memo_matches_tag(memo, tag):
+                    matched.append(memo)
+                    if len(matched) >= limit:
+                        break
+
+        next_page_token = response.get("nextPageToken")
+        if not isinstance(next_page_token, str) or not next_page_token:
+            break
+        page_token = next_page_token
+
+    return matched
+
+
+def _memos_markdown(memos: list[dict[str, Any]]) -> str:
+    blocks: list[str] = []
+    for index, memo in enumerate(memos, start=1):
+        name = str(memo.get("name", ""))
+        create_time = str(memo.get("createTime", ""))
+        content = str(memo.get("content", "")).strip()
+        blocks.append(f"### {index}. {name}\n\n创建时间：{create_time}\n\n{content}")
+    return "\n\n---\n\n".join(blocks)
+
+
+def _tag_summary_memo_content(*, tag: str, summary: str, memos: list[dict[str, Any]]) -> str:
+    references = "\n".join(f"- {memo.get('name', '')}" for memo in memos)
+    return (
+        f"#系统/标签总结 {tag}\n\n"
+        f"# {tag} 整体总结\n\n"
+        f"{summary.strip()}\n\n"
+        "## 相关 memo\n\n"
+        f"{references}\n"
+    )
+
+
+def _memo_uid_from_name(name: Any) -> str | None:
+    if not isinstance(name, str) or not name.startswith("memos/"):
+        return None
+    return name.removeprefix("memos/")
 
 
 def main() -> None:

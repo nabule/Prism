@@ -26,6 +26,18 @@ DEFAULT_ORGANIZE_MEMO_USER = """请整理以下 memo，并遵守本地标签治�
 原始 memo：
 {content}"""
 
+DEFAULT_TAG_SUMMARY_SYSTEM = """你是个人知识库专题整理助手。请输出 Markdown，不要输出 JSON。
+目标是把同一标签下零散 memo 整理成适合人阅读的整体展示。
+请保留事实边界，不要编造未出现的信息。
+建议结构：总览、关键主题、时间线或进展、已完成、问题与风险、待办、相关 memo。"""
+
+DEFAULT_TAG_SUMMARY_USER = """请为标签 {tag} 生成整体总结。
+
+memo 数量：{memo_count}
+
+memo 列表：
+{memos_markdown}"""
+
 
 @dataclass(frozen=True)
 class PromptTemplate:
@@ -51,6 +63,7 @@ class RenderedPrompt:
 @dataclass(frozen=True)
 class PromptsConfig:
     organize_memo: PromptTemplate
+    tag_summary: PromptTemplate
 
     @classmethod
     def load(cls, path: str | Path = "config/prompts.yaml") -> "PromptsConfig":
@@ -65,12 +78,21 @@ class PromptsConfig:
         organize_memo = raw.get("organize_memo", {})
         if not isinstance(organize_memo, dict):
             raise ConfigError("prompts organize_memo must be a mapping")
-        return cls(organize_memo=_template_from_mapping(organize_memo))
+        tag_summary = raw.get("tag_summary", {})
+        if tag_summary and not isinstance(tag_summary, dict):
+            raise ConfigError("prompts tag_summary must be a mapping")
+        return cls(
+            organize_memo=_template_from_mapping(organize_memo, "organize_memo"),
+            tag_summary=_template_from_mapping(tag_summary, "tag_summary") if tag_summary else default_tag_summary_prompt(),
+        )
 
     def save(self, path: str | Path) -> None:
         config_path = Path(path)
         config_path.parent.mkdir(parents=True, exist_ok=True)
-        payload = {"organize_memo": self.organize_memo.to_dict()}
+        payload = {
+            "organize_memo": self.organize_memo.to_dict(),
+            "tag_summary": self.tag_summary.to_dict(),
+        }
         with config_path.open("w", encoding="utf-8") as file:
             yaml.safe_dump(payload, file, allow_unicode=True, sort_keys=False)
 
@@ -79,7 +101,10 @@ def load_prompts_or_default(path: str | Path) -> PromptsConfig:
     config_path = Path(path)
     if config_path.exists():
         return PromptsConfig.load(config_path)
-    return PromptsConfig(organize_memo=default_organize_memo_prompt())
+    return PromptsConfig(
+        organize_memo=default_organize_memo_prompt(),
+        tag_summary=default_tag_summary_prompt(),
+    )
 
 
 def default_organize_memo_prompt() -> PromptTemplate:
@@ -89,13 +114,20 @@ def default_organize_memo_prompt() -> PromptTemplate:
     )
 
 
-def _template_from_mapping(raw: dict[str, Any]) -> PromptTemplate:
+def default_tag_summary_prompt() -> PromptTemplate:
+    return PromptTemplate(
+        system=DEFAULT_TAG_SUMMARY_SYSTEM,
+        user=DEFAULT_TAG_SUMMARY_USER,
+    )
+
+
+def _template_from_mapping(raw: dict[str, Any], name: str) -> PromptTemplate:
     system = str(raw.get("system", "")).strip()
     user = str(raw.get("user", "")).strip()
     if not system:
-        raise ConfigError("organize_memo system prompt must not be empty")
+        raise ConfigError(f"{name} system prompt must not be empty")
     if not user:
-        raise ConfigError("organize_memo user prompt must not be empty")
+        raise ConfigError(f"{name} user prompt must not be empty")
     return PromptTemplate(system=system, user=user)
 
 

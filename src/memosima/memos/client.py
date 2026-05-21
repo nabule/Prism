@@ -55,8 +55,19 @@ class MemosClient:
     async def get_memo(self, memo_uid: str) -> dict[str, Any]:
         return await self._request("GET", f"/api/v1/memos/{memo_uid}")
 
-    async def list_memos(self, *, page_size: int = 20) -> dict[str, Any]:
-        return await self._request("GET", "/api/v1/memos", params={"pageSize": page_size})
+    async def list_memos(
+        self,
+        *,
+        page_size: int = 20,
+        page_token: str | None = None,
+        filter_text: str | None = None,
+    ) -> dict[str, Any]:
+        params: dict[str, Any] = {"pageSize": page_size}
+        if page_token:
+            params["pageToken"] = page_token
+        if filter_text:
+            params["filter"] = filter_text
+        return await self._request("GET", "/api/v1/memos", params=params)
 
     async def create_memo(self, content: str, visibility: str = "PRIVATE") -> dict[str, Any]:
         return await self._request(

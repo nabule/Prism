@@ -413,11 +413,14 @@ def _memo_uid(memo: dict[str, object]) -> str | None:
 
 
 def _is_sidecar_summary_memo(memo: dict[str, object]) -> bool:
+    sidecar_tags = {"系统/AI整理", "系统/标签总结"}
     tags = memo.get("tags")
-    if isinstance(tags, list) and "系统/AI整理" in {str(tag) for tag in tags}:
+    if isinstance(tags, list) and sidecar_tags.intersection({str(tag) for tag in tags}):
         return True
     content = memo.get("content")
-    return isinstance(content, str) and content.lstrip().startswith("#系统/AI整理")
+    return isinstance(content, str) and any(
+        content.lstrip().startswith(f"#{tag}") for tag in sidecar_tags
+    )
 
 
 def _clarification_comment(reason: str | None) -> str:

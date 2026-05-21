@@ -23,5 +23,6 @@ def test_build_summary_memo_content_contains_source_tags_and_excerpt(tmp_path):
     assert "#系统/标签待审核" in content
     assert "#项目/个人AI知识库" in content
     assert "#项目/新方向" in content
+    assert "## AI整理：个人 AI 知识库开发记录 #AI知识库 #项目/新方向" in content
     assert "来源 memo：memos/abc123" in content
     assert "> 个人 AI 知识库开发记录 #AI知识库 #项目/新方向" in content

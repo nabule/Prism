@@ -180,6 +180,11 @@ ADMIN_UI_HTML = """<!doctype html>
         <label for="promptUser" style="margin-top: 10px;">User</label>
         <textarea id="promptUser" class="prompt" spellcheck="false"></textarea>
         <div class="muted">可用占位符：{active_tags}、{local_plan_json}、{content}</div>
+        <label for="tagSummarySystem" style="margin-top: 14px;">Tag Summary System</label>
+        <textarea id="tagSummarySystem" class="prompt" spellcheck="false"></textarea>
+        <label for="tagSummaryUser" style="margin-top: 10px;">Tag Summary User</label>
+        <textarea id="tagSummaryUser" class="prompt" spellcheck="false"></textarea>
+        <div class="muted">可用占位符：{tag}、{memo_count}、{memos_markdown}</div>
       </div>
     </section>
 
@@ -219,6 +224,22 @@ ADMIN_UI_HTML = """<!doctype html>
             <tbody id="jobsBody"></tbody>
           </table>
         </div>
+      </div>
+
+      <div class="panel">
+        <h2>标签总结</h2>
+        <div class="toolbar">
+          <div class="field">
+            <label for="tagSummaryTag">标签</label>
+            <input id="tagSummaryTag" value="#项目/个人AI知识库">
+          </div>
+          <div class="field">
+            <label for="tagSummaryLimit">数量</label>
+            <input id="tagSummaryLimit" type="number" min="1" max="200" value="50">
+          </div>
+          <button id="createTagSummaryButton" class="primary" type="button">生成总结</button>
+        </div>
+        <pre id="tagSummaryOutput">未生成</pre>
       </div>
 
       <div class="panel">
@@ -284,6 +305,9 @@ const jobsBody = document.getElementById("jobsBody");
 const candidatesBody = document.getElementById("candidatesBody");
 const promptSystem = document.getElementById("promptSystem");
 const promptUser = document.getElementById("promptUser");
+const tagSummarySystem = document.getElementById("tagSummarySystem");
+const tagSummaryUser = document.getElementById("tagSummaryUser");
+const tagSummaryOutput = document.getElementById("tagSummaryOutput");
 const promptDialog = document.getElementById("promptDialog");
 const overrideSystem = document.getElementById("overrideSystem");
 const overrideUser = document.getElementById("overrideUser");
@@ -378,6 +402,8 @@ async function loadPrompts() {
     const data = await requestJson("/admin/prompts");
     promptSystem.value = data.organize_memo.system;
     promptUser.value = data.organize_memo.user;
+    tagSummarySystem.value = data.tag_summary.system;
+    tagSummaryUser.value = data.tag_summary.user;
     setNotice("默认提示词已刷新", "ok");
     return data.organize_memo;
   } catch (error) {
@@ -392,10 +418,33 @@ async function savePrompts() {
       method: "PUT",
       body: JSON.stringify({ system: promptSystem.value, user: promptUser.value })
     });
+    const tagData = await requestJson("/admin/prompts/tag-summary", {
+      method: "PUT",
+      body: JSON.stringify({ system: tagSummarySystem.value, user: tagSummaryUser.value })
+    });
     promptSystem.value = data.system;
     promptUser.value = data.user;
+    tagSummarySystem.value = tagData.system;
+    tagSummaryUser.value = tagData.user;
     setNotice("默认提示词已保存", "ok");
   } catch (error) {
+    setNotice(String(error.message || error), "error");
+  }
+}
+
+async function createTagSummary() {
+  try {
+    const tag = document.getElementById("tagSummaryTag").value.trim();
+    const limit = Number(document.getElementById("tagSummaryLimit").value || "50");
+    const data = await requestJson("/admin/tag-summaries", {
+      method: "POST",
+      body: JSON.stringify({ tag, limit })
+    });
+    tagSummaryOutput.textContent = JSON.stringify(data, null, 2);
+    showDetail(data);
+    setNotice(`标签总结已生成：memos/${data.summary_memo_uid}`, "ok");
+  } catch (error) {
+    tagSummaryOutput.textContent = String(error.message || error);
     setNotice(String(error.message || error), "error");
   }
 }
@@ -524,6 +573,7 @@ document.getElementById("refreshJobsButton").addEventListener("click", loadJobs)
 document.getElementById("refreshCandidatesButton").addEventListener("click", loadCandidates);
 document.getElementById("refreshPromptsButton").addEventListener("click", loadPrompts);
 document.getElementById("savePromptsButton").addEventListener("click", savePrompts);
+document.getElementById("createTagSummaryButton").addEventListener("click", createTagSummary);
 
 tokenInput.value = localStorage.getItem(storageKey) || "";
 loadHealth();

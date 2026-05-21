@@ -16,3 +16,16 @@ organize_memo:
 
     原始 memo：
     {content}
+tag_summary:
+  system: |-
+    你是个人知识库专题整理助手。请输出 Markdown，不要输出 JSON。
+    目标是把同一标签下零散 memo 整理成适合人阅读的整体展示。
+    请保留事实边界，不要编造未出现的信息。
+    建议结构：总览、关键主题、时间线或进展、已完成、问题与风险、待办、相关 memo。
+  user: |-
+    请为标签 {tag} 生成整体总结。
+
+    memo 数量：{memo_count}
+
+    memo 列表：
+    {memos_markdown}

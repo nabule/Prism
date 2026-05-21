@@ -108,7 +108,7 @@
 
   <h2>8. 按标签生成整体总结</h2>
   <p>打开 <code>http://localhost:8080/admin/ui</code>，在“标签总结”区域输入标签，例如 <code>#项目/个人AI知识库</code>，设置最多读取 memo 数量后点击“生成总结”。Sidecar 会读取最近的 Memos 内容，在本地筛选出匹配该标签的 memo，调用默认模型生成 Markdown 总结，然后在 Memos 中创建一条新 memo。</p>
-  <p>生成内容会带有 <code>#系统/标签总结</code> 和目标标签，标题形如 <code>#项目/个人AI知识库 整体总结</code>，正文包含模型整理后的总览、主题、进展、问题和相关 memo 列表。Sidecar 还会把总结 memo 通过 Memos 原生 <code>REFERENCE</code> relation 引用到每条参与整理的 memo，相关 memo 可在 Memos 界面中直接点击打开。标签总结使用 <code>config/prompts.yaml</code> 中的 <code>tag_summary</code> 提示词，可在管理页面保存默认提示词。</p>
+  <p>生成内容会带有 <code>#系统/标签总结</code> 和目标标签，标题形如 <code>#项目/个人AI知识库 整体总结</code>，正文包含模型整理后的总览、主题、进展、问题和相关 memo 列表。Sidecar 还会把总结 memo 通过 Memos 原生 <code>REFERENCE</code> relation 引用到每条参与整理的普通来源 memo，相关 memo 可在 Memos 界面中直接点击打开。标签总结不会把已有 <code>#系统/AI整理</code> 或 <code>#系统/标签总结</code> memo 再次纳入来源；写入 relation 前也会跳过自引用、反向引用和多跳循环引用。标签总结使用 <code>config/prompts.yaml</code> 中的 <code>tag_summary</code> 提示词，可在管理页面保存默认提示词。</p>
   <pre><code>curl -X POST -H "Authorization: Bearer&lt;空格&gt;$SIDECAR_ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"tag":"#项目/个人AI知识库","limit":50}' \

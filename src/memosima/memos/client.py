@@ -84,7 +84,7 @@ class MemosClient:
         )
 
     async def list_memo_relations(self, memo_uid: str) -> dict[str, Any]:
-        return await self._request("GET", f"/api/v1/memos/{memo_uid}/relations")
+        return await self._request("GET", f"/api/v1/{_memo_name(memo_uid)}/relations")
 
     async def upsert_memo_reference_relation(
         self,
@@ -98,6 +98,8 @@ class MemosClient:
         relations = current.get("relations", [])
         if not isinstance(relations, list):
             raise MemosClientError("Memos returned unexpected memo relations response")
+        if source_name == related_name:
+            return current
 
         relation = {
             "memo": {"name": source_name},
@@ -106,6 +108,8 @@ class MemosClient:
         }
         merged = [_as_relation_payload(item) for item in relations if isinstance(item, dict)]
         if not _has_reference_relation(merged, source_name, related_name):
+            if await self._has_reference_path(start_name=related_name, target_name=source_name):
+                return current
             merged.append(relation)
 
         return await self._request(
@@ -113,6 +117,37 @@ class MemosClient:
             f"/api/v1/{source_name}/relations",
             json={"relations": merged},
         )
+
+    async def _has_reference_path(self, *, start_name: str, target_name: str) -> bool:
+        queue = [start_name]
+        visited: set[str] = set()
+        while queue:
+            memo_name = queue.pop(0)
+            if memo_name in visited:
+                continue
+            visited.add(memo_name)
+
+            current = await self.list_memo_relations(memo_name)
+            relations = current.get("relations", [])
+            if not isinstance(relations, list):
+                raise MemosClientError("Memos returned unexpected memo relations response")
+
+            for item in relations:
+                if not isinstance(item, dict):
+                    continue
+                relation = _as_relation_payload(item)
+                if relation.get("type") != "REFERENCE":
+                    continue
+                if _nested_name(relation.get("memo")) != memo_name:
+                    continue
+                related_name = _nested_name(relation.get("relatedMemo"))
+                if not related_name:
+                    continue
+                if related_name == target_name:
+                    return True
+                if related_name not in visited:
+                    queue.append(related_name)
+        return False
 
     async def list_user_webhooks(self, parent: str) -> dict[str, Any]:
         return await self._request("GET", f"/api/v1/{parent}/webhooks")

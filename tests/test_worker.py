@@ -533,6 +533,118 @@ limits:
     assert "附件已转成 Markdown 后参与整理" in FakeMemosClient.created_memos[0]
 
 
+@pytest.mark.asyncio
+async def test_worker_backfills_title_for_empty_memo_with_attachment_after_llm(tmp_path, monkeypatch):
+    app_path = write_yaml(
+        tmp_path / "app.yaml",
+        app_config_text(tmp_path / "sidecar.db")
+        + """
+document_parser:
+  provider: mineru
+  token_env: MINERU_API_TOKEN
+limits:
+  max_attachment_mb: 1
+  allowed_parse_extensions:
+    - .txt
+    - .md
+    - .pdf
+""",
+    )
+    models_path = write_yaml(tmp_path / "models.yaml", models_config_text())
+    write_yaml(tmp_path / "taxonomy.yaml", taxonomy_config_text())
+    monkeypatch.setenv("MEMOS_BASE_URL", "http://memos.local")
+    monkeypatch.setenv("MEMOS_API_TOKEN", "memos-token")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    config = AppConfig.load(app_path)
+    models = ModelsConfig.load(models_path)
+    store = Store(config.database_path)
+    store.migrate()
+    store.ensure_workspace("default")
+    store.create_job(
+        workspace_id="default",
+        job_type="process_memo",
+        idempotency_key="memo:pdf-only",
+        payload={"memo_uid": "pdf-only"},
+    )
+
+    class FakeMemosClient:
+        created_memos: list[str] = []
+        updated_memos: list[tuple[str, str]] = []
+        relations: list[tuple[str, str]] = []
+
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def get_memo(self, memo_uid):
+            return {
+                "name": f"memos/{memo_uid}",
+                "content": "",
+                "attachments": [
+                    {
+                        "name": "attachments/pdf1",
+                        "filename": "白皮书.pdf",
+                        "contentType": "application/pdf",
+                    }
+                ],
+            }
+
+        async def create_memo(self, content):
+            self.created_memos.append(content)
+            return {"name": "memos/summary-pdf-only", "content": content}
+
+        async def update_memo_content(self, memo_uid, content):
+            self.updated_memos.append((memo_uid, content))
+            return {"name": f"memos/{memo_uid}", "content": content}
+
+        async def create_comment(self, memo_uid, content):
+            raise AssertionError("parsed attachment and LLM title should avoid clarification")
+
+        async def download_resource(self, resource_name, filename=None):
+            assert resource_name == "attachments/pdf1"
+            assert filename == "白皮书.pdf"
+            return b"pdf-bytes"
+
+        async def upsert_memo_reference_relation(self, *, source_memo_uid, related_memo_uid):
+            self.relations.append((source_memo_uid, related_memo_uid))
+            return {}
+
+    class FakeDocumentParser:
+        async def parse(self, *, resource, data):
+            return ParsedAttachment(
+                resource=resource,
+                kind="attachment_document",
+                content_markdown="# 银行智能体白皮书\n\n附件正文描述金融智能体落地路径。",
+                metadata={"provider": "mineru", "filename": resource.filename},
+            )
+
+    class FakeLLMClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def organize_memo(self, *, content, taxonomy, local_plan, prompt_template):
+            return LLMOrganizationDraft(
+                title="AI整理：银行智能体白皮书",
+                summary="附件说明金融智能体落地路径",
+                active_tags=["#项目/个人AI知识库"],
+                needs_clarification=False,
+            )
+
+    monkeypatch.setattr("memosima.worker.runner.MemosClient", FakeMemosClient)
+    monkeypatch.setattr("memosima.worker.runner.OpenAICompatibleClient", FakeLLMClient)
+    monkeypatch.setattr("memosima.worker.runner.create_document_parser", lambda config: FakeDocumentParser())
+
+    processed = await Worker(config, store, models).run_once()
+
+    assert processed is True
+    job = store.list_jobs()[0]
+    assert job.status == "succeeded"
+    assert job.result["original_memo_title_updated"] is True
+    assert job.result["original_memo_title"] == "银行智能体白皮书"
+    assert FakeMemosClient.updated_memos == [("pdf-only", "# 银行智能体白皮书")]
+    assert FakeMemosClient.relations == [("pdf-only", "summary-pdf-only")]
+    assert "附件说明金融智能体落地路径" in FakeMemosClient.created_memos[0]
+
+
 def test_worker_limits_ai_generated_tag_count(tmp_path):
     app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
     taxonomy_path = write_yaml(

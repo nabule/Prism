@@ -175,6 +175,16 @@ class Worker:
             )
             self._upsert_tag_candidates(job.workspace_id, memo_uid, organization_plan.candidate_tags)
 
+        original_title_content = _build_original_title_backfill_content(
+            memo_content=memo_content,
+            attachment_markdowns=attachment_markdowns,
+            llm_draft=llm_draft,
+        )
+        original_memo_title_updated = False
+        if original_title_content:
+            await client.update_memo_content(memo_uid, original_title_content)
+            original_memo_title_updated = True
+
         summary_content = build_summary_memo_content(
             source_memo_uid=memo_uid,
             source_content=source_content,
@@ -211,6 +221,8 @@ class Worker:
             "ai_source": "llm" if llm_draft else "local",
             "attachments": attachment_results,
             "comment_created": comment_created,
+            "original_memo_title_updated": original_memo_title_updated,
+            "original_memo_title": _extract_backfilled_title(original_title_content) if original_title_content else None,
         }
 
     async def _process_attachments(
@@ -493,6 +505,35 @@ def _build_source_content(memo_content: str, attachment_markdowns: list[str]) ->
 
 def _format_attachment_markdown(filename: str, markdown: str) -> str:
     return f"## 附件：{filename}\n\n{markdown.strip()}"
+
+
+def _build_original_title_backfill_content(
+    *,
+    memo_content: str,
+    attachment_markdowns: list[str],
+    llm_draft: LLMOrganizationDraft | None,
+) -> str | None:
+    if memo_content.strip() or not attachment_markdowns or llm_draft is None:
+        return None
+    title = _sanitize_original_title(llm_draft.title)
+    if not title:
+        return None
+    return f"# {title}"
+
+
+def _sanitize_original_title(title: str) -> str:
+    text = " ".join(title.strip().split())
+    for prefix in ("AI整理：", "AI整理:", "AI整理"):
+        if text.startswith(prefix):
+            text = text.removeprefix(prefix).strip()
+    text = text.lstrip("#").strip()
+    if len(text) > 120:
+        text = text[:120].rstrip()
+    return text
+
+
+def _extract_backfilled_title(content: str) -> str:
+    return content.removeprefix("#").strip()
 
 
 def _should_parse_with_document_parser(skipped: SkippedAttachment) -> bool:

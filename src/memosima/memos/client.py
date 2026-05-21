@@ -76,6 +76,13 @@ class MemosClient:
             json={"content": content, "visibility": visibility},
         )
 
+    async def update_memo_content(self, memo_uid: str, content: str) -> dict[str, Any]:
+        return await self._request(
+            "PATCH",
+            f"/api/v1/{_memo_name(memo_uid)}",
+            json={"content": content},
+        )
+
     async def create_comment(self, memo_uid: str, content: str) -> dict[str, Any]:
         return await self._request(
             "POST",

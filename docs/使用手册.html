@@ -134,6 +134,7 @@
 
   <h2>11. 附件解析</h2>
   <p>上传 <code>.txt</code> 或 <code>.md</code> 附件后，worker 会下载并解析为 Markdown artifact。上传 <code>.doc</code>、<code>.docx</code>、<code>.xls</code>、<code>.xlsx</code>、<code>.ppt</code>、<code>.pptx</code> 或 <code>.pdf</code> 后，worker 会先调用 MinerU 在线服务转成 Markdown，再把 Markdown 拼接到原 memo 正文后进入现有 AI 整理、自动标签和摘要流程。解析结果记录在 job <code>result.attachments</code>，正文保存在 Sidecar SQLite 的 <code>artifacts</code> 表。</p>
+  <p>如果原始 memo 没有任何正文、只有附件，且附件解析和 LLM 分析成功，worker 会把 LLM 生成的标题以 Markdown 一级标题形式回写到原始 memo，例如 <code># 银行智能体白皮书</code>。这样 Memos 列表中不再只显示空内容或附件名；完整整理结果仍会生成独立的 <code>AI整理</code> memo，并通过原生引用关联回原 memo。</p>
 
   <h2>12. 验证和构建</h2>
   <pre><code>npx nx test sidecar

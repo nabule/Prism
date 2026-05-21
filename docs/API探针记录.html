@@ -119,7 +119,8 @@ PATCH /api/v1/memos/{source_uid}/relations
 GET /api/v1/memos/{source_uid}/relations
 -&gt; 200，返回 relations 中包含 source -&gt; target 的 REFERENCE 关系
 </code></pre>
-<p>当前 worker 在创建 AI 整理 memo 后，会用上述接口把原始 memo 关联到 AI 整理 memo。</p>
+<p>2026-05-21 追加验证：<code>GET /relations</code> 会返回与当前 memo 相关的入边和出边；<code>PATCH /relations</code> 可用传入列表替换当前 memo 相关的 relation 子集，传入空列表可清空当前 memo 的出边。Sidecar 生成 AI 整理 memo 时统一写入 <code>AI整理 memo -&gt; 原始 memo</code> 的 <code>REFERENCE</code>，并避免在正文中写入裸 <code>memos/{uid}</code>，防止与原生 relation 叠加形成双向循环引用。</p>
+<p>当前 worker 在创建 AI 整理 memo 后，会用上述接口把 AI 整理 memo 关联到原始 memo。</p>
 
 </article>
 </main>

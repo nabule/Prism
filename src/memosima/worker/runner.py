@@ -204,8 +204,8 @@ class Worker:
             content_hash=_memo_hash(summary_memo),
         )
         await client.upsert_memo_reference_relation(
-            source_memo_uid=memo_uid,
-            related_memo_uid=summary_memo_uid,
+            source_memo_uid=summary_memo_uid,
+            related_memo_uid=memo_uid,
         )
 
         comment_created = False

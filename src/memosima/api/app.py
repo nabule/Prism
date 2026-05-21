@@ -441,12 +441,12 @@ def _memos_markdown(memos: list[dict[str, Any]]) -> str:
 
 
 def _tag_summary_memo_content(*, tag: str, summary: str, memos: list[dict[str, Any]]) -> str:
-    references = "\n".join(f"- {memo.get('name', '')}" for memo in memos)
+    references = "\n".join(f"- {str(memo.get('name', '')).removeprefix('memos/')}" for memo in memos)
     return (
         f"#系统/标签总结 {tag}\n\n"
         f"# {tag} 整体总结\n\n"
         f"{summary.strip()}\n\n"
-        "## 相关 memo\n\n"
+        "## 相关 memo UID\n\n"
         f"{references}\n"
     )
 

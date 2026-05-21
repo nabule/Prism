@@ -29,7 +29,7 @@ def build_summary_memo_content(
         "",
         f"## AI整理：{_sanitize_candidate_tag_markers(_summary_title(source_content, llm_draft), hidden_candidate_paths)}",
         "",
-        f"来源 memo：memos/{source_memo_uid}",
+        f"来源 memo UID：{source_memo_uid}",
         "",
         "### 摘要",
         "",

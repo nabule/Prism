@@ -141,9 +141,25 @@ providers:
 <p>worker 会把解析结果写入 job <code>result.ai_plan</code>。内容明确时会用 <code>system_tags.ai_summary</code> 创建 AI 整理 memo；内容过短或包含问号时会用 <code>system_tags.pending_clarification</code> 标记草案，在原 memo 下写澄清评论，并把任务置为 <code>waiting_user</code>。</p>
 <p>候选标签持久化后会进入 Sidecar SQLite 的 <code>tag_candidates</code> 表，可通过 <code>/admin/tag-candidates</code> 查询，并通过 <code>/admin/tag-candidates/{id}/approve</code> 或 <code>/admin/tag-candidates/{id}/reject</code> 审核。审核通过后会同步写入 <code>business_tags</code> 表并标记为 <code>active</code>，worker 后续会把这些标签与 <code>config/taxonomy.yaml</code> 中的 active 标签合并使用。当前审核结果不会自动改写 <code>config/taxonomy.yaml</code>。</p>
 <p>也可以打开 <code>http://localhost:8080/admin/ui</code> 使用调试管理页面审核候选标签。该页面要求手动输入 <code>SIDECAR_ADMIN_TOKEN</code>，token 只保存在当前浏览器，不会由服务端注入页面。</p>
+<h2>document_parser</h2>
+<p><code>document_parser</code> 用于配置 Office/PDF 附件转 Markdown 的解析 provider。当前默认 provider 为 <code>mineru</code>，真实 token 从 <code>MINERU_API_TOKEN</code> 环境变量读取，只放在本地 <code>.env</code> 或部署密钥中，不提交到 git。</p>
+<pre><code>document_parser:
+  provider: mineru
+  token_env: MINERU_API_TOKEN
+  base_url: https://mineru.net
+  timeout_seconds: 60
+  poll_interval_seconds: 3
+  max_polls: 60
+  mineru_model_version: vlm
+  language: ch
+  enable_table: true
+  enable_formula: true
+  is_ocr: false
+</code></pre>
+<p>worker 会先从 Memos 下载附件。<code>.txt</code> 和 <code>.md</code> 在本地安全解码；<code>.doc</code>、<code>.docx</code>、<code>.xls</code>、<code>.xlsx</code>、<code>.ppt</code>、<code>.pptx</code> 和 <code>.pdf</code> 会调用文档解析 provider 转成 Markdown。Markdown 会写入 <code>artifacts</code> 表，并在调用 LLM 前拼接进原 memo 正文，后续 AI 整理和自动标签流程保持不变。provider 设计为可替换，后续可以接入本地 LibreOffice、unstructured 或其他在线解析服务。</p>
 <h2>limits</h2>
 <p><code>limits.max_attachment_mb</code> 控制单个附件解析大小上限。<code>limits.allowed_parse_extensions</code> 控制允许进入解析流程的扩展名。<code>limits.max_ai_active_tags</code> 控制单条 memo 最多接收多少个 AI 补充的正式标签，默认 <code>5</code>；<code>limits.max_ai_candidate_tags</code> 控制单条 memo 最多接收多少个 AI 新候选标签，默认 <code>2</code>。用户在正文里手动写出的标签不会因为该限制被吞掉。</p>
-<p>当前已实现 <code>.txt</code> 和 <code>.md</code> 的安全文本解析；<code>.docx</code>、<code>.xlsx</code>、<code>.pdf</code>、<code>.drawio</code>、<code>.drawio.svg</code> 和 <code>.json</code> 仍保留在配置中，后续接入专用解析器前会被跳过，不会主动执行未知格式内容。</p>
+<p>当前已实现 <code>.txt</code>、<code>.md</code>、Word、Excel、PPT 和 PDF 解析。<code>.drawio</code>、<code>.drawio.svg</code> 和 <code>.json</code> 仍保留在配置中，后续接入专用解析器前会被跳过，不会主动执行未知格式内容。</p>
 
 </article>
 </main>

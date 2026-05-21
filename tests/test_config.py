@@ -52,6 +52,17 @@ def test_app_config_reads_secret_values_from_environment(tmp_path, monkeypatch):
     assert config.allowed_parse_extensions == (".txt", ".md")
     assert config.max_ai_active_tags == 5
     assert config.max_ai_candidate_tags == 2
+    assert config.document_parser_provider == "mineru"
+    assert config.document_parser_token_env == "MINERU_API_TOKEN"
+    assert config.document_parser_base_url == "https://mineru.net"
+    assert config.document_parser_timeout_seconds == 60
+    assert config.document_parser_poll_interval_seconds == 3
+    assert config.document_parser_max_polls == 60
+    assert config.mineru_model_version == "vlm"
+    assert config.mineru_language == "ch"
+    assert config.mineru_enable_table is True
+    assert config.mineru_enable_formula is True
+    assert config.mineru_is_ocr is False
 
 
 def test_prompts_config_loads_and_renders_template(tmp_path):
@@ -119,6 +130,16 @@ disabled: []
     plan = taxonomy.build_organization_plan("数管项目记录 #数管 #其他/数管")
 
     assert plan.active_tags == ("#项目/数管",)
+    assert plan.candidate_tags == ()
+
+
+def test_taxonomy_ignores_markdown_headings_as_tags(tmp_path):
+    taxonomy_path = write_yaml(tmp_path / "taxonomy.yaml", taxonomy_config_text())
+    taxonomy = TaxonomyConfig.load(taxonomy_path)
+
+    plan = taxonomy.build_organization_plan("# 附件标题\n\n## 二级标题\n\n正文 #AI知识库")
+
+    assert plan.active_tags == ("#项目/个人AI知识库",)
     assert plan.candidate_tags == ()
 
 

@@ -17,6 +17,18 @@ memos:
   request_timeout_seconds: 15
   ingestion_mode: poll
   poll_page_size: 20
+document_parser:
+  provider: mineru
+  token_env: MINERU_API_TOKEN
+  base_url: https://mineru.net
+  timeout_seconds: 60
+  poll_interval_seconds: 3
+  max_polls: 60
+  mineru_model_version: vlm
+  language: ch
+  enable_table: true
+  enable_formula: true
+  is_ocr: false
 worker:
   poll_interval_seconds: 2
   max_attempts: 3
@@ -28,8 +40,12 @@ limits:
   allowed_parse_extensions:
     - .txt
     - .md
+    - .doc
     - .docx
+    - .xls
     - .xlsx
+    - .ppt
+    - .pptx
     - .pdf
     - .drawio
     - .drawio.svg

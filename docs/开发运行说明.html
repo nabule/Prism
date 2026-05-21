@@ -12,7 +12,7 @@
 <div class="meta">来源：docs/开发运行说明.html</div>
 <h1>开发运行说明</h1>
 <h2>当前阶段</h2>
-<p>当前实现范围为 P0+P1+P2，并开始 P3 的文本附件解析基础：</p>
+<p>当前实现范围为 P0+P1+P2，并进入 P3 附件解析阶段：</p>
 <ul>
 <li>FastAPI Sidecar API。</li>
 <li>Memos webhook 接收。</li>
@@ -29,9 +29,9 @@
 <li>AI 整理 memo 本地模板创建，并在 Sidecar 数据库记录来源关联。</li>
 <li>待澄清 memo 评论追问，并把任务置为 <code>waiting_user</code>。</li>
 <li>OpenAI-compatible LLM provider 接入，默认使用 OpenRouter <code>google/gemma-3-27b-it</code>，并保留、OpenAI、DeepSeek 等 provider 模板。</li>
-<li>P3 起步：txt/md 附件下载、解析为 Markdown artifact 并写入 <code>artifacts</code> 表。</li>
+<li>P3：txt/md 附件下载并解析为 Markdown artifact；Word、Excel、PPT、PDF 附件通过 MinerU 在线服务转成 Markdown artifact，并在 AI 整理前拼接进来源内容。</li>
 </ul>
-<p>docx/xlsx/pdf/drawio/Mind Elixir 解析、RAG、自动文档和备份恢复属于后续阶段。</p>
+<p>drawio/Mind Elixir 专用解析、RAG、自动文档和备份恢复属于后续阶段。</p>
 <h2>环境准备</h2>
 <p>本项目在 Linux 环境下开发和测试。所有常用开发命令通过 Nx 任务入口执行：</p>
 <pre><code class="language-bash">npx nx test sidecar
@@ -166,16 +166,17 @@ curl -X POST -H &quot;Authorization: Bearer&lt;空格&gt;$SIDECAR_ADMIN_TOKEN&qu
 </code></pre>
 <p>审核通过会把候选标签写入 Sidecar SQLite 的 <code>business_tags</code> 表，状态为 <code>active</code>。worker 每次处理 memo 时会合并 <code>config/taxonomy.yaml</code> 中的 active 标签和数据库中审核通过的 active 标签，因此后续同类 memo 会直接使用该标签，不再重复创建候选。</p>
 <p>当前不会自动改写 <code>config/taxonomy.yaml</code>；如果需要把运行期审核结果固化为配置文件，后续会提供导出或管理接口。</p>
-<h2>P3 文本附件解析</h2>
-<p>worker 处理 memo 时会读取 memo 中的 <code>resources</code> 或 <code>attachments</code> 字段。对于允许扩展名内的 <code>.txt</code> 和 <code>.md</code> 附件，会通过 Memos 资源接口下载内容，并写入 Sidecar SQLite 的 <code>artifacts</code> 表：</p>
+<h2>P3 附件解析</h2>
+<p>worker 处理 memo 时会读取 memo 中的 <code>resources</code> 或 <code>attachments</code> 字段。对于允许扩展名内的 <code>.txt</code> 和 <code>.md</code> 附件，会通过 Memos 资源接口下载并安全解码为 Markdown；对于 <code>.doc</code>、<code>.docx</code>、<code>.xls</code>、<code>.xlsx</code>、<code>.ppt</code>、<code>.pptx</code> 和 <code>.pdf</code>，会调用可插拔文档解析 provider，默认 provider 为 MinerU 在线 API。解析结果写入 Sidecar SQLite 的 <code>artifacts</code> 表：</p>
 <ul>
-<li><code>kind=attachment_text</code></li>
+<li><code>kind=attachment_text</code> 或 <code>kind=attachment_document</code></li>
 <li><code>memo_uid</code>：来源 memo uid</li>
 <li><code>resource_uid</code>：Memos resource name，例如 <code>resources/...</code></li>
 <li><code>content_markdown</code>：解析后的 Markdown 文本</li>
 <li><code>metadata_json</code>：文件名、content type、大小、扩展名等元数据</li>
 </ul>
-<p>解析结果会出现在 job <code>result.attachments</code> 中，状态可能是 <code>parsed</code>、<code>skipped</code> 或 <code>failed</code>。当前只实现 txt/md 安全文本解析；其他允许扩展会先记录为跳过，后续按 P3 计划逐步接入专用解析器。</p>
+<p>Office/PDF 解析流程为：向 MinerU 申请上传 URL，PUT 上传文件，轮询批量解析结果，下载结果 zip 并读取其中的 Markdown。得到的 Markdown 会在调用 LLM 前拼接到原 memo 正文后面，后续 AI 整理、标签生成、候选标签审核和 AI 整理 memo 创建流程保持不变。</p>
+<p>解析结果会出现在 job <code>result.attachments</code> 中，状态可能是 <code>parsed</code>、<code>skipped</code> 或 <code>failed</code>。如果未配置 <code>MINERU_API_TOKEN</code>，Office/PDF 附件会记录为 <code>document_parser_not_configured</code>，不会阻塞普通正文整理。</p>
 <h2>Docker 状态</h2>
 <p>仓库已提供 <code>docker-compose.yml</code> 和 <code>Dockerfile</code> 草案。Docker Hub 镜像下载优先使用 Xget 加速地址，例如 <code>xget.your-domain.com/cr/docker/neosmemo/memos:stable</code>。</p>
 <p>最近一次 <code>docker compose pull memos</code> 与 <code>npx nx build sidecar</code> 已通过 <code>xget.your-domain.com</code> 成功完成镜像拉取和构建。真实 Memos 手动 webhook 联调已通过；Memos 内置 webhook 自动配置接口已验证，但自动回调需要公网可达的 Sidecar webhook URL。</p>

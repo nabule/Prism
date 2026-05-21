@@ -45,9 +45,9 @@
     <li>AI 提示词可配置；支持保存默认提示词，也支持任务重试时临时覆盖。</li>
     <li>按标签生成整体总结，可把同一标签下的零散 memos 整理成一条人可读的展示 memo。</li>
     <li>待澄清评论和 <code>waiting_user</code> 任务状态。</li>
-    <li><code>.txt</code>、<code>.md</code> 附件解析到 <code>artifacts</code> 表。</li>
+    <li><code>.txt</code>、<code>.md</code> 附件解析到 <code>artifacts</code> 表；Word、Excel、PPT、PDF 附件可通过 MinerU 在线服务转成 Markdown 后参与 AI 整理。</li>
   </ul>
-  <p class="note">还没有完成：docx/xlsx/pdf/drawio/Mind Elixir 专用解析、向量索引、问答、自动文档、备份恢复。</p>
+  <p class="note">还没有完成：drawio/Mind Elixir 专用解析、向量索引、问答、自动文档、备份恢复。</p>
 
   <h2>1. 准备配置</h2>
   <p>复制环境变量示例并填写真实值。不要把真实 <code>.env</code> 提交到 git。</p>
@@ -131,8 +131,8 @@
   <pre><code>curl -X POST -H "Authorization: Bearer&lt;空格&gt;$SIDECAR_ADMIN_TOKEN" \
   "http://localhost:8080/admin/jobs/1/retry"</code></pre>
 
-  <h2>11. 文本附件解析</h2>
-  <p>上传 <code>.txt</code> 或 <code>.md</code> 附件后，worker 会下载并解析为 Markdown artifact。解析结果记录在 job <code>result.attachments</code>，正文保存在 Sidecar SQLite 的 <code>artifacts</code> 表。</p>
+  <h2>11. 附件解析</h2>
+  <p>上传 <code>.txt</code> 或 <code>.md</code> 附件后，worker 会下载并解析为 Markdown artifact。上传 <code>.doc</code>、<code>.docx</code>、<code>.xls</code>、<code>.xlsx</code>、<code>.ppt</code>、<code>.pptx</code> 或 <code>.pdf</code> 后，worker 会先调用 MinerU 在线服务转成 Markdown，再把 Markdown 拼接到原 memo 正文后进入现有 AI 整理、自动标签和摘要流程。解析结果记录在 job <code>result.attachments</code>，正文保存在 Sidecar SQLite 的 <code>artifacts</code> 表。</p>
 
   <h2>12. 验证和构建</h2>
   <pre><code>npx nx test sidecar

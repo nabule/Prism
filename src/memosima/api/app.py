@@ -252,6 +252,11 @@ def create_app(
         summary_uid = _memo_uid_from_name(created.get("name"))
         if not summary_uid:
             raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Memos summary response missing name")
+        for related_uid in _memo_uids_from_memos(memos):
+            await memos_client.upsert_memo_reference_relation(
+                source_memo_uid=summary_uid,
+                related_memo_uid=related_uid,
+            )
         return TagSummaryResponse(
             tag=request.tag,
             memo_count=len(memos),
@@ -430,6 +435,15 @@ def _tag_summary_memo_content(*, tag: str, summary: str, memos: list[dict[str, A
         "## 相关 memo\n\n"
         f"{references}\n"
     )
+
+
+def _memo_uids_from_memos(memos: list[dict[str, Any]]) -> list[str]:
+    uids: list[str] = []
+    for memo in memos:
+        uid = _memo_uid_from_name(memo.get("name"))
+        if uid:
+            uids.append(uid)
+    return uids
 
 
 def _memo_uid_from_name(name: Any) -> str | None:

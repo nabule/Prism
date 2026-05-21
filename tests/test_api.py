@@ -217,6 +217,16 @@ def test_admin_tag_summary_creates_summary_memo(tmp_path, monkeypatch):
                         "content": "其他记录",
                         "tags": ["其他"],
                     },
+                    {
+                        "name": "memos/ai-summary",
+                        "content": "#系统/AI整理 #项目/个人AI知识库\n\nAI 整理 memo",
+                        "tags": ["系统/AI整理", "项目/个人AI知识库"],
+                    },
+                    {
+                        "name": "memos/tag-summary",
+                        "content": "#系统/标签总结 #项目/个人AI知识库\n\n标签总结 memo",
+                        "tags": ["系统/标签总结", "项目/个人AI知识库"],
+                    },
                 ]
             }
 
@@ -257,5 +267,7 @@ def test_admin_tag_summary_creates_summary_memo(tmp_path, monkeypatch):
     assert "#系统/标签总结 #项目/个人AI知识库" in data["content"]
     assert "memos/source1" in data["content"]
     assert "memos/other" not in FakeLLMClient.seen_memos_markdown
+    assert "memos/ai-summary" not in FakeLLMClient.seen_memos_markdown
+    assert "memos/tag-summary" not in FakeLLMClient.seen_memos_markdown
     assert FakeMemosClient.created_memos == [data["content"]]
     assert FakeMemosClient.relations == [("tag-summary-1", "source1")]

@@ -401,7 +401,7 @@ async def _list_memos_for_tag(memos_client: MemosClient, *, tag: str, limit: int
             raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Memos returned invalid response")
 
         for memo in raw_memos:
-            if isinstance(memo, dict):
+            if isinstance(memo, dict) and not _is_sidecar_generated_memo(memo):
                 scanned += 1
                 if _memo_matches_tag(memo, tag):
                     matched.append(memo)
@@ -414,6 +414,17 @@ async def _list_memos_for_tag(memos_client: MemosClient, *, tag: str, limit: int
         page_token = next_page_token
 
     return matched
+
+
+def _is_sidecar_generated_memo(memo: dict[str, Any]) -> bool:
+    sidecar_tags = {"系统/AI整理", "系统/标签总结"}
+    tags = memo.get("tags")
+    if isinstance(tags, list) and sidecar_tags.intersection({str(tag).lstrip("#") for tag in tags}):
+        return True
+    content = memo.get("content")
+    return isinstance(content, str) and any(
+        content.lstrip().startswith(f"#{tag}") for tag in sidecar_tags
+    )
 
 
 def _memos_markdown(memos: list[dict[str, Any]]) -> str:

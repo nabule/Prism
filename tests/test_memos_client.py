@@ -255,7 +255,71 @@ async def test_memos_client_reads_memo_and_creates_comment(monkeypatch):
         auth_header,
         auth_header,
         auth_header,
+        auth_header,
     ]
+
+
+@pytest.mark.asyncio
+async def test_memos_client_skips_reference_cycles(monkeypatch):
+    app = FastAPI()
+    seen_relation_payloads: list[dict[str, object]] = []
+    relations_by_memo = {
+        "a": [],
+        "b": [
+            {
+                "memo": {"name": "memos/b"},
+                "relatedMemo": {"name": "memos/a"},
+                "type": "REFERENCE",
+            }
+        ],
+        "c": [
+            {
+                "memo": {"name": "memos/c"},
+                "relatedMemo": {"name": "memos/d"},
+                "type": "REFERENCE",
+            }
+        ],
+        "d": [
+            {
+                "memo": {"name": "memos/d"},
+                "relatedMemo": {"name": "memos/a"},
+                "type": "REFERENCE",
+            }
+        ],
+    }
+
+    @app.get("/api/v1/memos/{memo_uid}/relations")
+    async def list_relations(memo_uid: str):
+        return {"relations": relations_by_memo.get(memo_uid, []), "nextPageToken": ""}
+
+    @app.patch("/api/v1/memos/{memo_uid}/relations")
+    async def update_relations(memo_uid: str, payload: dict[str, object]):
+        seen_relation_payloads.append(payload)
+        return {}
+
+    original_async_client = AsyncClient
+
+    def fake_async_client(*args, **kwargs):
+        kwargs["transport"] = ASGITransport(app=app)
+        kwargs["base_url"] = "http://testserver"
+        return original_async_client(*args, **kwargs)
+
+    monkeypatch.setattr("memosima.memos.client.httpx.AsyncClient", fake_async_client)
+    client = MemosClient("http://memos.local", "token")
+
+    assert await client.upsert_memo_reference_relation(source_memo_uid="a", related_memo_uid="a") == {
+        "relations": [],
+        "nextPageToken": "",
+    }
+    assert await client.upsert_memo_reference_relation(source_memo_uid="a", related_memo_uid="b") == {
+        "relations": [],
+        "nextPageToken": "",
+    }
+    assert await client.upsert_memo_reference_relation(source_memo_uid="a", related_memo_uid="c") == {
+        "relations": [],
+        "nextPageToken": "",
+    }
+    assert seen_relation_payloads == []
 
 
 @pytest.mark.asyncio

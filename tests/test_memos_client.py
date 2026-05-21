@@ -35,6 +35,14 @@ async def test_memos_client_reads_memo_and_creates_comment(monkeypatch):
     async def get_memo(memo_uid: str):
         return {"name": f"memos/{memo_uid}", "content": "hello"}
 
+    @app.get("/api/v1/memos")
+    async def list_memos(pageSize: int):
+        return {
+            "memos": [{"name": "memos/abc", "content": "hello"}],
+            "nextPageToken": "",
+            "pageSize": pageSize,
+        }
+
     @app.post("/api/v1/memos")
     async def create_memo():
         return {"name": "memos/new", "content": "created"}
@@ -134,6 +142,11 @@ async def test_memos_client_reads_memo_and_creates_comment(monkeypatch):
     }
     assert await client.get_current_user() == {"user": {"name": "users/test", "username": "test"}}
     assert await client.get_memo("abc") == {"name": "memos/abc", "content": "hello"}
+    assert await client.list_memos(page_size=10) == {
+        "memos": [{"name": "memos/abc", "content": "hello"}],
+        "nextPageToken": "",
+        "pageSize": 10,
+    }
     assert await client.create_memo("created") == {"name": "memos/new", "content": "created"}
     assert await client.create_comment("abc", "comment") == {
         "name": "memos/abc/comments/1",
@@ -210,6 +223,7 @@ async def test_memos_client_reads_memo_and_creates_comment(monkeypatch):
         auth_header,
         None,
         None,
+        auth_header,
         auth_header,
         auth_header,
         auth_header,

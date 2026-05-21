@@ -33,6 +33,8 @@ class Worker:
     async def run_once(self) -> bool:
         job = self.store.claim_next_job()
         if job is None:
+            if await self._poll_memos_once():
+                return True
             return False
         try:
             result = await self.handle_job(job)
@@ -51,6 +53,46 @@ class Worker:
             processed = await self.run_once()
             if not processed:
                 await asyncio.sleep(self.config.worker_poll_interval_seconds)
+
+    async def _poll_memos_once(self) -> bool:
+        if self.config.memos_ingestion_mode not in {"poll", "both"}:
+            return False
+        if not self.config.memos_base_url or not self.config.memos_api_token:
+            return False
+
+        client = MemosClient(
+            base_url=self.config.memos_base_url,
+            api_token=self.config.memos_api_token,
+            timeout_seconds=self.config.memos_timeout_seconds,
+        )
+        response = await client.list_memos(page_size=self.config.memos_poll_page_size)
+        memos = response.get("memos", [])
+        if not isinstance(memos, list):
+            return False
+
+        created_any = False
+        for memo in memos:
+            if not isinstance(memo, dict) or _is_sidecar_summary_memo(memo):
+                continue
+            memo_uid = _memo_uid(memo)
+            update_time = memo.get("updateTime") or memo.get("update_time") or memo.get("updatedTs")
+            if not memo_uid or self.store.has_memo(
+                workspace_id=self.config.workspace_id,
+                memos_uid=memo_uid,
+                memo_type="original",
+            ):
+                continue
+            idempotency_key = f"memos.poll:{memo_uid}:{update_time or 'unknown'}"
+            if self.store.has_job(workspace_id=self.config.workspace_id, idempotency_key=idempotency_key):
+                continue
+            _, created = self.store.create_job(
+                workspace_id=self.config.workspace_id,
+                job_type="process_memo",
+                idempotency_key=idempotency_key,
+                payload={"memo_uid": memo_uid, "poll": {"memo": {"name": memo.get("name"), "updateTime": update_time}}},
+            )
+            created_any = created_any or created
+        return created_any
 
     async def handle_job(self, job: Job) -> dict[str, object]:
         if job.type != "process_memo":
@@ -360,6 +402,22 @@ def _extract_memo_uid(memo: dict[str, object]) -> str:
     if not isinstance(name, str) or not name.startswith("memos/"):
         raise ValueError("Created summary memo response is missing name")
     return name.removeprefix("memos/")
+
+
+def _memo_uid(memo: dict[str, object]) -> str | None:
+    name = memo.get("name")
+    if isinstance(name, str) and name.startswith("memos/"):
+        return name.removeprefix("memos/")
+    uid = memo.get("uid") or memo.get("id")
+    return str(uid) if uid else None
+
+
+def _is_sidecar_summary_memo(memo: dict[str, object]) -> bool:
+    tags = memo.get("tags")
+    if isinstance(tags, list) and "系统/AI整理" in {str(tag) for tag in tags}:
+        return True
+    content = memo.get("content")
+    return isinstance(content, str) and content.lstrip().startswith("#系统/AI整理")
 
 
 def _clarification_comment(reason: str | None) -> str:

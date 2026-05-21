@@ -471,3 +471,96 @@ async def test_worker_uses_approved_business_tags_from_store(tmp_path, monkeypat
     assert store.list_tag_candidates(workspace_id="default", status="candidate") == []
     assert "#项目/新方向" in FakeClient.created_memos[0]
     assert FakeClient.relations == [("approved-tag", "summary-approved-tag")]
+
+
+@pytest.mark.asyncio
+async def test_worker_polling_enqueues_new_original_memos(tmp_path, monkeypatch):
+    app_path = write_yaml(
+        tmp_path / "app.yaml",
+        app_config_text(tmp_path / "sidecar.db").replace("ingestion_mode: webhook", "ingestion_mode: poll"),
+    )
+    write_yaml(tmp_path / "taxonomy.yaml", taxonomy_config_text())
+    monkeypatch.setenv("MEMOS_BASE_URL", "http://memos.local")
+    monkeypatch.setenv("MEMOS_API_TOKEN", "memos-token")
+    config = AppConfig.load(app_path)
+    store = Store(config.database_path)
+    store.migrate()
+    store.ensure_workspace("default")
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def list_memos(self, *, page_size):
+            return {
+                "memos": [
+                    {
+                        "name": "memos/new-original",
+                        "updateTime": "2026-05-21T03:20:00Z",
+                        "content": "新的原始 memo",
+                        "tags": [],
+                    },
+                    {
+                        "name": "memos/summary",
+                        "updateTime": "2026-05-21T03:19:00Z",
+                        "content": "#系统/AI整理\n\nAI memo",
+                        "tags": ["系统/AI整理"],
+                    },
+                ]
+            }
+
+    monkeypatch.setattr("memosima.worker.runner.MemosClient", FakeClient)
+
+    worker = Worker(config, store)
+
+    assert await worker._poll_memos_once() is True
+    jobs = store.list_jobs()
+    assert len(jobs) == 1
+    assert jobs[0].status == "pending"
+    assert jobs[0].payload["memo_uid"] == "new-original"
+    assert jobs[0].idempotency_key == "memos.poll:new-original:2026-05-21T03:20:00Z"
+
+    assert await worker._poll_memos_once() is False
+    assert len(store.list_jobs()) == 1
+
+
+@pytest.mark.asyncio
+async def test_worker_polling_skips_already_synced_memos(tmp_path, monkeypatch):
+    app_path = write_yaml(
+        tmp_path / "app.yaml",
+        app_config_text(tmp_path / "sidecar.db").replace("ingestion_mode: webhook", "ingestion_mode: poll"),
+    )
+    write_yaml(tmp_path / "taxonomy.yaml", taxonomy_config_text())
+    monkeypatch.setenv("MEMOS_BASE_URL", "http://memos.local")
+    monkeypatch.setenv("MEMOS_API_TOKEN", "memos-token")
+    config = AppConfig.load(app_path)
+    store = Store(config.database_path)
+    store.migrate()
+    store.ensure_workspace("default")
+    store.upsert_memo(
+        workspace_id="default",
+        memos_uid="already-synced",
+        memo_type="original",
+        status="synced",
+    )
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def list_memos(self, *, page_size):
+            return {
+                "memos": [
+                    {
+                        "name": "memos/already-synced",
+                        "updateTime": "2026-05-21T03:20:00Z",
+                        "content": "已处理 memo",
+                        "tags": [],
+                    }
+                ]
+            }
+
+    monkeypatch.setattr("memosima.worker.runner.MemosClient", FakeClient)
+
+    assert await Worker(config, store)._poll_memos_once() is False
+    assert store.list_jobs() == []

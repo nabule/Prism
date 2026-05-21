@@ -42,6 +42,8 @@ class AppConfig:
     memos_api_token: str | None
     memos_webhook_url: str | None
     memos_timeout_seconds: float
+    memos_ingestion_mode: str
+    memos_poll_page_size: int
     worker_poll_interval_seconds: float
     worker_max_attempts: int
     worker_create_probe_comment: bool
@@ -80,6 +82,8 @@ class AppConfig:
             memos_api_token=_env_value(str(memos_api_token_env)) if memos_api_token_env else None,
             memos_webhook_url=_env_value(str(memos_webhook_url_env)) if memos_webhook_url_env else None,
             memos_timeout_seconds=float(memos.get("request_timeout_seconds", 15)),
+            memos_ingestion_mode=str(memos.get("ingestion_mode", "poll")),
+            memos_poll_page_size=int(memos.get("poll_page_size", 20)),
             worker_poll_interval_seconds=float(worker.get("poll_interval_seconds", 2)),
             worker_max_attempts=int(worker.get("max_attempts", 3)),
             worker_create_probe_comment=bool(worker.get("create_probe_comment", False)),

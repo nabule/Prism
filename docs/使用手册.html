@@ -85,15 +85,16 @@
   --pat-output-env-file /tmp/memosima-pat.env</code></pre>
   <p>把临时文件中的 <code>MEMOS_API_TOKEN</code> 写入本机受控的 <code>.env</code> 或部署密钥管理位置。</p>
 
-  <h2>5. 配置 Memos Webhook</h2>
-  <p>Memos 0.28.0 会拒绝 webhook URL 指向 localhost、Docker 内网或私有 IP。需要公网 URL，或者用公网隧道转发到 <code>http://localhost:8080</code>。</p>
+  <h2>5. 配置内容入口</h2>
+  <p>本地部署默认使用 <code>poll</code> 模式，Sidecar 会主动轮询 Memos 最近 memo，不需要公网 webhook，也不需要在 Memos Web 中配置内网回调地址。</p>
+  <p>如果要使用 Memos 内置 webhook，Memos 0.28.0 会拒绝 webhook URL 指向 localhost、Docker 内网或私有 IP，需要公网 URL，或者用公网隧道转发到 <code>http://localhost:8080</code>。</p>
   <pre><code>npx nx run sidecar:probe-memos -- \
   --bootstrap-username test \
   --bootstrap-password testtest \
   --configure-webhook-url "$MEMOS_WEBHOOK_URL"</code></pre>
 
   <h2>6. 处理一条 memo</h2>
-  <p>在 Memos 中创建内容明确的 memo。Webhook 到达后，Sidecar 会创建 <code>process_memo</code> 任务，worker 会读取 memo、生成整理计划、创建 AI 整理 memo 并建立 relation。</p>
+  <p>在 Memos 中创建内容明确的 memo。默认轮询模式下，worker 会在短时间内发现新 memo，并创建 <code>process_memo</code> 任务；随后读取 memo、生成整理计划、创建 AI 整理 memo 并建立 relation。</p>
   <p>查询任务：</p>
   <pre><code>curl -H "Authorization: Bearer&lt;空格&gt;$SIDECAR_ADMIN_TOKEN" \
   "http://localhost:8080/admin/jobs"</code></pre>

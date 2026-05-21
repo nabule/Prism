@@ -213,12 +213,35 @@ def test_admin_tag_summary_creates_summary_memo(tmp_path, monkeypatch):
                         "tags": ["项目/个人AI知识库"],
                     },
                     {
+                        "name": "memos/source-parent",
+                        "createTime": "2026-05-21T03:05:00Z",
+                        "content": "项目父标签直接记录 #项目",
+                        "tags": ["项目"],
+                    },
+                    {
+                        "name": "memos/source-content-child",
+                        "createTime": "2026-05-21T03:10:00Z",
+                        "content": "正文里只有子标签 #项目/高层总结",
+                        "tags": [],
+                    },
+                    {
                         "name": "memos/other",
-                        "content": "其他记录",
-                        "tags": ["其他"],
+                        "content": "相似但不是子标签 #项目管理",
+                        "tags": ["项目管理"],
                     },
                     {
                         "name": "memos/ai-summary",
+                        "content": "#系统/AI整理 #项目/个人AI知识库\n\nAI 整理 memo",
+                        "tags": ["系统/AI整理", "项目/个人AI知识库"],
+                    },
+                    {
+                        "name": "memos/source-from-summary",
+                        "createTime": "2026-05-21T03:15:00Z",
+                        "content": "原文没有标签，只有 AI 整理结果命中了项目标签",
+                        "tags": [],
+                    },
+                    {
+                        "name": "memos/ai-summary-linked",
                         "content": "#系统/AI整理 #项目/个人AI知识库\n\nAI 整理 memo",
                         "tags": ["系统/AI整理", "项目/个人AI知识库"],
                     },
@@ -246,29 +269,50 @@ def test_admin_tag_summary_creates_summary_memo(tmp_path, monkeypatch):
 
         async def summarize_tag(self, *, tag, memos_markdown, memo_count, prompt_template):
             FakeLLMClient.seen_memos_markdown = memos_markdown
-            assert tag == "#项目/个人AI知识库"
-            assert memo_count == 1
-            return "## 总览\n\n个人 AI 知识库正在推进。"
+            assert tag == "#项目"
+            assert memo_count == 4
+            return "## 总览\n\n个人 AI 知识库正在推进，详见 [来源一](memos/source1) 和 memos/source-parent。"
 
     monkeypatch.setattr("memosima.api.app.MemosClient", FakeMemosClient)
     monkeypatch.setattr("memosima.api.app.OpenAICompatibleClient", FakeLLMClient)
 
     client = TestClient(create_app(str(app_path), str(models_path)))
+    client.app.state.store.upsert_memo(
+        workspace_id="default",
+        memos_uid="ai-summary-linked",
+        memo_type="ai_summary",
+        source_memo_uid="source-from-summary",
+        status="created",
+    )
     response = client.post(
         "/admin/tag-summaries",
         headers={"Authorization": "Bearer admin-token"},
-        json={"tag": "#项目/个人AI知识库", "limit": 20},
+        json={"tag": "#项目", "limit": 20},
     )
 
     assert response.status_code == 200
     data = response.json()
     assert data["summary_memo_uid"] == "tag-summary-1"
-    assert data["memo_count"] == 1
-    assert "#系统/标签总结 #项目/个人AI知识库" in data["content"]
+    assert data["memo_count"] == 4
+    assert "#系统/标签总结 #项目" in data["content"]
     assert "source1" in data["content"]
     assert "memos/source1" not in data["content"]
+    assert "来源一（memo UID：source1）" in data["content"]
+    assert "source-parent" in data["content"]
+    assert "memos/source-parent" not in data["content"]
+    assert "memo UID：source-parent" in data["content"]
+    assert "source-content-child" in data["content"]
+    assert "source-from-summary" in data["content"]
     assert "memos/other" not in FakeLLMClient.seen_memos_markdown
+    assert "memos/source1" not in FakeLLMClient.seen_memos_markdown
+    assert "项目管理" not in FakeLLMClient.seen_memos_markdown
     assert "memos/ai-summary" not in FakeLLMClient.seen_memos_markdown
+    assert "memos/ai-summary-linked" not in FakeLLMClient.seen_memos_markdown
     assert "memos/tag-summary" not in FakeLLMClient.seen_memos_markdown
     assert FakeMemosClient.created_memos == [data["content"]]
-    assert FakeMemosClient.relations == [("tag-summary-1", "source1")]
+    assert FakeMemosClient.relations == [
+        ("tag-summary-1", "source1"),
+        ("tag-summary-1", "source-parent"),
+        ("tag-summary-1", "source-content-child"),
+        ("tag-summary-1", "source-from-summary"),
+    ]

@@ -23,6 +23,8 @@ worker:
   create_probe_comment: false
 limits:
   max_attachment_mb: 50
+  max_ai_active_tags: 5
+  max_ai_candidate_tags: 2
   allowed_parse_extensions:
     - .txt
     - .md

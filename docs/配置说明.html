@@ -112,6 +112,8 @@ providers:
     extra_body: {}
 </code></pre>
 <p>worker 会读取默认 provider，并在对应 <code>api_key_env</code> 环境变量存在时发起 OpenAI-compatible <code>/chat/completions</code> 调用。<code>base_url</code>、<code>default_model</code>、<code>temperature</code>、<code>max_tokens</code>、<code>response_format</code> 和 <code>extra_body</code> 都从 <code>config/models.yaml</code> 读取。<code>max_tokens</code> 留空时不会向模型请求发送输出 token 限制；Sidecar 也不会主动截断输入正文。<code>extra_body</code> 会原样合并到请求 JSON，适合配置厂商扩展参数。模型输出必须是 JSON 对象，Sidecar 会校验 <code>title</code>、<code>summary</code>、<code>key_points</code>、<code>todos</code>、<code>active_tags</code>、<code>candidate_tags</code>、<code>needs_clarification</code> 和 <code>clarification_question</code> 字段。没有配置 key 时不调用 LLM，自动回退到本地模板整理。</p>
+<h2>memos</h2>
+<p><code>memos.show_candidate_tags</code> 控制待审核业务标签是否以 Memos 原生 <code>#tag</code> 形式写入 AI 整理 memo。默认 <code>false</code>：待审核业务标签仍进入 Sidecar 审核列表，也会在 AI 整理 memo 的“待审核”说明中显示，但会去掉前导 <code>#</code>，因此不会在 Memos Web 中作为标签显示或参与标签筛选。设为 <code>true</code> 时恢复旧行为，待审核业务标签会写成 <code>#标签</code>，可在 Memos Web 里显示和筛选。<code>#系统/标签待审核</code> 这个系统状态标签不受该开关影响，用于筛选“含待审核项”的 AI 整理 memo。</p>
 <p><code>active_tags</code> 只能使用已有正式标签；如果模型把未知标签放入 <code>active_tags</code>，Sidecar 会把它降级为候选标签。<code>candidate_tags</code> 用于 AI 从正文提出的新标签建议，每项包含 <code>path</code>、<code>reason</code> 和 <code>confidence</code>。新标签不会自动激活，必须通过候选标签审核。业务标签还要求最后一级名称全局唯一：已有 <code>#项目/数管</code> 时，<code>#数管</code> 和 <code>#其他/数管</code> 都不能再作为新的业务标签。为避免过度打标，Sidecar 会优先接收命中的已有正式标签，并限制单次 LLM 额外补充的标签数量。</p>
 <h2>prompts.yaml</h2>
 <p><code>config/prompts.yaml</code> 保存所有 LLM 调用点的默认提示词。当前调用点包括 <code>organize_memo</code> 和 <code>tag_summary</code>，每个调用点都包含 <code>system</code> 和 <code>user</code> 两段模板。</p>

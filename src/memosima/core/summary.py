@@ -11,38 +11,43 @@ def build_summary_memo_content(
     organization_plan: OrganizationPlan,
     taxonomy: TaxonomyConfig,
     llm_draft: LLMOrganizationDraft | None = None,
+    show_candidate_tags: bool = False,
 ) -> str:
     ai_summary_tag = taxonomy.system_tags.get("ai_summary", "#系统/AI整理")
+    hidden_candidate_paths = [] if show_candidate_tags else [candidate.path for candidate in organization_plan.candidate_tags]
     tags = _dedupe(
         [
             ai_summary_tag,
             *organization_plan.system_tags,
             *organization_plan.active_tags,
-            *(candidate.path for candidate in organization_plan.candidate_tags),
+            *(candidate.path for candidate in organization_plan.candidate_tags if show_candidate_tags),
         ]
     )
 
     lines = [
         f"{ai_summary_tag} {' '.join(tag for tag in tags if tag != ai_summary_tag)}".strip(),
         "",
-        f"## AI整理：{_summary_title(source_content, llm_draft)}",
+        f"## AI整理：{_sanitize_candidate_tag_markers(_summary_title(source_content, llm_draft), hidden_candidate_paths)}",
         "",
         f"来源 memo：memos/{source_memo_uid}",
         "",
         "### 摘要",
         "",
-        llm_draft.summary if llm_draft else _summary_text(source_content),
+        _sanitize_candidate_tag_markers(
+            llm_draft.summary if llm_draft else _summary_text(source_content),
+            hidden_candidate_paths,
+        ),
         "",
     ]
 
     if llm_draft and llm_draft.key_points:
         lines.extend(["### 要点", ""])
-        lines.extend(f"- {point}" for point in llm_draft.key_points)
+        lines.extend(f"- {_sanitize_candidate_tag_markers(point, hidden_candidate_paths)}" for point in llm_draft.key_points)
         lines.append("")
 
     if llm_draft and llm_draft.todos:
         lines.extend(["### 待办", ""])
-        lines.extend(f"- {todo}" for todo in llm_draft.todos)
+        lines.extend(f"- {_sanitize_candidate_tag_markers(todo, hidden_candidate_paths)}" for todo in llm_draft.todos)
         lines.append("")
 
     lines.extend(
@@ -58,7 +63,10 @@ def build_summary_memo_content(
         lines.append("- 已使用：无")
 
     if organization_plan.candidate_tags:
-        lines.extend(f"- 待审核：{candidate.path}" for candidate in organization_plan.candidate_tags)
+        lines.extend(
+            f"- 待审核：{_display_candidate_tag(candidate.path, show_candidate_tags)}"
+            for candidate in organization_plan.candidate_tags
+        )
     else:
         lines.append("- 待审核：无")
 
@@ -80,7 +88,7 @@ def build_summary_memo_content(
             "",
             "### 原文摘录",
             "",
-            _excerpt(source_content),
+            _sanitize_candidate_tag_markers(_excerpt(source_content), hidden_candidate_paths),
         ]
     )
 
@@ -119,4 +127,15 @@ def _dedupe(values: list[str]) -> list[str]:
         if value not in seen:
             seen.add(value)
             result.append(value)
+    return result
+
+
+def _display_candidate_tag(tag: str, show_candidate_tags: bool) -> str:
+    return tag if show_candidate_tags else tag.removeprefix("#")
+
+
+def _sanitize_candidate_tag_markers(text: str, candidate_tags: list[str]) -> str:
+    result = text
+    for tag in candidate_tags:
+        result = result.replace(tag, tag.removeprefix("#"))
     return result

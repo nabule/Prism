@@ -44,6 +44,7 @@ class AppConfig:
     memos_timeout_seconds: float
     memos_ingestion_mode: str
     memos_poll_page_size: int
+    memos_show_candidate_tags: bool
     worker_poll_interval_seconds: float
     worker_max_attempts: int
     worker_create_probe_comment: bool
@@ -98,6 +99,7 @@ class AppConfig:
             memos_timeout_seconds=float(memos.get("request_timeout_seconds", 15)),
             memos_ingestion_mode=str(memos.get("ingestion_mode", "poll")),
             memos_poll_page_size=int(memos.get("poll_page_size", 20)),
+            memos_show_candidate_tags=bool(memos.get("show_candidate_tags", False)),
             worker_poll_interval_seconds=float(worker.get("poll_interval_seconds", 2)),
             worker_max_attempts=int(worker.get("max_attempts", 3)),
             worker_create_probe_comment=bool(worker.get("create_probe_comment", False)),

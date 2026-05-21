@@ -48,6 +48,7 @@ def test_app_config_reads_secret_values_from_environment(tmp_path, monkeypatch):
     assert config.memos_webhook_url == "https://sidecar.example.com/webhooks/memos"
     assert config.memos_ingestion_mode == "webhook"
     assert config.memos_poll_page_size == 20
+    assert config.memos_show_candidate_tags is False
     assert config.max_attachment_bytes == 1024 * 1024
     assert config.allowed_parse_extensions == (".txt", ".md")
     assert config.max_ai_active_tags == 5

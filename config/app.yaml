@@ -17,6 +17,7 @@ memos:
   request_timeout_seconds: 15
   ingestion_mode: poll
   poll_page_size: 20
+  show_candidate_tags: false
 document_parser:
   provider: mineru
   token_env: MINERU_API_TOKEN

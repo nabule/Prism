@@ -44,6 +44,8 @@ def test_app_config_reads_secret_values_from_environment(tmp_path, monkeypatch):
     assert config.memos_base_url == "http://memos.local"
     assert config.memos_api_token == "memos-token"
     assert config.memos_webhook_url == "https://sidecar.example.com/webhooks/memos"
+    assert config.memos_ingestion_mode == "webhook"
+    assert config.memos_poll_page_size == 20
     assert config.max_attachment_bytes == 1024 * 1024
     assert config.allowed_parse_extensions == (".txt", ".md")
 

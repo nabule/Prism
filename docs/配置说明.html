@@ -65,11 +65,13 @@
 <li><code>memos.base_url_env</code>：Memos 地址的环境变量名。</li>
 <li><code>memos.api_token_env</code>：Memos token 的环境变量名。</li>
 <li><code>memos.webhook_url_env</code>：Memos 内置 webhook 回调 URL 的环境变量名。</li>
+<li><code>memos.ingestion_mode</code>：memo 入口模式，默认 <code>poll</code>，由 Sidecar 主动轮询 Memos，不需要公网 webhook；也可设为 <code>webhook</code> 或 <code>both</code>。</li>
+<li><code>memos.poll_page_size</code>：轮询时每次读取最近 memo 的数量，默认 <code>20</code>。</li>
 <li><code>prompts.path</code>：LLM 默认提示词配置文件路径，默认 <code>config/prompts.yaml</code>。</li>
 <li><code>worker.max_attempts</code>：任务失败后的最大尝试次数。</li>
 <li><code>worker.create_probe_comment</code>：P0 探针是否在 memo 下写入测试评论，默认关闭。</li>
 </ul>
-<p>Memos <code>0.28.0</code> 会拒绝 webhook URL 指向本机、Docker 内网或其他保留/私有 IP。Compose 内部地址 <code>http://sidecar:8080/webhooks/memos</code> 不能用于 Memos 内置 webhook；需要配置公网可达 URL，或使用公网隧道转发到本机 Sidecar。</p>
+<p>本地部署推荐使用 <code>poll</code> 模式，不需要暴露公网地址。Memos <code>0.28.0</code> 会拒绝 webhook URL 指向本机、Docker 内网或其他保留/私有 IP；只有在需要 webhook 模式时，才需要配置公网可达 URL 或公网隧道。</p>
 <h2>models.yaml</h2>
 <p>当前默认模型配置使用 OpenAI-compatible 接口，OpenRouter 保留为备选：</p>
 <pre><code class="language-yaml">default_provider: 

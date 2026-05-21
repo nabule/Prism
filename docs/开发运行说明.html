@@ -63,13 +63,14 @@ npx nx build sidecar
   --pat-output-env-file /tmp/memosima-pat.env
 </code></pre>
 <p>默认输出会隐藏 PAT 原文；<code>/tmp/memosima-pat.env</code> 仅供本机临时注入容器，不要提交到仓库。</p>
-<p>配置 Memos 内置 webhook：</p>
+<p>本地部署默认使用 Sidecar 主动轮询 Memos，不需要公网 webhook。<code>config/app.yaml</code> 中 <code>memos.ingestion_mode: poll</code> 会让 worker 在空闲时读取最近 memo，发现未处理的原始 memo 后自动创建 <code>process_memo</code> 任务。</p>
+<p>可选：配置 Memos 内置 webhook：</p>
 <pre><code class="language-bash">npx nx run sidecar:probe-memos -- \
   --bootstrap-username test \
   --bootstrap-password testtest \
   --configure-webhook-url &quot;https://your-public-sidecar.example.com/webhooks/memos&quot;
 </code></pre>
-<p>也可以通过 <code>.env</code> 配置 <code>MEMOS_WEBHOOK_URL</code>，然后直接执行探针。Memos <code>0.28.0</code> 会拒绝 webhook URL 解析到本机、Docker 内网或其他保留/私有 IP，例如 <code>http://sidecar:8080/webhooks/memos</code>、<code>http://localhost:8080/webhooks/memos</code> 和 <code>http://172.x.x.x:8080/webhooks/memos</code>。真实自动回调验收需要公网可达 URL，或使用公网隧道把 <code>http://localhost:8080</code> 暴露出去。</p>
+<p>也可以通过 <code>.env</code> 配置 <code>MEMOS_WEBHOOK_URL</code>，然后直接执行探针。Memos <code>0.28.0</code> 会拒绝 webhook URL 解析到本机、Docker 内网或其他保留/私有 IP，例如 <code>http://sidecar:8080/webhooks/memos</code>、<code>http://localhost:8080/webhooks/memos</code> 和 <code>http://172.x.x.x:8080/webhooks/memos</code>。本地测试不需要绕过该限制，使用默认轮询模式即可。</p>
 <p>配置 webhook、创建 memo 并轮询 Sidecar 任务状态：</p>
 <pre><code class="language-bash">npx nx run sidecar:probe-memos -- \
   --bootstrap-username test \

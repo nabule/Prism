@@ -266,6 +266,18 @@ class Store:
                 ).fetchall()
         return [_job_from_row(row) for row in rows]
 
+    def has_job(self, *, workspace_id: str, idempotency_key: str) -> bool:
+        with self.connect() as connection:
+            row = connection.execute(
+                """
+                SELECT 1 FROM jobs
+                WHERE workspace_id = ? AND idempotency_key = ?
+                LIMIT 1
+                """,
+                (workspace_id, idempotency_key),
+            ).fetchone()
+        return row is not None
+
     def get_job(self, job_id: int) -> Job | None:
         with self.connect() as connection:
             row = connection.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
@@ -425,6 +437,29 @@ class Store:
                 params,
             ).fetchall()
         return [_memo_from_row(row) for row in rows]
+
+    def has_memo(
+        self,
+        *,
+        workspace_id: str,
+        memos_uid: str,
+        memo_type: str | None = None,
+    ) -> bool:
+        conditions = ["workspace_id = ?", "memos_uid = ?"]
+        params: list[Any] = [workspace_id, memos_uid]
+        if memo_type is not None:
+            conditions.append("type = ?")
+            params.append(memo_type)
+        with self.connect() as connection:
+            row = connection.execute(
+                f"""
+                SELECT 1 FROM memos
+                WHERE {" AND ".join(conditions)}
+                LIMIT 1
+                """,
+                params,
+            ).fetchone()
+        return row is not None
 
     def upsert_tag_candidate(
         self,

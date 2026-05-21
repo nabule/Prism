@@ -15,6 +15,8 @@ memos:
   api_token_env: MEMOS_API_TOKEN
   webhook_url_env: MEMOS_WEBHOOK_URL
   request_timeout_seconds: 15
+  ingestion_mode: poll
+  poll_page_size: 20
 worker:
   poll_interval_seconds: 2
   max_attempts: 3

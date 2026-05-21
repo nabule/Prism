@@ -50,6 +50,8 @@ def test_app_config_reads_secret_values_from_environment(tmp_path, monkeypatch):
     assert config.memos_poll_page_size == 20
     assert config.max_attachment_bytes == 1024 * 1024
     assert config.allowed_parse_extensions == (".txt", ".md")
+    assert config.max_ai_active_tags == 5
+    assert config.max_ai_candidate_tags == 2
 
 
 def test_prompts_config_loads_and_renders_template(tmp_path):

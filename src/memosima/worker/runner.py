@@ -308,17 +308,22 @@ class Worker:
         candidates = list(local_plan.candidate_tags)
         disabled_tags = list(local_plan.disabled_tags)
         active_tag_paths = set(taxonomy.active_tag_paths)
+        active_tag_result_paths = set(active_tags)
         candidate_paths = {candidate.path for candidate in candidates}
         candidate_leafs = {_tag_leaf(candidate.path) for candidate in candidates}
+        llm_active_added = 0
+        llm_candidates_added = 0
 
         def add_candidate(path: str, reason: str, confidence: float) -> None:
-            nonlocal candidate_paths, candidate_leafs
+            nonlocal candidate_paths, candidate_leafs, llm_candidates_added
             if (
                 path in candidate_paths
                 or path in active_tag_paths
                 or _tag_leaf(path) in candidate_leafs
                 or path.startswith("#系统/")
             ):
+                return
+            if llm_candidates_added >= self.config.max_ai_candidate_tags:
                 return
             candidates.append(
                 TagCandidate(
@@ -331,6 +336,17 @@ class Worker:
             )
             candidate_paths.add(path)
             candidate_leafs.add(_tag_leaf(path))
+            llm_candidates_added += 1
+
+        def add_active(path: str) -> None:
+            nonlocal llm_active_added
+            if path in active_tag_result_paths:
+                return
+            if llm_active_added >= self.config.max_ai_active_tags:
+                return
+            active_tags.append(path)
+            active_tag_result_paths.add(path)
+            llm_active_added += 1
 
         for raw_tag in llm_draft.active_tags:
             try:
@@ -340,7 +356,7 @@ class Worker:
             if status == "disabled":
                 disabled_tags.append(tag)
             elif status == "active":
-                active_tags.append(tag)
+                add_active(tag)
             elif not tag.startswith("#系统/"):
                 add_candidate(tag, "AI suggested this tag from memo content but it is not approved", 0.6)
 
@@ -352,7 +368,7 @@ class Worker:
             if status == "disabled":
                 disabled_tags.append(tag)
             elif status == "active":
-                active_tags.append(tag)
+                add_active(tag)
             else:
                 add_candidate(tag, llm_candidate.reason, llm_candidate.confidence)
 

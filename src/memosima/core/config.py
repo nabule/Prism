@@ -49,6 +49,8 @@ class AppConfig:
     worker_create_probe_comment: bool
     max_attachment_bytes: int
     allowed_parse_extensions: tuple[str, ...]
+    max_ai_active_tags: int
+    max_ai_candidate_tags: int
 
     @classmethod
     def load(cls, path: str | Path = "config/app.yaml") -> "AppConfig":
@@ -94,6 +96,8 @@ class AppConfig:
                     [".txt", ".md", ".docx", ".xlsx", ".pdf", ".drawio", ".drawio.svg", ".json"],
                 )
             ),
+            max_ai_active_tags=int(limits.get("max_ai_active_tags", 5)),
+            max_ai_candidate_tags=int(limits.get("max_ai_candidate_tags", 2)),
         )
 
 

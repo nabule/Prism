@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from memosima.core.config import AppConfig, ModelsConfig
+from memosima.core.taxonomy import TaxonomyConfig
 from memosima.db.store import Store
 from memosima.llm.provider import LLMOrganizationDraft
 from memosima.worker.runner import Worker
@@ -414,6 +415,69 @@ async def test_worker_merges_ai_generated_tags_from_body(tmp_path, monkeypatch):
     assert "#项目/未知正式标签" in FakeMemosClient.created_memos[0]
     assert "#杂项" in FakeMemosClient.created_memos[0]
     assert FakeMemosClient.relations == [("ai-tags", "summary-ai-tags")]
+
+
+def test_worker_limits_ai_generated_tag_count(tmp_path):
+    app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
+    taxonomy_path = write_yaml(
+        tmp_path / "taxonomy.yaml",
+        """
+system_tags:
+  original: "#系统/原始记录"
+  tag_candidate: "#系统/标签待审核"
+business_tags:
+  - path: "#领域/标签一"
+    status: active
+  - path: "#领域/标签二"
+    status: active
+  - path: "#领域/标签三"
+    status: active
+  - path: "#领域/标签四"
+    status: active
+  - path: "#领域/标签五"
+    status: active
+  - path: "#领域/标签六"
+    status: active
+aliases: []
+disabled: []
+""",
+    )
+    config = AppConfig.load(app_path)
+    taxonomy = TaxonomyConfig.load(taxonomy_path)
+    local_plan = taxonomy.build_organization_plan("这是一条没有手动标签但主题明确的记录")
+    llm_draft = LLMOrganizationDraft(
+        title="多标签整理",
+        summary="模型返回了过多标签",
+        active_tags=[
+            "#领域/标签一",
+            "#领域/标签二",
+            "#领域/标签三",
+            "#领域/标签四",
+            "#领域/标签五",
+            "#领域/标签六",
+        ],
+        candidate_tags=[
+            {"path": "#领域/候选一", "reason": "候选一", "confidence": 0.9},
+            {"path": "#领域/候选二", "reason": "候选二", "confidence": 0.8},
+            {"path": "#领域/候选三", "reason": "候选三", "confidence": 0.7},
+        ],
+        needs_clarification=False,
+    )
+
+    plan = Worker(config, Store(config.database_path))._merge_llm_tags(
+        taxonomy=taxonomy,
+        local_plan=local_plan,
+        llm_draft=llm_draft,
+    )
+
+    assert plan.active_tags == (
+        "#领域/标签一",
+        "#领域/标签二",
+        "#领域/标签三",
+        "#领域/标签四",
+        "#领域/标签五",
+    )
+    assert [candidate.path for candidate in plan.candidate_tags] == ["#领域/候选一", "#领域/候选二"]
 
 
 @pytest.mark.asyncio

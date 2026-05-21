@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Memosima 普通用户使用手册</title>
+  <style>
+    :root { color-scheme: light dark; --bg:#f7f8fa; --fg:#1f2937; --muted:#667085; --panel:#fff; --border:#d0d5dd; --accent:#2563eb; --code:#101828; --codebg:#eef2f6; --ok:#047857; --warn:#b45309; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.65 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    main { max-width: 1040px; margin: 0 auto; padding: 40px 24px 72px; }
+    article { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 32px; box-shadow: 0 1px 2px rgba(16,24,40,.05); }
+    h1, h2, h3 { line-height: 1.25; margin: 1.4em 0 .6em; }
+    h1 { margin-top: 0; font-size: 2rem; }
+    h2 { border-top: 1px solid var(--border); padding-top: 1.1em; }
+    a { color: var(--accent); }
+    table { border-collapse: collapse; width: 100%; margin: 1rem 0; display: block; overflow-x: auto; }
+    th, td { border: 1px solid var(--border); padding: .55rem .7rem; text-align: left; vertical-align: top; }
+    th { background: #f2f4f7; }
+    pre { background: var(--codebg); color: var(--code); padding: 1rem; border-radius: 8px; overflow-x: auto; }
+    code { background: var(--codebg); color: var(--code); padding: .12rem .28rem; border-radius: 4px; }
+    pre code { background: transparent; padding: 0; }
+    .note { background: #f9fafb; border: 1px solid var(--border); border-radius: 8px; padding: 1rem; color: var(--muted); }
+    .ok { color: var(--ok); font-weight: 600; }
+    .warn { color: var(--warn); font-weight: 600; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg:#0b1220; --fg:#e5e7eb; --muted:#9ca3af; --panel:#111827; --border:#374151; --accent:#60a5fa; --code:#e5e7eb; --codebg:#1f2937; --ok:#34d399; --warn:#fbbf24; }
+      th, .note { background: #1f2937; }
+    }
+  </style>
+</head>
+<body>
+<main>
+<article>
+  <h1>Memosima 普通用户使用手册</h1>
+  <p>普通用户日常只需要使用 Memos 客户端或 Memos Web 页面记录内容。Memosima Sidecar 会在后台自动读取新 memo，生成 AI 整理 memo、识别已有标签，并把新标签放入候选列表等待确认。</p>
+
+  <h2>1. 日常使用入口</h2>
+  <table>
+    <thead>
+      <tr><th>入口</th><th>用途</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Memos Web 或客户端</td><td>日常记录、查看原始 memo、查看 AI 生成的整理 memo。这是普通用户的主要入口。</td></tr>
+      <tr><td>Memosima 管理页面 <code>/admin/ui</code></td><td>调试、查看后台任务、重试失败任务、审核 AI 提出的候选标签。普通记录不需要打开它。</td></tr>
+    </tbody>
+  </table>
+  <p class="note">管理员需要先部署好 Memosima、配置 Memos webhook 和模型 key。普通用户不需要接触 API key、Docker 或命令行。</p>
+
+  <h2>2. 添加一条内容</h2>
+  <p>在 Memos 中新建 memo，直接写正文即可。内容越清楚，AI 整理和标签识别越稳定。</p>
+  <pre><code>今天调研了本地 AI 知识库方案。
+Memos 负责快速记录，Sidecar 负责后台整理、生成摘要和标签建议。
+下一步要验证附件解析和语义检索。</code></pre>
+  <p>保存后，如果 webhook 已配置，后台会自动处理这条 memo。处理完成后，Memos 中会出现一条新的 AI 整理 memo，并通过 Memos 原生 relation 关联到原始 memo。</p>
+
+  <h2>3. 写内容的建议</h2>
+  <ul>
+    <li>一条 memo 尽量只记录一个主题，例如一次会议、一段想法、一个资料摘录或一个任务进展。</li>
+    <li>正文里写清楚背景、结论、下一步，AI 会更容易生成摘要、要点和待办。</li>
+    <li>可以手动写已有标签，例如 <code>#项目/个人AI知识库</code>。已有正式标签会被直接使用。</li>
+    <li>不确定用什么标签时可以不写，AI 会从正文中提出候选标签。</li>
+    <li>短句或只有问题的 memo 可能会被标记为待澄清，需要补充信息后再重试。</li>
+  </ul>
+
+  <h2>4. AI 会生成什么</h2>
+  <p>后台处理成功后，AI 整理 memo 通常包含这些内容：</p>
+  <ul>
+    <li>标题：根据正文生成的简短标题。</li>
+    <li>摘要：对原文的结构化总结。</li>
+    <li>要点：原文中的关键信息。</li>
+    <li>待办：可以继续执行的事项。</li>
+    <li>标签状态：已使用的正式标签、待审核的新标签、被禁用或无法使用的标签。</li>
+    <li>原文摘录：便于回看来源。</li>
+  </ul>
+  <p>如果模型 key 没有配置，系统仍会做本地模板整理和显式 <code>#tag</code> 识别，但不会调用大模型生成更完整的摘要和标签建议。</p>
+
+  <h2>5. 标签如何自动生成</h2>
+  <p>Memosima 使用两层标签机制：</p>
+  <table>
+    <thead>
+      <tr><th>标签类型</th><th>来源</th><th>是否自动生效</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>正式标签</td><td>管理员在配置中预置，或候选标签审核通过后形成。</td><td><span class="ok">会直接使用</span></td></tr>
+      <tr><td>候选标签</td><td>用户写了未审核的新 <code>#tag</code>，或 AI 从正文中提出新标签。</td><td><span class="warn">不会直接生效，需要审核</span></td></tr>
+      <tr><td>禁用标签</td><td>管理员明确禁用的标签。</td><td><span class="warn">不会使用</span></td></tr>
+    </tbody>
+  </table>
+  <p>AI 返回的 <code>active_tags</code> 只有命中正式标签集合时才会直接使用。AI 提出的新标签会进入 <code>candidate_tags</code>，不会自动变成正式标签。</p>
+
+  <h2>6. 手动写标签</h2>
+  <p>可以在 Memos 正文中直接写标签：</p>
+  <pre><code>完成 Memosima 管理页面调试。
+#项目/个人AI知识库 #阶段/P2</code></pre>
+  <p>如果 <code>#项目/个人AI知识库</code> 是正式标签，它会直接进入整理结果。如果 <code>#阶段/P2</code> 不是正式标签，它会进入候选标签列表，等待审核。</p>
+
+  <h2>7. 不写标签时的自动识别</h2>
+  <p>不写任何标签也可以。AI 会根据正文内容判断适合的正式标签，并在需要时提出新标签建议。</p>
+  <pre><code>今天把 的 qwen 模型接入到知识库整理流程。
+模型参数改成配置文件控制，并验证了真实接口调用。</code></pre>
+  <p>如果系统已有 <code>#项目/个人AI知识库</code>，AI 可以直接使用它。如果 AI 认为需要 <code>#模型/</code>，但这个标签还不是正式标签，它会进入候选列表。</p>
+
+  <h2>8. 审核 AI 提出的新标签</h2>
+  <p>有权限的用户打开管理页面：</p>
+  <pre><code>http://localhost:8080/admin/ui</code></pre>
+  <p>在页面中输入 <code>SIDECAR_ADMIN_TOKEN</code>，进入“候选标签”区域。</p>
+  <ul>
+    <li>点击“通过”：候选标签会变成正式标签，后续同类 memo 可直接使用。</li>
+    <li>点击“拒绝”：这次候选不会进入正式标签集合。</li>
+    <li>审核备注可用于记录通过或拒绝的原因。</li>
+  </ul>
+  <p class="note">当前审核通过会写入 Sidecar 数据库，后续 worker 会使用；不会自动改写 <code>config/taxonomy.yaml</code>。</p>
+
+  <h2>9. 待澄清内容怎么处理</h2>
+  <p>如果 memo 太短、缺少上下文，或像是在问一个需要更多信息的问题，系统可能不会直接创建 AI 整理 memo，而是在原 memo 下创建澄清评论。</p>
+  <p>处理方式：</p>
+  <ol>
+    <li>回到 Memos，编辑原始 memo，补充背景和目标。</li>
+    <li>打开管理页面 <code>/admin/ui</code>。</li>
+    <li>找到对应 <code>waiting_user</code> 任务，点击“重试”。</li>
+  </ol>
+
+  <h2>10. 附件内容</h2>
+  <p>当前普通用户可以上传 <code>.txt</code> 或 <code>.md</code> 附件。后台会下载并解析为 Markdown artifact，供后续整理流程使用。</p>
+  <p class="note">当前还没有完成 docx、xlsx、pdf、drawio、Mind Elixir 的专用解析。上传这些文件不会主动执行未知内容，系统会先跳过或记录状态。</p>
+
+  <h2>11. 常见问题</h2>
+  <h3>为什么没有生成 AI 整理 memo？</h3>
+  <p>常见原因是 webhook 没有送达、worker 没有运行、模型 key 没配置、任务失败，或 memo 被判定为待澄清。可以在 <code>/admin/ui</code> 查看任务状态。</p>
+
+  <h3>为什么新标签没有直接出现在正式标签里？</h3>
+  <p>新标签必须审核。这样可以避免 AI 或用户临时写法污染正式标签体系。</p>
+
+  <h3>我应该经常手动写标签吗？</h3>
+  <p>已有明确标签时可以手动写；不确定时不用强行写，让 AI 先生成候选标签，再由管理员审核。</p>
+
+  <h3>普通用户使用客户端还是 Web？</h3>
+  <p>日常记录使用 Memos 客户端或 Memos Web 都可以。Memosima 的 Web 管理页面主要用于调试、任务重试和标签审核，不是日常记录入口。</p>
+
+  <h2>12. 更多文档</h2>
+  <ul>
+    <li><a href="../README.html">项目入口</a></li>
+    <li><a href="使用手册.html">部署与管理使用手册</a></li>
+    <li><a href="配置说明.html">配置说明</a></li>
+    <li><a href="开发运行说明.html">开发运行说明</a></li>
+  </ul>
+</article>
+</main>
+</body>
+</html>

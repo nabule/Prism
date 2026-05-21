@@ -115,6 +115,10 @@ async def test_memos_client_reads_memo_and_creates_comment(monkeypatch):
     async def download_resource(resource_id: str):
         return Response(content=b"downloaded", media_type="text/plain")
 
+    @app.get("/file/attachments/{attachment_id}/{filename}")
+    async def download_attachment(attachment_id: str, filename: str):
+        return Response(content=f"{attachment_id}/{filename}".encode(), media_type="application/pdf")
+
     original_async_client = AsyncClient
 
     def fake_async_client(*args, **kwargs):
@@ -210,6 +214,7 @@ async def test_memos_client_reads_memo_and_creates_comment(monkeypatch):
     }
     await client.delete_personal_access_token("users/test/personalAccessTokens/1")
     assert await client.download_resource("resources/file1") == b"downloaded"
+    assert await client.download_resource("attachments/file2", filename="report.pdf") == b"file2/report.pdf"
     assert seen_webhook_payloads == [
         {
             "url": "https://sidecar.example.com/webhooks/memos",
@@ -238,6 +243,7 @@ async def test_memos_client_reads_memo_and_creates_comment(monkeypatch):
         auth_header,
         None,
         None,
+        auth_header,
         auth_header,
         auth_header,
         auth_header,

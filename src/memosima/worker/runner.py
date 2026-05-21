@@ -225,7 +225,7 @@ class Worker:
         document_parser = create_document_parser(self.config)
         for resource in extract_attachment_resources(memo):
             try:
-                data = await client.download_resource(resource.name)
+                data = await client.download_resource(resource.name, filename=resource.filename)
                 parsed = parse_text_attachment(
                     resource=resource,
                     data=data,

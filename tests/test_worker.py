@@ -57,7 +57,7 @@ async def test_worker_processes_memo_with_mock_client(tmp_path, monkeypatch):
         async def create_comment(self, memo_uid, content):
             raise AssertionError("probe comment is disabled")
 
-        async def download_resource(self, resource_name):
+        async def download_resource(self, resource_name, filename=None):
             assert resource_name == "resources/note1"
             return b"attachment text\n"
 
@@ -141,7 +141,7 @@ async def test_worker_waits_for_user_when_memo_needs_clarification(tmp_path, mon
             self.comments.append((memo_uid, content))
             return {"name": f"memos/{memo_uid}/comments/1", "content": content}
 
-        async def download_resource(self, resource_name):
+        async def download_resource(self, resource_name, filename=None):
             raise AssertionError("short memo has no resources")
 
     monkeypatch.setattr("memosima.worker.runner.MemosClient", FakeClient)
@@ -199,7 +199,7 @@ async def test_worker_uses_llm_draft_when_model_key_is_configured(tmp_path, monk
         async def create_comment(self, memo_uid, content):
             raise AssertionError("clear LLM jobs must not create comments")
 
-        async def download_resource(self, resource_name):
+        async def download_resource(self, resource_name, filename=None):
             raise AssertionError("LLM memo has no resources")
 
         async def upsert_memo_reference_relation(self, *, source_memo_uid, related_memo_uid):
@@ -280,7 +280,7 @@ async def test_worker_uses_temporary_prompt_override_from_job_payload(tmp_path, 
         async def create_comment(self, memo_uid, content):
             raise AssertionError("clear prompt override jobs must not create comments")
 
-        async def download_resource(self, resource_name):
+        async def download_resource(self, resource_name, filename=None):
             raise AssertionError("prompt override memo has no resources")
 
         async def upsert_memo_reference_relation(self, *, source_memo_uid, related_memo_uid):
@@ -356,7 +356,7 @@ async def test_worker_merges_ai_generated_tags_from_body(tmp_path, monkeypatch):
         async def create_comment(self, memo_uid, content):
             raise AssertionError("clear AI tag jobs must not create comments")
 
-        async def download_resource(self, resource_name):
+        async def download_resource(self, resource_name, filename=None):
             raise AssertionError("AI tag memo has no resources")
 
         async def upsert_memo_reference_relation(self, *, source_memo_uid, related_memo_uid):
@@ -479,7 +479,7 @@ limits:
         async def create_comment(self, memo_uid, content):
             raise AssertionError("document markdown should make the memo clear enough")
 
-        async def download_resource(self, resource_name):
+        async def download_resource(self, resource_name, filename=None):
             assert resource_name == "resources/doc1"
             return b"docx-bytes"
 
@@ -634,7 +634,7 @@ async def test_worker_uses_approved_business_tags_from_store(tmp_path, monkeypat
         async def create_comment(self, memo_uid, content):
             raise AssertionError("clear jobs must not create comments")
 
-        async def download_resource(self, resource_name):
+        async def download_resource(self, resource_name, filename=None):
             raise AssertionError("approved tag memo has no resources")
 
         async def upsert_memo_reference_relation(self, *, source_memo_uid, related_memo_uid):

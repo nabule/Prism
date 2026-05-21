@@ -159,6 +159,7 @@ providers:
   is_ocr: false
 </code></pre>
 <p>worker 会先从 Memos 下载附件。<code>.txt</code> 和 <code>.md</code> 在本地安全解码；<code>.doc</code>、<code>.docx</code>、<code>.xls</code>、<code>.xlsx</code>、<code>.ppt</code>、<code>.pptx</code> 和 <code>.pdf</code> 会调用文档解析 provider 转成 Markdown。Markdown 会写入 <code>artifacts</code> 表，并在调用 LLM 前拼接进原 memo 正文，后续 AI 整理和自动标签流程保持不变。provider 设计为可替换，后续可以接入本地 LibreOffice、unstructured 或其他在线解析服务。</p>
+<p>如果原 memo 正文为空且至少一个附件成功进入解析结果，LLM 返回标题后，worker 会调用 Memos 内容更新接口把该标题回写到原 memo。job 结果中会记录 <code>original_memo_title_updated</code> 和 <code>original_memo_title</code>，便于在管理页或 API 中排查。</p>
 <h2>limits</h2>
 <p><code>limits.max_attachment_mb</code> 控制单个附件解析大小上限。<code>limits.allowed_parse_extensions</code> 控制允许进入解析流程的扩展名。<code>limits.max_ai_active_tags</code> 控制单条 memo 最多接收多少个 AI 补充的正式标签，默认 <code>5</code>；<code>limits.max_ai_candidate_tags</code> 控制单条 memo 最多接收多少个 AI 新候选标签，默认 <code>2</code>。用户在正文里手动写出的标签不会因为该限制被吞掉。</p>
 <p>当前已实现 <code>.txt</code>、<code>.md</code>、Word、Excel、PPT 和 PDF 解析。<code>.drawio</code>、<code>.drawio.svg</code> 和 <code>.json</code> 仍保留在配置中，后续接入专用解析器前会被跳过，不会主动执行未知格式内容。</p>

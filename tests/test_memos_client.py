@@ -14,6 +14,7 @@ async def test_memos_client_reads_memo_and_creates_comment(monkeypatch):
     seen_headers: list[str | None] = []
     seen_webhook_payloads: list[dict[str, object]] = []
     seen_relation_payloads: list[dict[str, object]] = []
+    seen_memo_updates: list[dict[str, object]] = []
 
     @app.get("/api/v1/health")
     async def health():
@@ -48,6 +49,11 @@ async def test_memos_client_reads_memo_and_creates_comment(monkeypatch):
     @app.post("/api/v1/memos")
     async def create_memo():
         return {"name": "memos/new", "content": "created"}
+
+    @app.patch("/api/v1/memos/{memo_uid}")
+    async def update_memo(memo_uid: str, payload: dict[str, object]):
+        seen_memo_updates.append(payload)
+        return {"name": f"memos/{memo_uid}", "content": payload["content"]}
 
     @app.post("/api/v1/memos/{memo_uid}/comments")
     async def create_comment(memo_uid: str):
@@ -167,6 +173,10 @@ async def test_memos_client_reads_memo_and_creates_comment(monkeypatch):
         "filter": 'tag == "项目/个人AI知识库"',
     }
     assert await client.create_memo("created") == {"name": "memos/new", "content": "created"}
+    assert await client.update_memo_content("abc", "# 回写标题") == {
+        "name": "memos/abc",
+        "content": "# 回写标题",
+    }
     assert await client.create_comment("abc", "comment") == {
         "name": "memos/abc/comments/1",
         "content": "comment",
@@ -238,11 +248,13 @@ async def test_memos_client_reads_memo_and_creates_comment(monkeypatch):
             ]
         }
     ]
+    assert seen_memo_updates == [{"content": "# 回写标题"}]
     auth_header = " ".join(["Bearer", "token"])
     assert seen_headers == [
         auth_header,
         None,
         None,
+        auth_header,
         auth_header,
         auth_header,
         auth_header,

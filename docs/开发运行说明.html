@@ -176,6 +176,7 @@ curl -X POST -H &quot;Authorization: Bearer&lt;空格&gt;$SIDECAR_ADMIN_TOKEN&qu
 <li><code>metadata_json</code>：文件名、content type、大小、扩展名等元数据</li>
 </ul>
 <p>Office/PDF 解析流程为：向 MinerU 申请上传 URL，PUT 上传文件，轮询批量解析结果，下载结果 zip 并读取其中的 Markdown。得到的 Markdown 会在调用 LLM 前拼接到原 memo 正文后面，后续 AI 整理、标签生成、候选标签审核和 AI 整理 memo 创建流程保持不变。</p>
+<p>对于正文为空、只有附件的原 memo，worker 会在 LLM 分析完成后使用 <code>PATCH /api/v1/memos/{memo_uid}</code> 回写一级标题。标题来自 LLM draft 的 <code>title</code> 字段，并会去掉多余的 <code>AI整理</code> 前缀和 Markdown <code>#</code> 符号，避免把原 memo 变成标签或覆盖已有正文。</p>
 <p>解析结果会出现在 job <code>result.attachments</code> 中，状态可能是 <code>parsed</code>、<code>skipped</code> 或 <code>failed</code>。如果未配置 <code>MINERU_API_TOKEN</code>，Office/PDF 附件会记录为 <code>document_parser_not_configured</code>，不会阻塞普通正文整理。</p>
 <h2>Docker 状态</h2>
 <p>仓库已提供 <code>docker-compose.yml</code> 和 <code>Dockerfile</code> 草案。Docker Hub 镜像下载优先使用 Xget 加速地址，例如 <code>xget.your-domain.com/cr/docker/neosmemo/memos:stable</code>。</p>

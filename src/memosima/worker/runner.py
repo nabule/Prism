@@ -181,6 +181,7 @@ class Worker:
             organization_plan=organization_plan,
             taxonomy=taxonomy,
             llm_draft=llm_draft,
+            show_candidate_tags=self.config.memos_show_candidate_tags,
         )
         summary_memo = await client.create_memo(summary_content)
         summary_memo_uid = _extract_memo_uid(summary_memo)

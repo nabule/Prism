@@ -81,7 +81,8 @@ async def test_worker_processes_memo_with_mock_client(tmp_path, monkeypatch):
     assert len(FakeClient.created_memos) == 1
     assert "#系统/AI整理" in FakeClient.created_memos[0]
     assert "#项目/个人AI知识库" in FakeClient.created_memos[0]
-    assert "#项目/新方向" in FakeClient.created_memos[0]
+    assert "#项目/新方向" not in FakeClient.created_memos[0]
+    assert "项目/新方向" in FakeClient.created_memos[0]
     assert "来源 memo：memos/abc123" in FakeClient.created_memos[0]
     candidates = store.list_tag_candidates(workspace_id="default")
     assert len(candidates) == 1
@@ -412,8 +413,10 @@ async def test_worker_merges_ai_generated_tags_from_body(tmp_path, monkeypatch):
     assert candidates[0].reason == "正文提到新增调试后台"
     assert candidates[0].confidence == 0.9
     assert "#项目/个人AI知识库" in FakeMemosClient.created_memos[0]
-    assert "#项目/调试后台" in FakeMemosClient.created_memos[0]
-    assert "#项目/未知正式标签" in FakeMemosClient.created_memos[0]
+    assert "#项目/调试后台" not in FakeMemosClient.created_memos[0]
+    assert "#项目/未知正式标签" not in FakeMemosClient.created_memos[0]
+    assert "项目/调试后台" in FakeMemosClient.created_memos[0]
+    assert "项目/未知正式标签" in FakeMemosClient.created_memos[0]
     assert "#杂项" in FakeMemosClient.created_memos[0]
     assert FakeMemosClient.relations == [("ai-tags", "summary-ai-tags")]
 

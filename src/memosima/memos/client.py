@@ -200,8 +200,8 @@ class MemosClient:
     async def delete_personal_access_token(self, name: str) -> None:
         await self._raw_request("DELETE", f"/api/v1/{name}")
 
-    async def download_resource(self, resource_name: str) -> bytes:
-        response = await self._raw_request("GET", _resource_path(resource_name))
+    async def download_resource(self, resource_name: str, *, filename: str | None = None) -> bytes:
+        response = await self._raw_request("GET", _resource_path(resource_name, filename=filename))
         return response.content
 
     async def _request(
@@ -253,10 +253,14 @@ def _memo_name(memo_uid_or_name: str) -> str:
     return f"memos/{memo_uid_or_name}"
 
 
-def _resource_path(resource_name: str) -> str:
+def _resource_path(resource_name: str, *, filename: str | None = None) -> str:
     if resource_name.startswith("/"):
         return resource_name
     if resource_name.startswith("resources/"):
+        return f"/file/{resource_name}"
+    if resource_name.startswith("attachments/"):
+        if filename:
+            return f"/file/{resource_name}/{filename}"
         return f"/file/{resource_name}"
     return resource_name
 

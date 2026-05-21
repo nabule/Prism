@@ -73,29 +73,45 @@
 </ul>
 <p>本地部署推荐使用 <code>poll</code> 模式，不需要暴露公网地址。Memos <code>0.28.0</code> 会拒绝 webhook URL 指向本机、Docker 内网或其他保留/私有 IP；只有在需要 webhook 模式时，才需要配置公网可达 URL 或公网隧道。</p>
 <h2>models.yaml</h2>
-<p>当前默认模型配置使用 OpenAI-compatible 接口，OpenRouter 保留为备选：</p>
-<pre><code class="language-yaml">default_provider: 
+<p>当前默认模型配置使用 OpenRouter 的 <code>google/gemma-3-27b-it</code>，并保留、OpenAI、DeepSeek 等常用 OpenAI-compatible provider 模板：</p>
+<pre><code class="language-yaml">default_provider: openrouter
 providers:
+  openrouter:
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    default_model: google/gemma-3-27b-it
+    temperature: 0.2
+    max_tokens:
+    response_format: json_object
+    extra_body: {}
   :
     base_url: 
     api_key_env: 
     default_model: 
     temperature: 0.2
-    max_tokens: 2000
+    max_tokens:
     response_format: json_object
     extra_body:
       chat_template_kwargs:
         enable_thinking: false
-  openrouter:
-    base_url: https://openrouter.ai/api/v1
-    api_key_env: OPENROUTER_API_KEY
-    default_model: openai/gpt-oss-120b
+  openai:
+    base_url: https://api.openai.com/v1
+    api_key_env: OPENAI_API_KEY
+    default_model: gpt-4o-mini
     temperature: 0.2
-    max_tokens: 2000
+    max_tokens:
+    response_format: json_object
+    extra_body: {}
+  deepseek:
+    base_url: https://api.deepseek.com
+    api_key_env: DEEPSEEK_API_KEY
+    default_model: deepseek-chat
+    temperature: 0.2
+    max_tokens:
     response_format: json_object
     extra_body: {}
 </code></pre>
-<p>worker 会读取默认 provider，并在对应 <code>api_key_env</code> 环境变量存在时发起 OpenAI-compatible <code>/chat/completions</code> 调用。<code>base_url</code>、<code>default_model</code>、<code>temperature</code>、<code>max_tokens</code>、<code>response_format</code> 和 <code>extra_body</code> 都从 <code>config/models.yaml</code> 读取。<code>extra_body</code> 会原样合并到请求 JSON，适合配置/Qwen 的 <code>chat_template_kwargs.enable_thinking=false</code> 等厂商扩展参数。模型输出必须是 JSON 对象，Sidecar 会校验 <code>title</code>、<code>summary</code>、<code>key_points</code>、<code>todos</code>、<code>active_tags</code>、<code>candidate_tags</code>、<code>needs_clarification</code> 和 <code>clarification_question</code> 字段。没有配置 key 时不调用 LLM，自动回退到本地模板整理。</p>
+<p>worker 会读取默认 provider，并在对应 <code>api_key_env</code> 环境变量存在时发起 OpenAI-compatible <code>/chat/completions</code> 调用。<code>base_url</code>、<code>default_model</code>、<code>temperature</code>、<code>max_tokens</code>、<code>response_format</code> 和 <code>extra_body</code> 都从 <code>config/models.yaml</code> 读取。<code>max_tokens</code> 留空时不会向模型请求发送输出 token 限制；Sidecar 也不会主动截断输入正文。<code>extra_body</code> 会原样合并到请求 JSON，适合配置厂商扩展参数。模型输出必须是 JSON 对象，Sidecar 会校验 <code>title</code>、<code>summary</code>、<code>key_points</code>、<code>todos</code>、<code>active_tags</code>、<code>candidate_tags</code>、<code>needs_clarification</code> 和 <code>clarification_question</code> 字段。没有配置 key 时不调用 LLM，自动回退到本地模板整理。</p>
 <p><code>active_tags</code> 只能使用已有正式标签；如果模型把未知标签放入 <code>active_tags</code>，Sidecar 会把它降级为候选标签。<code>candidate_tags</code> 用于 AI 从正文提出的新标签建议，每项包含 <code>path</code>、<code>reason</code> 和 <code>confidence</code>。新标签不会自动激活，必须通过候选标签审核。</p>
 <h2>prompts.yaml</h2>
 <p><code>config/prompts.yaml</code> 保存所有 LLM 调用点的默认提示词。当前调用点为 <code>organize_memo</code>，包含 <code>system</code> 和 <code>user</code> 两段模板。模板支持以下占位符：</p>

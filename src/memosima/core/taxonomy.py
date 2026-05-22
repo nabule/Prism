@@ -146,6 +146,13 @@ class TaxonomyConfig:
 
     def build_organization_plan(self, content: str) -> OrganizationPlan:
         raw_tags = _extract_tags(content)
+        return self.build_organization_plan_from_tags(content, raw_tags)
+
+    def build_organization_plan_from_tags(
+        self,
+        content: str,
+        raw_tags: tuple[str, ...] | list[str],
+    ) -> OrganizationPlan:
         system_original = self.system_tags.get("original", "#系统/原始记录")
         system_pending = self.system_tags.get("pending_clarification", "#系统/待澄清")
         system_candidate = self.system_tags.get("tag_candidate", "#系统/标签待审核")

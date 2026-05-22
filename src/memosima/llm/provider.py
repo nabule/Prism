@@ -33,6 +33,22 @@ class LLMOrganizationDraft(BaseModel):
     clarification_question: str | None = Field(default=None, max_length=1000)
 
 
+class LLMReminderItem(BaseModel):
+    title: str = Field(min_length=1, max_length=120)
+    body: str = Field(default="", max_length=2000)
+    due_at: str = Field(min_length=1, max_length=80)
+    timezone: str = Field(min_length=1, max_length=80)
+    confidence: float = Field(default=0.5, ge=0, le=1)
+    raw_text: str = Field(default="", max_length=1000)
+
+
+class LLMReminderExtraction(BaseModel):
+    has_reminder: bool = False
+    items: list[LLMReminderItem] = Field(default_factory=list, max_length=10)
+    needs_clarification: bool = False
+    clarification_question: str | None = Field(default=None, max_length=1000)
+
+
 @dataclass(frozen=True)
 class OpenAICompatibleClient:
     provider: ProviderConfig
@@ -68,6 +84,36 @@ class OpenAICompatibleClient:
         payload.update(self.provider.extra_body)
         response = await self._request("POST", "/chat/completions", json=payload)
         return _parse_draft_response(response)
+
+    async def extract_reminders(
+        self,
+        *,
+        content: str,
+        timezone: str,
+        now: str,
+        trigger_tag: str,
+    ) -> LLMReminderExtraction:
+        rendered_prompt = _render_reminder_prompt(
+            content=content,
+            timezone=timezone,
+            now=now,
+            trigger_tag=trigger_tag,
+        )
+        payload = {
+            "model": self.provider.default_model,
+            "messages": [
+                {"role": "system", "content": rendered_prompt["system"]},
+                {"role": "user", "content": rendered_prompt["user"]},
+            ],
+            "temperature": self.provider.temperature,
+        }
+        if self.provider.max_tokens is not None:
+            payload["max_tokens"] = self.provider.max_tokens
+        if self.provider.response_format:
+            payload["response_format"] = {"type": self.provider.response_format}
+        payload.update(self.provider.extra_body)
+        response = await self._request("POST", "/chat/completions", json=payload)
+        return _parse_reminder_response(response)
 
     async def summarize_tag(
         self,
@@ -148,6 +194,29 @@ def _parse_draft_response(response: dict[str, Any]) -> LLMOrganizationDraft:
         raise LLMClientError("LLM JSON does not match organization schema") from exc
 
 
+def _parse_reminder_response(response: dict[str, Any]) -> LLMReminderExtraction:
+    choices = response.get("choices")
+    if not isinstance(choices, list) or not choices:
+        raise LLMClientError("LLM response is missing choices")
+    first = choices[0]
+    if not isinstance(first, dict):
+        raise LLMClientError("LLM response choice has unexpected shape")
+    message = first.get("message")
+    if not isinstance(message, dict):
+        raise LLMClientError("LLM response is missing message")
+    content = message.get("content")
+    if not isinstance(content, str) or not content.strip():
+        raise LLMClientError("LLM response is missing message content")
+    try:
+        raw = json.loads(content)
+    except ValueError as exc:
+        raise LLMClientError("LLM message content is not valid JSON") from exc
+    try:
+        return LLMReminderExtraction.model_validate(raw)
+    except ValidationError as exc:
+        raise LLMClientError("LLM JSON does not match reminder schema") from exc
+
+
 def _parse_text_response(response: dict[str, Any]) -> str:
     choices = response.get("choices")
     if not isinstance(choices, list) or not choices:
@@ -179,6 +248,34 @@ def _render_prompt(
             "content": content,
         }
     )
+
+
+def _render_reminder_prompt(*, content: str, timezone: str, now: str, trigger_tag: str) -> dict[str, str]:
+    system = (
+        "你是提醒时间抽取器，只返回 JSON 对象，不要输出 Markdown。"
+        "只处理用户明确使用触发标签的提醒请求。"
+        "把相对时间换算成带时区的 ISO 8601 时间；无法确定具体时间时要求澄清。"
+    )
+    user = (
+        f"触发标签：{trigger_tag}\n"
+        f"当前时间：{now}\n"
+        f"默认时区：{timezone}\n\n"
+        "请返回 JSON：\n"
+        "{"
+        '"has_reminder": boolean, '
+        '"items": [{"title": string, "body": string, "due_at": string, "timezone": string, '
+        '"confidence": number, "raw_text": string}], '
+        '"needs_clarification": boolean, '
+        '"clarification_question": string|null'
+        "}\n\n"
+        "规则：\n"
+        "- 只有正文包含触发标签时才提取提醒。\n"
+        "- due_at 必须是可解析的 ISO 8601 时间，优先包含时区偏移。\n"
+        "- 如果只有日期没有具体时刻、时间已无法确定或语义模糊，needs_clarification=true。\n"
+        "- title 简短概括提醒事项，body 保留必要上下文。\n\n"
+        f"memo 内容：\n{content}"
+    )
+    return {"system": system, "user": user}
 
 
 def _join_url(base_url: str, path: str) -> str:

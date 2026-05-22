@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import io
+import json
+import zipfile
+
 from fastapi.testclient import TestClient
 
 from memosima.api.app import create_app
@@ -144,7 +148,15 @@ def test_admin_ui_returns_debug_page_without_exposing_token(tmp_path, monkeypatc
     assert "Memosima Admin" in response.text
     assert "/admin/jobs" in response.text
     assert "/admin/tag-candidates" in response.text
+    assert "/admin/reminders" in response.text
+    assert "/admin/backups/download" in response.text
+    assert "/admin/backups/restore" in response.text
     assert "/admin/prompts" in response.text
+    assert 'id="jobs"' in response.text
+    assert 'id="tag-candidates"' in response.text
+    assert 'id="tag-summary"' in response.text
+    assert 'id="backup"' in response.text
+    assert "scrollToHashTarget" in response.text
     assert "admin-token" not in response.text
     assert "secret-key" not in response.text
 
@@ -182,6 +194,123 @@ def test_admin_tag_candidates_review_flow(tmp_path, monkeypatch):
     assert approved.json()["status"] == "approved"
     assert approved.json()["reviewer_note"] == "纳入正式标签"
     assert remaining.json()["candidates"] == []
+
+
+def test_admin_reminders_requires_token_lists_retries_and_cancels(tmp_path, monkeypatch):
+    app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
+    models_path = write_yaml(tmp_path / "models.yaml", models_config_text())
+    monkeypatch.setenv("SIDECAR_ADMIN_TOKEN", "admin-token")
+
+    app = create_app(str(app_path), str(models_path))
+    reminder, _ = app.state.store.create_reminder(
+        workspace_id="default",
+        source_memo_uid="abc123",
+        title="提交周报",
+        body="周报发给团队",
+        due_at="2026-05-22T01:30:00+00:00",
+        timezone="Asia/Shanghai",
+        confidence=0.92,
+        raw_text="#提醒 明天 09:30 提交周报",
+    )
+    app.state.store.mark_reminder_failed(reminder.id, "webhook failed")
+    client = TestClient(app)
+
+    unauthorized = client.get("/admin/reminders")
+    listed = client.get("/admin/reminders?status=failed", headers={"Authorization": "Bearer admin-token"})
+    retried = client.post(
+        f"/admin/reminders/{reminder.id}/retry",
+        headers={"Authorization": "Bearer admin-token"},
+    )
+    cancelled = client.post(
+        f"/admin/reminders/{reminder.id}/cancel",
+        headers={"Authorization": "Bearer admin-token"},
+    )
+
+    assert unauthorized.status_code == 401
+    assert listed.status_code == 200
+    assert listed.json()["reminders"][0]["title"] == "提交周报"
+    assert listed.json()["reminders"][0]["status"] == "failed"
+    assert retried.status_code == 200
+    assert retried.json()["status"] == "pending"
+    assert cancelled.status_code == 200
+    assert cancelled.json()["status"] == "cancelled"
+
+
+def test_admin_backup_download_contains_database_and_non_secret_configs(tmp_path, monkeypatch):
+    app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
+    models_path = write_yaml(tmp_path / "models.yaml", models_config_text())
+    write_yaml(tmp_path / "prompts.yaml", prompts_config_text())
+    write_yaml(tmp_path / "taxonomy.yaml", "system_tags:\n  original: \"#系统/原始记录\"\nbusiness_tags: []\naliases: []\ndisabled: []\n")
+    monkeypatch.setenv("SIDECAR_ADMIN_TOKEN", "admin-token")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "secret-key")
+
+    app = create_app(str(app_path), str(models_path))
+    app.state.store.create_job(
+        workspace_id="default",
+        job_type="process_memo",
+        idempotency_key="memo:backup",
+        payload={"memo_uid": "backup"},
+    )
+    client = TestClient(app)
+
+    unauthorized = client.get("/admin/backups/download")
+    response = client.get("/admin/backups/download", headers={"Authorization": "Bearer admin-token"})
+
+    assert unauthorized.status_code == 401
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/zip")
+    assert "secret-key" not in response.content.decode("latin1")
+    with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+        names = set(archive.namelist())
+        assert "manifest.json" in names
+        assert "database/sidecar.db" in names
+        assert "config/app.yaml" in names
+        assert "config/models.yaml" in names
+        assert "config/prompts.yaml" in names
+        manifest = json.loads(archive.read("manifest.json"))
+        assert manifest["kind"] == "memosima-sidecar-backup"
+        assert manifest["version"] == 1
+        assert manifest["restore_behavior"] == "database_only"
+
+
+def test_admin_backup_restore_replaces_sidecar_database(tmp_path, monkeypatch):
+    app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
+    models_path = write_yaml(tmp_path / "models.yaml", models_config_text())
+    monkeypatch.setenv("SIDECAR_ADMIN_TOKEN", "admin-token")
+
+    app = create_app(str(app_path), str(models_path))
+    app.state.store.create_job(
+        workspace_id="default",
+        job_type="process_memo",
+        idempotency_key="memo:before-backup",
+        payload={"memo_uid": "before-backup"},
+    )
+    client = TestClient(app)
+    backup = client.get("/admin/backups/download", headers={"Authorization": "Bearer admin-token"}).content
+
+    app.state.store.create_job(
+        workspace_id="default",
+        job_type="process_memo",
+        idempotency_key="memo:after-backup",
+        payload={"memo_uid": "after-backup"},
+    )
+    assert len(app.state.store.list_jobs()) == 2
+
+    unauthorized = client.post("/admin/backups/restore", content=backup, headers={"Content-Type": "application/zip"})
+    restored = client.post(
+        "/admin/backups/restore",
+        content=backup,
+        headers={"Authorization": "Bearer admin-token", "Content-Type": "application/zip"},
+    )
+
+    assert unauthorized.status_code == 401
+    assert restored.status_code == 200
+    data = restored.json()
+    assert data["restored_database"] is True
+    assert data["restored_configs"] is False
+    jobs = app.state.store.list_jobs()
+    assert len(jobs) == 1
+    assert jobs[0].idempotency_key == "memo:before-backup"
 
 
 def test_admin_tag_summary_creates_summary_memo(tmp_path, monkeypatch):

@@ -1,8 +1,16 @@
 from __future__ import annotations
 
 import argparse
+import io
+import json
 import os
 import re
+import shutil
+import sqlite3
+import tempfile
+import zipfile
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import uvicorn
@@ -15,7 +23,7 @@ from memosima.api.security import require_admin
 from memosima.api.webhooks import build_idempotency_key, extract_memo_uid
 from memosima.core.config import AppConfig, ConfigError, ModelsConfig
 from memosima.core.prompts import PromptTemplate, PromptsConfig, load_prompts_or_default
-from memosima.db.store import Job, MemoRecord, Store, TagCandidateRecord
+from memosima.db.store import Job, MemoRecord, ReminderRecord, Store, TagCandidateRecord
 from memosima.llm.provider import OpenAICompatibleClient
 from memosima.memos.client import MemosClient
 
@@ -64,6 +72,27 @@ class TagCandidatesResponse(BaseModel):
     candidates: list[TagCandidateView]
 
 
+class ReminderView(BaseModel):
+    id: int
+    workspace_id: str
+    source_memo_uid: str
+    title: str
+    body: str
+    due_at: str
+    timezone: str
+    status: str
+    confidence: float
+    raw_text: str
+    sent_at: str | None
+    error: str | None
+    created_at: str
+    updated_at: str
+
+
+class RemindersResponse(BaseModel):
+    reminders: list[ReminderView]
+
+
 class ReviewTagCandidateRequest(BaseModel):
     note: str | None = Field(default=None, max_length=1000)
 
@@ -94,6 +123,14 @@ class TagSummaryResponse(BaseModel):
     content: str
 
 
+class BackupRestoreResponse(BaseModel):
+    restored_database: bool
+    restored_configs: bool = False
+    backup_version: int
+    source_created_at: str | None = None
+    message: str
+
+
 class HealthResponse(BaseModel):
     service: str = "memosima"
     version: str
@@ -104,6 +141,8 @@ class HealthResponse(BaseModel):
     models_default_provider: str
     models_default_model: str
     models_api_key_present: bool
+    reminders_enabled: bool
+    reminders_webhook_configured: bool
 
 
 def create_app(
@@ -139,6 +178,8 @@ def create_app(
             models_default_provider=models.default_provider,
             models_default_model=provider.default_model,
             models_api_key_present=provider.api_key_present,
+            reminders_enabled=config.reminders_enabled,
+            reminders_webhook_configured=bool(config.reminders_webhook_url),
         )
 
     @app.get("/admin/ui", include_in_schema=False)
@@ -286,6 +327,36 @@ def create_app(
         return _job_view(job)
 
     @app.get(
+        "/admin/backups/download",
+        dependencies=[Depends(require_admin)],
+    )
+    async def download_backup() -> Response:
+        backup = _build_backup_archive(
+            config=config,
+            models_path=Path(models_path),
+            config_path=Path(config_path),
+        )
+        filename = f"memosima-sidecar-backup-{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}.zip"
+        return Response(
+            content=backup,
+            media_type="application/zip",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+    @app.post(
+        "/admin/backups/restore",
+        response_model=BackupRestoreResponse,
+        dependencies=[Depends(require_admin)],
+    )
+    async def restore_backup(request: Request) -> BackupRestoreResponse:
+        archive = await request.body()
+        result = _restore_backup_archive(archive=archive, config=config)
+        app.state.store = Store(config.database_path)
+        app.state.store.migrate()
+        app.state.store.ensure_workspace(config.workspace_id)
+        return result
+
+    @app.get(
         "/admin/tag-candidates",
         response_model=TagCandidatesResponse,
         dependencies=[Depends(require_admin)],
@@ -304,6 +375,48 @@ def create_app(
                 )
             ]
         )
+
+    @app.get(
+        "/admin/reminders",
+        response_model=RemindersResponse,
+        dependencies=[Depends(require_admin)],
+    )
+    async def list_reminders(
+        status_filter: str | None = Query(default=None, alias="status"),
+        limit: int = Query(default=100, ge=1, le=500),
+    ) -> RemindersResponse:
+        return RemindersResponse(
+            reminders=[
+                _reminder_view(reminder)
+                for reminder in store.list_reminders(
+                    workspace_id=config.workspace_id,
+                    status=status_filter,
+                    limit=limit,
+                )
+            ]
+        )
+
+    @app.post(
+        "/admin/reminders/{reminder_id}/retry",
+        response_model=ReminderView,
+        dependencies=[Depends(require_admin)],
+    )
+    async def retry_reminder(reminder_id: int) -> ReminderView:
+        reminder = store.retry_reminder(reminder_id)
+        if reminder is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reminder not found")
+        return _reminder_view(reminder)
+
+    @app.post(
+        "/admin/reminders/{reminder_id}/cancel",
+        response_model=ReminderView,
+        dependencies=[Depends(require_admin)],
+    )
+    async def cancel_reminder(reminder_id: int) -> ReminderView:
+        reminder = store.cancel_reminder(reminder_id)
+        if reminder is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reminder not found")
+        return _reminder_view(reminder)
 
     @app.post(
         "/admin/tag-candidates/{candidate_id}/approve",
@@ -363,6 +476,135 @@ def _job_view(job: Job) -> JobView:
     )
 
 
+def _build_backup_archive(*, config: AppConfig, models_path: Path, config_path: Path) -> bytes:
+    created_at = datetime.now(UTC).isoformat(timespec="seconds")
+    buffer = io.BytesIO()
+    config_files = _backup_config_files(config=config, models_path=models_path, config_path=config_path)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        snapshot_path = Path(tmpdir) / "sidecar.db"
+        _copy_sqlite_database(config.database_path, snapshot_path)
+        with zipfile.ZipFile(buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
+            manifest = {
+                "kind": "memosima-sidecar-backup",
+                "version": 1,
+                "created_at": created_at,
+                "workspace_id": config.workspace_id,
+                "database_path": str(config.database_path),
+                "config_files": [name for name, _ in config_files],
+                "restore_behavior": "database_only",
+            }
+            archive.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
+            archive.write(snapshot_path, "database/sidecar.db")
+            for archive_name, file_path in config_files:
+                if file_path.exists() and file_path.is_file():
+                    archive.write(file_path, archive_name)
+    return buffer.getvalue()
+
+
+def _restore_backup_archive(*, archive: bytes, config: AppConfig) -> BackupRestoreResponse:
+    if len(archive) > 100 * 1024 * 1024:
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Backup archive is too large")
+    try:
+        with zipfile.ZipFile(io.BytesIO(archive)) as zip_archive:
+            _validate_backup_members(zip_archive)
+            manifest = _read_backup_manifest(zip_archive)
+            database_bytes = zip_archive.read("database/sidecar.db")
+    except zipfile.BadZipFile as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Backup archive must be a ZIP file") from exc
+    except KeyError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Backup archive is missing database") from exc
+
+    if manifest.get("kind") != "memosima-sidecar-backup":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported backup archive")
+    version = int(manifest.get("version", 0))
+    if version != 1:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Unsupported backup version: {version}")
+
+    config.database_path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_path = Path(tmpdir) / "restore.db"
+        tmp_path.write_bytes(database_bytes)
+        _validate_sqlite_database(tmp_path)
+        replacement_path = config.database_path.with_suffix(f"{config.database_path.suffix}.restore")
+        shutil.copy2(tmp_path, replacement_path)
+        os.replace(replacement_path, config.database_path)
+
+    store = Store(config.database_path)
+    store.migrate()
+    store.ensure_workspace(config.workspace_id)
+    return BackupRestoreResponse(
+        restored_database=True,
+        restored_configs=False,
+        backup_version=version,
+        source_created_at=manifest.get("created_at") if isinstance(manifest.get("created_at"), str) else None,
+        message="Sidecar database restored. Config files in the archive were not applied automatically.",
+    )
+
+
+def _copy_sqlite_database(source: Path, destination: Path) -> None:
+    source.parent.mkdir(parents=True, exist_ok=True)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    source_connection = sqlite3.connect(source)
+    try:
+        destination_connection = sqlite3.connect(destination)
+        try:
+            source_connection.backup(destination_connection)
+        finally:
+            destination_connection.close()
+    finally:
+        source_connection.close()
+
+
+def _backup_config_files(*, config: AppConfig, models_path: Path, config_path: Path) -> list[tuple[str, Path]]:
+    files = [
+        ("config/app.yaml", config_path),
+        ("config/models.yaml", models_path),
+        ("config/prompts.yaml", config.prompts_path),
+        ("config/taxonomy.yaml", config.taxonomy_path),
+    ]
+    result: list[tuple[str, Path]] = []
+    seen: set[Path] = set()
+    for archive_name, path in files:
+        resolved = path.resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        result.append((archive_name, path))
+    return result
+
+
+def _validate_backup_members(archive: zipfile.ZipFile) -> None:
+    for name in archive.namelist():
+        path = Path(name)
+        if path.is_absolute() or ".." in path.parts:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Backup archive contains unsafe paths")
+
+
+def _read_backup_manifest(archive: zipfile.ZipFile) -> dict[str, Any]:
+    try:
+        raw = json.loads(archive.read("manifest.json").decode("utf-8"))
+    except KeyError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Backup archive is missing manifest") from exc
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Backup manifest is invalid") from exc
+    if not isinstance(raw, dict):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Backup manifest must be an object")
+    return raw
+
+
+def _validate_sqlite_database(path: Path) -> None:
+    try:
+        connection = sqlite3.connect(path)
+        try:
+            row = connection.execute("PRAGMA integrity_check").fetchone()
+        finally:
+            connection.close()
+    except sqlite3.DatabaseError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Backup database is invalid") from exc
+    if row is None or row[0] != "ok":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Backup database failed integrity check")
+
+
 def _tag_candidate_view(candidate: TagCandidateRecord) -> TagCandidateView:
     return TagCandidateView(
         id=candidate.id,
@@ -377,6 +619,25 @@ def _tag_candidate_view(candidate: TagCandidateRecord) -> TagCandidateView:
         reviewer_note=candidate.reviewer_note,
         created_at=candidate.created_at,
         updated_at=candidate.updated_at,
+    )
+
+
+def _reminder_view(reminder: ReminderRecord) -> ReminderView:
+    return ReminderView(
+        id=reminder.id,
+        workspace_id=reminder.workspace_id,
+        source_memo_uid=reminder.source_memo_uid,
+        title=reminder.title,
+        body=reminder.body,
+        due_at=reminder.due_at,
+        timezone=reminder.timezone,
+        status=reminder.status,
+        confidence=reminder.confidence,
+        raw_text=reminder.raw_text,
+        sent_at=reminder.sent_at,
+        error=reminder.error,
+        created_at=reminder.created_at,
+        updated_at=reminder.updated_at,
     )
 
 

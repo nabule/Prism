@@ -6,7 +6,7 @@ from memosima.core.attachments import ParsedAttachment
 from memosima.core.config import AppConfig, ModelsConfig
 from memosima.core.taxonomy import TaxonomyConfig
 from memosima.db.store import Store
-from memosima.llm.provider import LLMOrganizationDraft
+from memosima.llm.provider import LLMOrganizationDraft, LLMReminderExtraction
 from memosima.worker.runner import Worker
 
 from helpers import app_config_text, models_config_text, taxonomy_config_text, write_yaml
@@ -80,10 +80,13 @@ async def test_worker_processes_memo_with_mock_client(tmp_path, monkeypatch):
     assert jobs[0].result["ai_plan"]["candidate_tags"][0]["path"] == "#项目/新方向"
     assert len(FakeClient.created_memos) == 1
     assert "#系统/AI整理" in FakeClient.created_memos[0]
-    assert "#项目/个人AI知识库" in FakeClient.created_memos[0]
+    assert "#项目/个人AI知识库" not in FakeClient.created_memos[0]
     assert "#项目/新方向" not in FakeClient.created_memos[0]
+    assert "项目/个人AI知识库" in FakeClient.created_memos[0]
     assert "项目/新方向" in FakeClient.created_memos[0]
     assert "来源 memo UID：abc123" in FakeClient.created_memos[0]
+    assert "[打开管理界面](http://localhost:5230/admin/ui)" in FakeClient.created_memos[0]
+    assert "[审核候选标签](http://localhost:5230/admin/ui#tag-candidates)" in FakeClient.created_memos[0]
     candidates = store.list_tag_candidates(workspace_id="default")
     assert len(candidates) == 1
     assert candidates[0].path == "#项目/新方向"
@@ -236,7 +239,242 @@ async def test_worker_uses_llm_draft_when_model_key_is_configured(tmp_path, monk
     assert "LLM 结构化摘要" in FakeMemosClient.created_memos[0]
     assert "- 关键点一" in FakeMemosClient.created_memos[0]
     assert "- 后续任务一" in FakeMemosClient.created_memos[0]
-    assert "#项目/个人AI知识库" in FakeMemosClient.created_memos[0]
+    assert "#项目/个人AI知识库" not in FakeMemosClient.created_memos[0]
+    assert "项目/个人AI知识库" in FakeMemosClient.created_memos[0]
+
+
+@pytest.mark.asyncio
+async def test_worker_creates_reminder_for_tagged_memo(tmp_path, monkeypatch):
+    app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
+    models_path = write_yaml(tmp_path / "models.yaml", models_config_text())
+    write_yaml(tmp_path / "taxonomy.yaml", taxonomy_config_text())
+    monkeypatch.setenv("MEMOS_BASE_URL", "http://memos.local")
+    monkeypatch.setenv("MEMOS_API_TOKEN", "memos-token")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    config = AppConfig.load(app_path)
+    models = ModelsConfig.load(models_path)
+    store = Store(config.database_path)
+    store.migrate()
+    store.ensure_workspace("default")
+    store.create_job(
+        workspace_id="default",
+        job_type="process_memo",
+        idempotency_key="memo:reminder",
+        payload={"memo_uid": "reminder"},
+    )
+
+    class FakeMemosClient:
+        created_memos: list[str] = []
+        comments: list[tuple[str, str]] = []
+
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def get_memo(self, memo_uid):
+            return {"name": f"memos/{memo_uid}", "content": "#提醒 明天 09:30 提交周报 #AI知识库"}
+
+        async def create_memo(self, content):
+            self.created_memos.append(content)
+            return {"name": "memos/summary-reminder", "content": content}
+
+        async def create_comment(self, memo_uid, content):
+            self.comments.append((memo_uid, content))
+            return {"name": f"memos/{memo_uid}/comments/1", "content": content}
+
+        async def download_resource(self, resource_name, filename=None):
+            raise AssertionError("reminder memo has no resources")
+
+        async def upsert_memo_reference_relation(self, *, source_memo_uid, related_memo_uid):
+            return {}
+
+    class FakeLLMClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def extract_reminders(self, *, content, timezone, now, trigger_tag):
+            assert trigger_tag == "#提醒"
+            assert timezone == "Asia/Shanghai"
+            return LLMReminderExtraction.model_validate(
+                {
+                    "has_reminder": True,
+                    "items": [
+                        {
+                            "title": "提交周报",
+                            "body": "周报发给团队",
+                            "due_at": "2099-05-22T09:30:00+08:00",
+                            "timezone": "Asia/Shanghai",
+                            "confidence": 0.92,
+                            "raw_text": "#提醒 明天 09:30 提交周报",
+                        }
+                    ],
+                    "needs_clarification": False,
+                    "clarification_question": None,
+                }
+            )
+
+        async def organize_memo(self, *, content, taxonomy, local_plan, prompt_template):
+            return LLMOrganizationDraft(
+                title="提醒整理",
+                summary="包含提醒事项",
+                active_tags=["#项目/个人AI知识库"],
+                needs_clarification=False,
+            )
+
+    monkeypatch.setattr("memosima.worker.runner.MemosClient", FakeMemosClient)
+    monkeypatch.setattr("memosima.worker.runner.OpenAICompatibleClient", FakeLLMClient)
+
+    processed = await Worker(config, store, models).run_once()
+
+    assert processed is True
+    job = store.list_jobs()[0]
+    assert job.status == "succeeded"
+    assert job.result["reminder"]["status"] == "created"
+    reminders = store.list_reminders(workspace_id="default")
+    assert len(reminders) == 1
+    assert reminders[0].source_memo_uid == "reminder"
+    assert reminders[0].title == "提交周报"
+    assert reminders[0].due_at == "2099-05-22T01:30:00+00:00"
+    assert FakeMemosClient.comments == []
+
+
+@pytest.mark.asyncio
+async def test_worker_writes_reminder_clarification_without_blocking_summary(tmp_path, monkeypatch):
+    app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
+    models_path = write_yaml(tmp_path / "models.yaml", models_config_text())
+    write_yaml(tmp_path / "taxonomy.yaml", taxonomy_config_text())
+    monkeypatch.setenv("MEMOS_BASE_URL", "http://memos.local")
+    monkeypatch.setenv("MEMOS_API_TOKEN", "memos-token")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    config = AppConfig.load(app_path)
+    models = ModelsConfig.load(models_path)
+    store = Store(config.database_path)
+    store.migrate()
+    store.ensure_workspace("default")
+    store.create_job(
+        workspace_id="default",
+        job_type="process_memo",
+        idempotency_key="memo:reminder-fuzzy",
+        payload={"memo_uid": "reminder-fuzzy"},
+    )
+
+    class FakeMemosClient:
+        created_memos: list[str] = []
+        comments: list[tuple[str, str]] = []
+
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def get_memo(self, memo_uid):
+            return {"name": f"memos/{memo_uid}", "content": "#提醒 有空的时候跟进项目方案 #AI知识库"}
+
+        async def create_memo(self, content):
+            self.created_memos.append(content)
+            return {"name": "memos/summary-reminder-fuzzy", "content": content}
+
+        async def create_comment(self, memo_uid, content):
+            self.comments.append((memo_uid, content))
+            return {"name": f"memos/{memo_uid}/comments/1", "content": content}
+
+        async def download_resource(self, resource_name, filename=None):
+            raise AssertionError("fuzzy reminder memo has no resources")
+
+        async def upsert_memo_reference_relation(self, *, source_memo_uid, related_memo_uid):
+            return {}
+
+    class FakeLLMClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def extract_reminders(self, *, content, timezone, now, trigger_tag):
+            return LLMReminderExtraction.model_validate(
+                {
+                    "has_reminder": True,
+                    "items": [],
+                    "needs_clarification": True,
+                    "clarification_question": "请补充具体提醒时间。",
+                }
+            )
+
+        async def organize_memo(self, *, content, taxonomy, local_plan, prompt_template):
+            return LLMOrganizationDraft(
+                title="模糊提醒整理",
+                summary="普通整理仍然完成",
+                active_tags=["#项目/个人AI知识库"],
+                needs_clarification=False,
+            )
+
+    monkeypatch.setattr("memosima.worker.runner.MemosClient", FakeMemosClient)
+    monkeypatch.setattr("memosima.worker.runner.OpenAICompatibleClient", FakeLLMClient)
+
+    processed = await Worker(config, store, models).run_once()
+
+    assert processed is True
+    job = store.list_jobs()[0]
+    assert job.status == "succeeded"
+    assert job.result["reminder"]["status"] == "waiting_user"
+    assert len(FakeMemosClient.created_memos) == 1
+    assert len(FakeMemosClient.comments) == 1
+    assert "提醒需要补充信息" in FakeMemosClient.comments[0][1]
+    assert store.list_reminders(workspace_id="default") == []
+
+
+@pytest.mark.asyncio
+async def test_worker_sends_due_reminder_to_webhook(tmp_path, monkeypatch):
+    app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
+    monkeypatch.setenv("REMINDER_WEBHOOK_URL", "https://notify.example.com/reminders")
+    config = AppConfig.load(app_path)
+    store = Store(config.database_path)
+    store.migrate()
+    store.ensure_workspace("default")
+    reminder, _ = store.create_reminder(
+        workspace_id="default",
+        source_memo_uid="abc123",
+        title="提交周报",
+        body="周报发给团队",
+        due_at="2000-01-01T00:00:00+00:00",
+        timezone="Asia/Shanghai",
+        confidence=0.9,
+        raw_text="#提醒 提交周报",
+    )
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+    class FakeAsyncClient:
+        calls: list[tuple[str, dict[str, str]]] = []
+
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        async def post(self, url, data):
+            self.calls.append((url, data))
+            return FakeResponse()
+
+    monkeypatch.setattr("memosima.worker.runner.httpx.AsyncClient", FakeAsyncClient)
+
+    processed = await Worker(config, store).run_once()
+
+    assert processed is True
+    sent = store.get_reminder(reminder.id)
+    assert sent is not None
+    assert sent.status == "sent"
+    assert sent.error is None
+    assert FakeAsyncClient.calls == [
+        (
+            "https://notify.example.com/reminders",
+            {
+                "title": "Memosima 提醒：提交周报",
+                "body": "周报发给团队\n\n到期时间：2000-01-01T00:00:00+00:00\n来源 memo UID：abc123",
+            },
+        )
+    ]
 
 
 @pytest.mark.asyncio
@@ -412,12 +650,14 @@ async def test_worker_merges_ai_generated_tags_from_body(tmp_path, monkeypatch):
     assert [candidate.path for candidate in candidates] == ["#项目/调试后台", "#项目/未知正式标签"]
     assert candidates[0].reason == "正文提到新增调试后台"
     assert candidates[0].confidence == 0.9
-    assert "#项目/个人AI知识库" in FakeMemosClient.created_memos[0]
+    assert "#项目/个人AI知识库" not in FakeMemosClient.created_memos[0]
     assert "#项目/调试后台" not in FakeMemosClient.created_memos[0]
     assert "#项目/未知正式标签" not in FakeMemosClient.created_memos[0]
+    assert "#杂项" not in FakeMemosClient.created_memos[0]
+    assert "项目/个人AI知识库" in FakeMemosClient.created_memos[0]
     assert "项目/调试后台" in FakeMemosClient.created_memos[0]
     assert "项目/未知正式标签" in FakeMemosClient.created_memos[0]
-    assert "#杂项" in FakeMemosClient.created_memos[0]
+    assert "杂项" in FakeMemosClient.created_memos[0]
     assert FakeMemosClient.relations == [("summary-ai-tags", "ai-tags")]
 
 
@@ -766,7 +1006,8 @@ async def test_worker_uses_approved_business_tags_from_store(tmp_path, monkeypat
     assert job.result["ai_plan"]["active_tags"] == ["#项目/新方向"]
     assert job.result["ai_plan"]["candidate_tags"] == []
     assert store.list_tag_candidates(workspace_id="default", status="candidate") == []
-    assert "#项目/新方向" in FakeClient.created_memos[0]
+    assert "#项目/新方向" not in FakeClient.created_memos[0]
+    assert "项目/新方向" in FakeClient.created_memos[0]
     assert FakeClient.relations == [("summary-approved-tag", "approved-tag")]
 
 
@@ -809,6 +1050,12 @@ async def test_worker_polling_enqueues_new_original_memos(tmp_path, monkeypatch)
                         "content": "#系统/标签总结 #项目/个人AI知识库\n\n标签整体总结",
                         "tags": ["系统/标签总结", "项目/个人AI知识库"],
                     },
+                    {
+                        "name": "memos/admin-entry",
+                        "updateTime": "2026-05-21T03:17:00Z",
+                        "content": "#系统/Memosima\n\n<!-- memosima:admin-entry -->\n\n管理入口",
+                        "tags": ["系统/Memosima"],
+                    },
                 ]
             }
 
@@ -825,6 +1072,78 @@ async def test_worker_polling_enqueues_new_original_memos(tmp_path, monkeypatch)
 
     assert await worker._poll_memos_once() is False
     assert len(store.list_jobs()) == 1
+
+
+@pytest.mark.asyncio
+async def test_worker_ignores_llm_tag_suggestions_when_user_wrote_business_tag(tmp_path, monkeypatch):
+    app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
+    models_path = write_yaml(tmp_path / "models.yaml", models_config_text())
+    write_yaml(tmp_path / "taxonomy.yaml", taxonomy_config_text())
+    monkeypatch.setenv("MEMOS_BASE_URL", "http://memos.local")
+    monkeypatch.setenv("MEMOS_API_TOKEN", "memos-token")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    config = AppConfig.load(app_path)
+    models = ModelsConfig.load(models_path)
+    store = Store(config.database_path)
+    store.migrate()
+    store.ensure_workspace("default")
+    store.create_job(
+        workspace_id="default",
+        job_type="process_memo",
+        idempotency_key="memo:user-tagged",
+        payload={"memo_uid": "user-tagged"},
+    )
+
+    class FakeMemosClient:
+        created_memos: list[str] = []
+
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def get_memo(self, memo_uid):
+            return {"name": f"memos/{memo_uid}", "content": "用户已经写了标签 #AI知识库"}
+
+        async def create_memo(self, content):
+            self.created_memos.append(content)
+            return {"name": "memos/summary-user-tagged", "content": content}
+
+        async def create_comment(self, memo_uid, content):
+            raise AssertionError("clear jobs must not create comments")
+
+        async def download_resource(self, resource_name, filename=None):
+            raise AssertionError("user tagged memo has no resources")
+
+        async def upsert_memo_reference_relation(self, *, source_memo_uid, related_memo_uid):
+            return {}
+
+    class FakeLLMClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def organize_memo(self, *, content, taxonomy, local_plan, prompt_template):
+            return LLMOrganizationDraft(
+                title="用户标签整理",
+                summary="模型返回的标签建议应被忽略",
+                active_tags=["#项目/未知正式标签"],
+                candidate_tags=[
+                    {"path": "#项目/调试后台", "reason": "用户已经写标签时不接收", "confidence": 0.9}
+                ],
+                needs_clarification=False,
+            )
+
+    monkeypatch.setattr("memosima.worker.runner.MemosClient", FakeMemosClient)
+    monkeypatch.setattr("memosima.worker.runner.OpenAICompatibleClient", FakeLLMClient)
+
+    processed = await Worker(config, store, models).run_once()
+
+    assert processed is True
+    job = store.list_jobs()[0]
+    assert job.status == "succeeded"
+    assert job.result["ai_plan"]["active_tags"] == ["#项目/个人AI知识库"]
+    assert job.result["ai_plan"]["candidate_tags"] == []
+    assert store.list_tag_candidates(workspace_id="default", status="candidate") == []
+    assert "#项目/未知正式标签" not in FakeMemosClient.created_memos[0]
+    assert "#项目/调试后台" not in FakeMemosClient.created_memos[0]
 
 
 @pytest.mark.asyncio
@@ -867,3 +1186,90 @@ async def test_worker_polling_skips_already_synced_memos(tmp_path, monkeypatch):
 
     assert await Worker(config, store)._poll_memos_once() is False
     assert store.list_jobs() == []
+
+
+@pytest.mark.asyncio
+async def test_worker_creates_admin_entry_memo_when_idle(tmp_path, monkeypatch):
+    app_path = write_yaml(
+        tmp_path / "app.yaml",
+        app_config_text(tmp_path / "sidecar.db").replace("ingestion_mode: webhook", "ingestion_mode: poll"),
+    )
+    monkeypatch.setenv("MEMOS_BASE_URL", "http://memos.local")
+    monkeypatch.setenv("MEMOS_API_TOKEN", "memos-token")
+    config = AppConfig.load(app_path)
+    store = Store(config.database_path)
+    store.migrate()
+    store.ensure_workspace("default")
+
+    class FakeClient:
+        created_memos: list[tuple[str, str]] = []
+
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def list_memos(self, *, page_size, page_token=None, filter_text=None):
+            assert filter_text == "<!-- memosima:admin-entry -->"
+            return {"memos": []}
+
+        async def create_memo(self, content, visibility="PRIVATE"):
+            self.created_memos.append((content, visibility))
+            return {"name": "memos/admin-entry", "content": content}
+
+    monkeypatch.setattr("memosima.worker.runner.MemosClient", FakeClient)
+
+    worker = Worker(config, store)
+
+    assert await worker.run_once() is True
+    assert len(FakeClient.created_memos) == 1
+    content, visibility = FakeClient.created_memos[0]
+    assert visibility == "PRIVATE"
+    assert "#系统/Memosima" in content
+    assert "<!-- memosima:admin-entry -->" in content
+    assert "[打开 Memosima 管理界面](http://localhost:5230/admin/ui)" in content
+    assert "[审核候选标签](http://localhost:5230/admin/ui#tag-candidates)" in content
+    entries = store.list_memos(workspace_id="default", memo_type="admin_entry")
+    assert len(entries) == 1
+    assert entries[0].memos_uid == "admin-entry"
+
+
+@pytest.mark.asyncio
+async def test_worker_updates_existing_admin_entry_memo(tmp_path, monkeypatch):
+    app_path = write_yaml(
+        tmp_path / "app.yaml",
+        app_config_text(tmp_path / "sidecar.db").replace("ingestion_mode: webhook", "ingestion_mode: poll"),
+    )
+    monkeypatch.setenv("MEMOS_BASE_URL", "http://memos.local")
+    monkeypatch.setenv("MEMOS_API_TOKEN", "memos-token")
+    config = AppConfig.load(app_path)
+    store = Store(config.database_path)
+    store.migrate()
+    store.ensure_workspace("default")
+    store.upsert_memo(
+        workspace_id="default",
+        memos_uid="admin-entry",
+        memo_type="admin_entry",
+        status="created",
+    )
+
+    class FakeClient:
+        updates: list[tuple[str, str]] = []
+
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def get_memo(self, memo_uid):
+            return {
+                "name": f"memos/{memo_uid}",
+                "content": "#系统/Memosima\n\n<!-- memosima:admin-entry -->\n\n旧入口",
+            }
+
+        async def update_memo_content(self, memo_uid, content):
+            self.updates.append((memo_uid, content))
+            return {"name": f"memos/{memo_uid}", "content": content}
+
+    monkeypatch.setattr("memosima.worker.runner.MemosClient", FakeClient)
+
+    assert await Worker(config, store)._ensure_admin_entry_memo_once() is True
+    assert len(FakeClient.updates) == 1
+    assert FakeClient.updates[0][0] == "admin-entry"
+    assert "[下载 Sidecar 备份](http://localhost:5230/admin/ui#backup)" in FakeClient.updates[0][1]

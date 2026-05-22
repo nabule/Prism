@@ -45,6 +45,9 @@ class AppConfig:
     memos_ingestion_mode: str
     memos_poll_page_size: int
     memos_show_candidate_tags: bool
+    memos_admin_entry_enabled: bool
+    memos_admin_entry_title: str
+    memos_admin_entry_visibility: str
     worker_poll_interval_seconds: float
     worker_max_attempts: int
     worker_create_probe_comment: bool
@@ -63,6 +66,12 @@ class AppConfig:
     mineru_enable_table: bool
     mineru_enable_formula: bool
     mineru_is_ocr: bool
+    reminders_enabled: bool
+    reminders_trigger_tag: str
+    reminders_webhook_url_env: str
+    reminders_webhook_url: str | None
+    reminders_confidence_threshold: float
+    reminders_request_timeout_seconds: float
 
     @classmethod
     def load(cls, path: str | Path = "config/app.yaml") -> "AppConfig":
@@ -77,11 +86,13 @@ class AppConfig:
         worker = raw.get("worker", {})
         limits = raw.get("limits", {})
         document_parser = raw.get("document_parser", {})
+        reminders = raw.get("reminders", {})
 
         admin_token_env = str(security.get("admin_token_env", "SIDECAR_ADMIN_TOKEN"))
         memos_base_url_env = memos.get("base_url_env", "MEMOS_BASE_URL")
         memos_api_token_env = memos.get("api_token_env", "MEMOS_API_TOKEN")
         memos_webhook_url_env = memos.get("webhook_url_env", "MEMOS_WEBHOOK_URL")
+        reminders_webhook_url_env = str(reminders.get("webhook_url_env", "REMINDER_WEBHOOK_URL"))
         db_path = Path(str(database.get("path", "data/sidecar/sidecar.db")))
 
         return cls(
@@ -100,6 +111,9 @@ class AppConfig:
             memos_ingestion_mode=str(memos.get("ingestion_mode", "poll")),
             memos_poll_page_size=int(memos.get("poll_page_size", 20)),
             memos_show_candidate_tags=bool(memos.get("show_candidate_tags", False)),
+            memos_admin_entry_enabled=bool(memos.get("admin_entry_enabled", True)),
+            memos_admin_entry_title=str(memos.get("admin_entry_title", "Memosima 管理入口")),
+            memos_admin_entry_visibility=str(memos.get("admin_entry_visibility", "PRIVATE")),
             worker_poll_interval_seconds=float(worker.get("poll_interval_seconds", 2)),
             worker_max_attempts=int(worker.get("max_attempts", 3)),
             worker_create_probe_comment=bool(worker.get("create_probe_comment", False)),
@@ -136,6 +150,12 @@ class AppConfig:
             mineru_enable_table=bool(document_parser.get("enable_table", True)),
             mineru_enable_formula=bool(document_parser.get("enable_formula", True)),
             mineru_is_ocr=bool(document_parser.get("is_ocr", False)),
+            reminders_enabled=bool(reminders.get("enabled", True)),
+            reminders_trigger_tag=str(reminders.get("trigger_tag", "#提醒")),
+            reminders_webhook_url_env=reminders_webhook_url_env,
+            reminders_webhook_url=_env_value(reminders_webhook_url_env),
+            reminders_confidence_threshold=float(reminders.get("confidence_threshold", 0.75)),
+            reminders_request_timeout_seconds=float(reminders.get("request_timeout_seconds", 10)),
         )
 
 

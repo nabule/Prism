@@ -80,6 +80,24 @@ class ArtifactRecord:
     created_at: str
 
 
+@dataclass(frozen=True)
+class ReminderRecord:
+    id: int
+    workspace_id: str
+    source_memo_uid: str
+    title: str
+    body: str
+    due_at: str
+    timezone: str
+    status: str
+    confidence: float
+    raw_text: str
+    sent_at: str | None
+    error: str | None
+    created_at: str
+    updated_at: str
+
+
 class Store:
     def __init__(self, database_path: str | Path):
         self.database_path = Path(database_path)
@@ -193,6 +211,28 @@ class Store:
 
                 CREATE INDEX IF NOT EXISTS idx_artifacts_memo_kind
                   ON artifacts(workspace_id, memo_uid, kind);
+
+                CREATE TABLE IF NOT EXISTS reminders (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  workspace_id TEXT NOT NULL,
+                  source_memo_uid TEXT NOT NULL,
+                  title TEXT NOT NULL,
+                  body TEXT NOT NULL,
+                  due_at TEXT NOT NULL,
+                  timezone TEXT NOT NULL,
+                  status TEXT NOT NULL,
+                  confidence REAL NOT NULL,
+                  raw_text TEXT NOT NULL,
+                  sent_at TEXT,
+                  error TEXT,
+                  created_at TEXT NOT NULL,
+                  updated_at TEXT NOT NULL,
+                  UNIQUE (workspace_id, source_memo_uid, due_at, title),
+                  FOREIGN KEY (workspace_id) REFERENCES workspaces(id)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_reminders_status_due
+                  ON reminders(status, due_at);
                 """
             )
 
@@ -724,6 +764,163 @@ class Store:
             ).fetchall()
         return [_artifact_from_row(row) for row in rows]
 
+    def create_reminder(
+        self,
+        *,
+        workspace_id: str,
+        source_memo_uid: str,
+        title: str,
+        body: str,
+        due_at: str,
+        timezone: str,
+        confidence: float,
+        raw_text: str,
+    ) -> tuple[ReminderRecord, bool]:
+        now = utc_now()
+        with self.connect() as connection:
+            cursor = connection.execute(
+                """
+                INSERT OR IGNORE INTO reminders (
+                  workspace_id, source_memo_uid, title, body, due_at, timezone,
+                  status, confidence, raw_text, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)
+                """,
+                (
+                    workspace_id,
+                    source_memo_uid,
+                    title,
+                    body,
+                    due_at,
+                    timezone,
+                    confidence,
+                    raw_text,
+                    now,
+                    now,
+                ),
+            )
+            created = cursor.rowcount == 1
+            row = connection.execute(
+                """
+                SELECT * FROM reminders
+                WHERE workspace_id = ? AND source_memo_uid = ? AND due_at = ? AND title = ?
+                """,
+                (workspace_id, source_memo_uid, due_at, title),
+            ).fetchone()
+        if row is None:
+            raise RuntimeError("Reminder insert did not return a row")
+        return _reminder_from_row(row), created
+
+    def list_reminders(
+        self,
+        *,
+        workspace_id: str,
+        status: str | None = None,
+        limit: int = 100,
+    ) -> list[ReminderRecord]:
+        with self.connect() as connection:
+            if status:
+                rows = connection.execute(
+                    """
+                    SELECT * FROM reminders
+                    WHERE workspace_id = ? AND status = ?
+                    ORDER BY due_at ASC, id ASC
+                    LIMIT ?
+                    """,
+                    (workspace_id, status, limit),
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    """
+                    SELECT * FROM reminders
+                    WHERE workspace_id = ?
+                    ORDER BY due_at ASC, id ASC
+                    LIMIT ?
+                    """,
+                    (workspace_id, limit),
+                ).fetchall()
+        return [_reminder_from_row(row) for row in rows]
+
+    def list_due_reminders(
+        self,
+        *,
+        workspace_id: str,
+        now: str,
+        limit: int = 50,
+    ) -> list[ReminderRecord]:
+        with self.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM reminders
+                WHERE workspace_id = ? AND status IN ('pending', 'failed') AND due_at <= ?
+                ORDER BY due_at ASC, id ASC
+                LIMIT ?
+                """,
+                (workspace_id, now, limit),
+            ).fetchall()
+        return [_reminder_from_row(row) for row in rows]
+
+    def get_reminder(self, reminder_id: int) -> ReminderRecord | None:
+        with self.connect() as connection:
+            row = connection.execute("SELECT * FROM reminders WHERE id = ?", (reminder_id,)).fetchone()
+        return _reminder_from_row(row) if row else None
+
+    def mark_reminder_sent(self, reminder_id: int) -> ReminderRecord | None:
+        now = utc_now()
+        with self.connect() as connection:
+            connection.execute(
+                """
+                UPDATE reminders
+                SET status = 'sent', sent_at = ?, error = NULL, updated_at = ?
+                WHERE id = ? AND status IN ('pending', 'failed')
+                """,
+                (now, now, reminder_id),
+            )
+            row = connection.execute("SELECT * FROM reminders WHERE id = ?", (reminder_id,)).fetchone()
+        return _reminder_from_row(row) if row else None
+
+    def mark_reminder_failed(self, reminder_id: int, error: str) -> ReminderRecord | None:
+        now = utc_now()
+        with self.connect() as connection:
+            connection.execute(
+                """
+                UPDATE reminders
+                SET status = 'failed', error = ?, updated_at = ?
+                WHERE id = ? AND status IN ('pending', 'failed')
+                """,
+                (error, now, reminder_id),
+            )
+            row = connection.execute("SELECT * FROM reminders WHERE id = ?", (reminder_id,)).fetchone()
+        return _reminder_from_row(row) if row else None
+
+    def retry_reminder(self, reminder_id: int) -> ReminderRecord | None:
+        now = utc_now()
+        with self.connect() as connection:
+            connection.execute(
+                """
+                UPDATE reminders
+                SET status = 'pending', error = NULL, updated_at = ?
+                WHERE id = ? AND status IN ('failed', 'sent')
+                """,
+                (now, reminder_id),
+            )
+            row = connection.execute("SELECT * FROM reminders WHERE id = ?", (reminder_id,)).fetchone()
+        return _reminder_from_row(row) if row else None
+
+    def cancel_reminder(self, reminder_id: int) -> ReminderRecord | None:
+        now = utc_now()
+        with self.connect() as connection:
+            connection.execute(
+                """
+                UPDATE reminders
+                SET status = 'cancelled', error = NULL, updated_at = ?
+                WHERE id = ? AND status IN ('pending', 'failed')
+                """,
+                (now, reminder_id),
+            )
+            row = connection.execute("SELECT * FROM reminders WHERE id = ?", (reminder_id,)).fetchone()
+        return _reminder_from_row(row) if row else None
+
 
 def _job_from_row(row: sqlite3.Row) -> Job:
     return Job(
@@ -809,6 +1006,25 @@ def _artifact_from_row(row: sqlite3.Row) -> ArtifactRecord:
         content_markdown=str(row["content_markdown"]),
         metadata=json.loads(row["metadata_json"]),
         created_at=str(row["created_at"]),
+    )
+
+
+def _reminder_from_row(row: sqlite3.Row) -> ReminderRecord:
+    return ReminderRecord(
+        id=int(row["id"]),
+        workspace_id=str(row["workspace_id"]),
+        source_memo_uid=str(row["source_memo_uid"]),
+        title=str(row["title"]),
+        body=str(row["body"]),
+        due_at=str(row["due_at"]),
+        timezone=str(row["timezone"]),
+        status=str(row["status"]),
+        confidence=float(row["confidence"]),
+        raw_text=str(row["raw_text"]),
+        sent_at=row["sent_at"],
+        error=row["error"],
+        created_at=str(row["created_at"]),
+        updated_at=str(row["updated_at"]),
     )
 
 

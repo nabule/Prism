@@ -12,22 +12,24 @@ def build_summary_memo_content(
     taxonomy: TaxonomyConfig,
     llm_draft: LLMOrganizationDraft | None = None,
     show_candidate_tags: bool = False,
+    admin_links: str | None = None,
 ) -> str:
     ai_summary_tag = taxonomy.system_tags.get("ai_summary", "#系统/AI整理")
-    hidden_candidate_paths = [] if show_candidate_tags else [candidate.path for candidate in organization_plan.candidate_tags]
     tags = _dedupe(
         [
             ai_summary_tag,
             *organization_plan.system_tags,
-            *organization_plan.active_tags,
-            *(candidate.path for candidate in organization_plan.candidate_tags if show_candidate_tags),
         ]
     )
+    hidden_business_paths = [
+        *organization_plan.active_tags,
+        *[candidate.path for candidate in organization_plan.candidate_tags],
+    ]
 
     lines = [
         f"{ai_summary_tag} {' '.join(tag for tag in tags if tag != ai_summary_tag)}".strip(),
         "",
-        f"## AI整理：{_sanitize_candidate_tag_markers(_summary_title(source_content, llm_draft), hidden_candidate_paths)}",
+        f"## AI整理：{_sanitize_candidate_tag_markers(_summary_title(source_content, llm_draft), hidden_business_paths)}",
         "",
         f"来源 memo UID：{source_memo_uid}",
         "",
@@ -35,19 +37,19 @@ def build_summary_memo_content(
         "",
         _sanitize_candidate_tag_markers(
             llm_draft.summary if llm_draft else _summary_text(source_content),
-            hidden_candidate_paths,
+            hidden_business_paths,
         ),
         "",
     ]
 
     if llm_draft and llm_draft.key_points:
         lines.extend(["### 要点", ""])
-        lines.extend(f"- {_sanitize_candidate_tag_markers(point, hidden_candidate_paths)}" for point in llm_draft.key_points)
+        lines.extend(f"- {_sanitize_candidate_tag_markers(point, hidden_business_paths)}" for point in llm_draft.key_points)
         lines.append("")
 
     if llm_draft and llm_draft.todos:
         lines.extend(["### 待办", ""])
-        lines.extend(f"- {_sanitize_candidate_tag_markers(todo, hidden_candidate_paths)}" for todo in llm_draft.todos)
+        lines.extend(f"- {_sanitize_candidate_tag_markers(todo, hidden_business_paths)}" for todo in llm_draft.todos)
         lines.append("")
 
     lines.extend(
@@ -58,20 +60,20 @@ def build_summary_memo_content(
     )
 
     if organization_plan.active_tags:
-        lines.extend(f"- 已使用：{tag}" for tag in organization_plan.active_tags)
+        lines.extend(f"- 已使用：{tag.removeprefix('#')}" for tag in organization_plan.active_tags)
     else:
         lines.append("- 已使用：无")
 
     if organization_plan.candidate_tags:
         lines.extend(
-            f"- 待审核：{_display_candidate_tag(candidate.path, show_candidate_tags)}"
+            f"- 待审核：{candidate.path.removeprefix('#')}"
             for candidate in organization_plan.candidate_tags
         )
     else:
         lines.append("- 待审核：无")
 
     if organization_plan.disabled_tags:
-        lines.extend(f"- 已禁用：{tag}" for tag in organization_plan.disabled_tags)
+        lines.extend(f"- 已禁用：{tag.removeprefix('#')}" for tag in organization_plan.disabled_tags)
 
     if organization_plan.needs_clarification:
         lines.extend(
@@ -88,9 +90,11 @@ def build_summary_memo_content(
             "",
             "### 原文摘录",
             "",
-            _sanitize_candidate_tag_markers(_excerpt(source_content), hidden_candidate_paths),
+            _sanitize_candidate_tag_markers(_excerpt(source_content), hidden_business_paths),
         ]
     )
+    if admin_links:
+        lines.extend(["", admin_links.strip()])
 
     return "\n".join(lines).strip() + "\n"
 
@@ -128,10 +132,6 @@ def _dedupe(values: list[str]) -> list[str]:
             seen.add(value)
             result.append(value)
     return result
-
-
-def _display_candidate_tag(tag: str, show_candidate_tags: bool) -> str:
-    return tag if show_candidate_tags else tag.removeprefix("#")
 
 
 def _sanitize_candidate_tag_markers(text: str, candidate_tags: list[str]) -> str:

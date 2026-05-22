@@ -18,6 +18,9 @@ memos:
   ingestion_mode: poll
   poll_page_size: 20
   show_candidate_tags: false
+  admin_entry_enabled: true
+  admin_entry_title: Memosima 管理入口
+  admin_entry_visibility: PRIVATE
 document_parser:
   provider: mineru
   token_env: MINERU_API_TOKEN
@@ -30,6 +33,12 @@ document_parser:
   enable_table: true
   enable_formula: true
   is_ocr: false
+reminders:
+  enabled: true
+  trigger_tag: "#提醒"
+  webhook_url_env: REMINDER_WEBHOOK_URL
+  confidence_threshold: 0.75
+  request_timeout_seconds: 10
 worker:
   poll_interval_seconds: 2
   max_attempts: 3

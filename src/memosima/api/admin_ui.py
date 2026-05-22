@@ -144,7 +144,7 @@ ADMIN_UI_HTML = """<!doctype html>
 
   <div class="grid">
     <section class="stack">
-      <div class="panel">
+      <div id="backup" class="panel">
         <h2>连接</h2>
         <div class="token-row">
           <div>
@@ -156,7 +156,7 @@ ADMIN_UI_HTML = """<!doctype html>
         </div>
       </div>
 
-      <div class="panel">
+      <div id="jobs" class="panel">
         <h2>健康状态</h2>
         <div class="toolbar">
           <button id="refreshHealthButton" type="button">刷新</button>
@@ -164,7 +164,20 @@ ADMIN_UI_HTML = """<!doctype html>
         <pre id="healthOutput">未加载</pre>
       </div>
 
-      <div class="panel">
+      <div id="tag-summary" class="panel">
+        <h2>备份恢复</h2>
+        <div class="toolbar">
+          <button id="downloadBackupButton" class="primary" type="button">下载备份</button>
+        </div>
+        <label for="restoreBackupInput">恢复 Sidecar 数据库</label>
+        <input id="restoreBackupInput" type="file" accept=".zip,application/zip">
+        <div class="toolbar" style="margin-top: 10px;">
+          <button id="restoreBackupButton" class="danger" type="button">上传恢复</button>
+        </div>
+        <div class="muted">备份包含 Sidecar SQLite 和非机密配置文件；恢复只替换 Sidecar SQLite，不自动覆盖配置。</div>
+      </div>
+
+      <div id="tag-candidates" class="panel">
         <h2>详情</h2>
         <pre id="detailOutput">选择任务或标签查看详情</pre>
       </div>
@@ -276,6 +289,42 @@ ADMIN_UI_HTML = """<!doctype html>
           </table>
         </div>
       </div>
+
+      <div class="panel">
+        <h2>提醒</h2>
+        <div class="toolbar">
+          <div class="field">
+            <label for="reminderStatus">状态</label>
+            <select id="reminderStatus">
+              <option value="">全部</option>
+              <option value="pending">pending</option>
+              <option value="failed">failed</option>
+              <option value="sent">sent</option>
+              <option value="cancelled">cancelled</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="reminderLimit">数量</label>
+            <input id="reminderLimit" type="number" min="1" max="500" value="100">
+          </div>
+          <button id="refreshRemindersButton" class="primary" type="button">刷新提醒</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 72px;">ID</th>
+                <th>标题</th>
+                <th style="width: 120px;">状态</th>
+                <th style="width: 180px;">到期</th>
+                <th style="width: 130px;">来源</th>
+                <th style="width: 190px;">操作</th>
+              </tr>
+            </thead>
+            <tbody id="remindersBody"></tbody>
+          </table>
+        </div>
+      </div>
     </section>
   </div>
 </main>
@@ -303,6 +352,7 @@ const detailOutput = document.getElementById("detailOutput");
 const healthOutput = document.getElementById("healthOutput");
 const jobsBody = document.getElementById("jobsBody");
 const candidatesBody = document.getElementById("candidatesBody");
+const remindersBody = document.getElementById("remindersBody");
 const promptSystem = document.getElementById("promptSystem");
 const promptUser = document.getElementById("promptUser");
 const tagSummarySystem = document.getElementById("tagSummarySystem");
@@ -353,6 +403,14 @@ async function requestJson(path, options = {}) {
     throw new Error(`${response.status} ${detail}`);
   }
   return data;
+}
+
+function adminHeaders() {
+  const adminToken = token();
+  if (!adminToken) {
+    throw new Error("缺少 Admin Token");
+  }
+  return { Authorization: `Bearer ${adminToken}` };
 }
 
 function cell(text, className = "") {
@@ -445,6 +503,59 @@ async function createTagSummary() {
     setNotice(`标签总结已生成：memos/${data.summary_memo_uid}`, "ok");
   } catch (error) {
     tagSummaryOutput.textContent = String(error.message || error);
+    setNotice(String(error.message || error), "error");
+  }
+}
+
+async function downloadBackup() {
+  try {
+    const response = await fetch("/admin/backups/download", { headers: adminHeaders() });
+    if (!response.ok) {
+      throw new Error(`${response.status} ${response.statusText}`);
+    }
+    const blob = await response.blob();
+    const disposition = response.headers.get("Content-Disposition") || "";
+    const match = disposition.match(/filename="([^"]+)"/);
+    const filename = match ? match[1] : "memosima-sidecar-backup.zip";
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    setNotice("备份已开始下载", "ok");
+  } catch (error) {
+    setNotice(String(error.message || error), "error");
+  }
+}
+
+async function restoreBackup() {
+  const input = document.getElementById("restoreBackupInput");
+  const file = input.files && input.files[0];
+  if (!file) {
+    setNotice("请选择备份 ZIP 文件", "error");
+    return;
+  }
+  if (!window.confirm("恢复会替换当前 Sidecar SQLite 数据库，继续？")) {
+    return;
+  }
+  try {
+    const response = await fetch("/admin/backups/restore", {
+      method: "POST",
+      headers: { ...adminHeaders(), "Content-Type": "application/zip" },
+      body: await file.arrayBuffer()
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      const detail = data && data.detail ? data.detail : response.statusText;
+      throw new Error(`${response.status} ${detail}`);
+    }
+    showDetail(data);
+    setNotice("备份已恢复", "ok");
+    await Promise.all([loadJobs(), loadCandidates(), loadReminders(), loadHealth()]);
+  } catch (error) {
     setNotice(String(error.message || error), "error");
   }
 }
@@ -559,6 +670,61 @@ async function reviewCandidate(id, action) {
   }
 }
 
+async function loadReminders() {
+  try {
+    const status = document.getElementById("reminderStatus").value;
+    const limit = document.getElementById("reminderLimit").value || "100";
+    const query = new URLSearchParams({ limit });
+    if (status) query.set("status", status);
+    const data = await requestJson(`/admin/reminders?${query.toString()}`);
+    remindersBody.replaceChildren(...data.reminders.map(renderReminderRow));
+    setNotice(`提醒已刷新：${data.reminders.length} 条`, "ok");
+  } catch (error) {
+    remindersBody.replaceChildren();
+    setNotice(String(error.message || error), "error");
+  }
+}
+
+function renderReminderRow(reminder) {
+  const tr = document.createElement("tr");
+  tr.append(
+    cell(reminder.id, "mono"),
+    cell(reminder.title),
+    cell(reminder.status, `status ${reminder.status}`),
+    cell(reminder.due_at, "mono"),
+    cell(reminder.source_memo_uid, "mono")
+  );
+  const actions = document.createElement("td");
+  actions.className = "actions";
+  actions.append(button("详情", "", () => showDetail(reminder)));
+  if (reminder.status === "failed" || reminder.status === "sent") {
+    actions.append(button("重试", "primary", () => updateReminder(reminder.id, "retry")));
+  }
+  if (reminder.status === "pending" || reminder.status === "failed") {
+    actions.append(button("取消", "danger", () => updateReminder(reminder.id, "cancel")));
+  }
+  tr.append(actions);
+  return tr;
+}
+
+async function updateReminder(id, action) {
+  try {
+    const data = await requestJson(`/admin/reminders/${id}/${action}`, { method: "POST" });
+    showDetail(data);
+    await loadReminders();
+  } catch (error) {
+    setNotice(String(error.message || error), "error");
+  }
+}
+
+function scrollToHashTarget() {
+  const targetId = decodeURIComponent(window.location.hash || "").replace(/^#/, "");
+  if (!targetId) return;
+  const target = document.getElementById(targetId);
+  if (!target) return;
+  target.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
 document.getElementById("saveTokenButton").addEventListener("click", () => {
   localStorage.setItem(storageKey, token());
   setNotice("Token 已保存到本机浏览器", "ok");
@@ -571,17 +737,23 @@ document.getElementById("clearTokenButton").addEventListener("click", () => {
 document.getElementById("refreshHealthButton").addEventListener("click", loadHealth);
 document.getElementById("refreshJobsButton").addEventListener("click", loadJobs);
 document.getElementById("refreshCandidatesButton").addEventListener("click", loadCandidates);
+document.getElementById("refreshRemindersButton").addEventListener("click", loadReminders);
 document.getElementById("refreshPromptsButton").addEventListener("click", loadPrompts);
 document.getElementById("savePromptsButton").addEventListener("click", savePrompts);
 document.getElementById("createTagSummaryButton").addEventListener("click", createTagSummary);
+document.getElementById("downloadBackupButton").addEventListener("click", downloadBackup);
+document.getElementById("restoreBackupButton").addEventListener("click", restoreBackup);
 
 tokenInput.value = localStorage.getItem(storageKey) || "";
 loadHealth();
 if (token()) {
   loadJobs();
   loadCandidates();
+  loadReminders();
   loadPrompts();
 }
+window.addEventListener("hashchange", scrollToHashTarget);
+setTimeout(scrollToHashTarget, 100);
 </script>
 </body>
 </html>

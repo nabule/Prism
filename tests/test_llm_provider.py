@@ -85,3 +85,59 @@ async def test_openai_compatible_client_parses_structured_draft(tmp_path, monkey
     assert "#项目/个人AI知识库" in messages[0]["content"]
     assert "active_tags" in messages[1]["content"]
     assert "整理个人 AI 知识库开发记录" in messages[1]["content"]
+
+
+@pytest.mark.asyncio
+async def test_openai_compatible_client_parses_reminder_extraction(tmp_path, monkeypatch):
+    models_path = write_yaml(tmp_path / "models.yaml", models_config_text())
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    models = ModelsConfig.load(models_path)
+    provider = models.providers[models.default_provider]
+    app = FastAPI()
+    seen: dict[str, object] = {}
+
+    @app.post("/api/v1/chat/completions")
+    async def chat_completions(request: Request):
+        seen["payload"] = await request.json()
+        return {
+            "choices": [
+                {
+                    "message": {
+                        "content": (
+                            '{"has_reminder":true,'
+                            '"items":[{"title":"提交周报","body":"周报发给团队",'
+                            '"due_at":"2026-05-22T09:30:00+08:00","timezone":"Asia/Shanghai",'
+                            '"confidence":0.92,"raw_text":"#提醒 明天 09:30 提交周报"}],'
+                            '"needs_clarification":false,"clarification_question":null}'
+                        )
+                    }
+                }
+            ]
+        }
+
+    original_async_client = AsyncClient
+
+    def fake_async_client(*args, **kwargs):
+        kwargs["transport"] = ASGITransport(app=app)
+        kwargs["base_url"] = "http://testserver"
+        return original_async_client(*args, **kwargs)
+
+    monkeypatch.setattr("memosima.llm.provider.httpx.AsyncClient", fake_async_client)
+
+    extraction = await OpenAICompatibleClient(provider, "test-key").extract_reminders(
+        content="#提醒 明天 09:30 提交周报",
+        timezone="Asia/Shanghai",
+        now="2026-05-21T10:00:00+08:00",
+        trigger_tag="#提醒",
+    )
+
+    assert extraction.has_reminder is True
+    assert extraction.needs_clarification is False
+    assert len(extraction.items) == 1
+    assert extraction.items[0].title == "提交周报"
+    assert extraction.items[0].confidence == 0.92
+    payload = seen["payload"]
+    assert isinstance(payload, dict)
+    assert payload["response_format"] == {"type": "json_object"}
+    assert "#提醒" in payload["messages"][1]["content"]
+    assert "2026-05-21T10:00:00+08:00" in payload["messages"][1]["content"]

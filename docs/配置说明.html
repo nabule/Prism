@@ -40,6 +40,10 @@
 <td>Memos 回调 Sidecar 的公网 URL，例如 <code>https://your-public-sidecar.example.com/webhooks/memos</code></td>
 </tr>
 <tr>
+<td><code>REMINDER_WEBHOOK_URL</code></td>
+<td>提醒通知出口。默认按 Bark 兼容接口发送 <code>POST title/body</code> 表单，例如 <code>https://api.day.app/your-bark-key/</code>。真实 token 只放在本地 <code>.env</code> 或部署密钥中。</td>
+</tr>
+<tr>
 <td><code></code></td>
 <td> API key，当前默认 LLM provider 使用该变量。</td>
 </tr>
@@ -67,11 +71,27 @@
 <li><code>memos.webhook_url_env</code>：Memos 内置 webhook 回调 URL 的环境变量名。</li>
 <li><code>memos.ingestion_mode</code>：memo 入口模式，默认 <code>poll</code>，由 Sidecar 主动轮询 Memos，不需要公网 webhook；也可设为 <code>webhook</code> 或 <code>both</code>。</li>
 <li><code>memos.poll_page_size</code>：轮询时每次读取最近 memo 的数量，默认 <code>20</code>。</li>
+<li><code>memos.admin_entry_enabled</code>：是否在 Memos 中自动维护 <code>#系统/Memosima</code> 管理入口 memo，默认开启。</li>
+<li><code>memos.admin_entry_title</code>：管理入口 memo 的标题，默认 <code>Memosima 管理入口</code>。</li>
+<li><code>memos.admin_entry_visibility</code>：管理入口 memo 的 Memos 可见性，默认 <code>PRIVATE</code>。</li>
 <li><code>prompts.path</code>：LLM 默认提示词配置文件路径，默认 <code>config/prompts.yaml</code>。</li>
 <li><code>worker.max_attempts</code>：任务失败后的最大尝试次数。</li>
 <li><code>worker.create_probe_comment</code>：P0 探针是否在 memo 下写入测试评论，默认关闭。</li>
 </ul>
 <p>本地部署推荐使用 <code>poll</code> 模式，不需要暴露公网地址。Memos <code>0.28.0</code> 会拒绝 webhook URL 指向本机、Docker 内网或其他保留/私有 IP；只有在需要 webhook 模式时，才需要配置公网可达 URL 或公网隧道。</p>
+<p>管理入口 memo 和 AI 整理 memo 中的管理链接由 <code>app.public_base_url</code> 生成；如果用户从其他设备访问 Memos，应把该值配置为浏览器可访问的 Sidecar 地址，例如 <code>http://192.168.1.10:8080</code> 或反向代理域名。管理页面支持 <code>#jobs</code>、<code>#tag-candidates</code>、<code>#tag-summary</code> 和 <code>#backup</code> 锚点直达。</p>
+<h2>reminders</h2>
+<p><code>reminders</code> 控制 <code>#提醒</code> 时间识别和定时通知：</p>
+<pre><code class="language-yaml">reminders:
+  enabled: true
+  trigger_tag: "#提醒"
+  webhook_url_env: REMINDER_WEBHOOK_URL
+  confidence_threshold: 0.75
+  request_timeout_seconds: 10
+</code></pre>
+<p>worker 只处理包含 <code>trigger_tag</code> 的 memo。命中后会调用默认 OpenAI-compatible provider 抽取 <code>title</code>、<code>body</code>、<code>due_at</code>、<code>timezone</code>、<code>confidence</code> 和 <code>raw_text</code>，并把明确、未来且置信度不低于阈值的结果写入 SQLite <code>reminders</code> 表。同一 <code>workspace_id</code>、来源 memo、到期时间和标题是幂等键，避免重复创建。</p>
+<p>到期扫描在 worker 空闲循环中执行，状态为 <code>pending</code> 或 <code>failed</code> 且 <code>due_at</code> 已到的提醒会发送到 <code>REMINDER_WEBHOOK_URL</code>。成功后状态变为 <code>sent</code>，失败会记录脱敏错误并保留为 <code>failed</code> 以便重试。发送内容不会把 webhook token 写入日志或 job result。</p>
+<p>如果模型 key 未配置、抽取失败或时间不明确，提醒流程会记录跳过原因；时间模糊、低置信或已过期时会在原 memo 下评论要求补充，但普通 AI 整理流程仍会继续。</p>
 <h2>models.yaml</h2>
 <p>当前默认模型配置使用 OpenRouter 的 <code>google/gemma-3-27b-it</code>，并保留、OpenAI、DeepSeek 等常用 OpenAI-compatible provider 模板：</p>
 <pre><code class="language-yaml">default_provider: openrouter
@@ -113,8 +133,8 @@ providers:
 </code></pre>
 <p>worker 会读取默认 provider，并在对应 <code>api_key_env</code> 环境变量存在时发起 OpenAI-compatible <code>/chat/completions</code> 调用。<code>base_url</code>、<code>default_model</code>、<code>temperature</code>、<code>max_tokens</code>、<code>response_format</code> 和 <code>extra_body</code> 都从 <code>config/models.yaml</code> 读取。<code>max_tokens</code> 留空时不会向模型请求发送输出 token 限制；Sidecar 也不会主动截断输入正文。<code>extra_body</code> 会原样合并到请求 JSON，适合配置厂商扩展参数。模型输出必须是 JSON 对象，Sidecar 会校验 <code>title</code>、<code>summary</code>、<code>key_points</code>、<code>todos</code>、<code>active_tags</code>、<code>candidate_tags</code>、<code>needs_clarification</code> 和 <code>clarification_question</code> 字段。没有配置 key 时不调用 LLM，自动回退到本地模板整理。</p>
 <h2>memos</h2>
-<p><code>memos.show_candidate_tags</code> 控制待审核业务标签是否以 Memos 原生 <code>#tag</code> 形式写入 AI 整理 memo。默认 <code>false</code>：待审核业务标签仍进入 Sidecar 审核列表，也会在 AI 整理 memo 的“待审核”说明中显示，但会去掉前导 <code>#</code>，因此不会在 Memos Web 中作为标签显示或参与标签筛选。设为 <code>true</code> 时恢复旧行为，待审核业务标签会写成 <code>#标签</code>，可在 Memos Web 里显示和筛选。<code>#系统/标签待审核</code> 这个系统状态标签不受该开关影响，用于筛选“含待审核项”的 AI 整理 memo。</p>
-<p><code>active_tags</code> 只能使用已有正式标签；如果模型把未知标签放入 <code>active_tags</code>，Sidecar 会把它降级为候选标签。<code>candidate_tags</code> 用于 AI 从正文提出的新标签建议，每项包含 <code>path</code>、<code>reason</code> 和 <code>confidence</code>。新标签不会自动激活，必须通过候选标签审核。业务标签还要求最后一级名称全局唯一：已有 <code>#项目/数管</code> 时，<code>#数管</code> 和 <code>#其他/数管</code> 都不能再作为新的业务标签。为避免过度打标，Sidecar 会优先接收命中的已有正式标签，并限制单次 LLM 额外补充的标签数量。</p>
+<p>AI 整理 memo 不再写入任何业务 <code>#tag</code>。它只保留 <code>#系统/AI整理</code>、<code>#系统/标签待审核</code> 等系统标签，业务标签会在“标签”区域以普通文本显示，避免 AI 生成内容进入 Memos 原生业务标签筛选。<code>memos.show_candidate_tags</code> 保留为兼容配置，但当前生成逻辑不会用它把候选业务标签写成 Memos 原生标签。</p>
+<p>只有用户原始 memo 没有任何业务标签时，Sidecar 才会接收 LLM 返回的 <code>active_tags</code> 和 <code>candidate_tags</code>。<code>active_tags</code> 只能使用已有正式标签；如果模型把未知标签放入 <code>active_tags</code>，Sidecar 会把它降级为候选标签。<code>candidate_tags</code> 用于 AI 从无标签正文提出的新标签建议，每项包含 <code>path</code>、<code>reason</code> 和 <code>confidence</code>。用户已经手写业务标签时，AI 标签建议会被忽略，只保留用户标签解析结果。新标签不会自动激活，必须通过候选标签审核。业务标签还要求最后一级名称全局唯一：已有 <code>#项目/数管</code> 时，<code>#数管</code> 和 <code>#其他/数管</code> 都不能再作为新的业务标签。</p>
 <h2>prompts.yaml</h2>
 <p><code>config/prompts.yaml</code> 保存所有 LLM 调用点的默认提示词。当前调用点包括 <code>organize_memo</code> 和 <code>tag_summary</code>，每个调用点都包含 <code>system</code> 和 <code>user</code> 两段模板。</p>
 <p><code>organize_memo</code> 用于单条 memo 的 AI 整理，支持以下占位符：</p>
@@ -130,6 +150,9 @@ providers:
 <li><code>{memos_markdown}</code>：匹配该标签的 memo 列表，已转换为 Markdown。</li>
 </ul>
 <p>管理页面 <code>/admin/ui</code> 的“保存默认”会写回 <code>config/prompts.yaml</code>；任务重试时选择临时修改，只会写入该任务 payload 的 <code>llm_prompt_override</code>。Compose 已将 <code>./config</code> 以可写方式挂载到 Sidecar 容器，便于从管理页面保存默认提示词。</p>
+<h2>备份恢复</h2>
+<p>管理接口 <code>/admin/backups/download</code> 会生成 Sidecar 备份 ZIP，内容包括 SQLite 快照 <code>database/sidecar.db</code>、<code>manifest.json</code>，以及 <code>config/app.yaml</code>、<code>config/models.yaml</code>、<code>config/prompts.yaml</code>、<code>config/taxonomy.yaml</code> 等非机密配置文件。真实密钥仍只通过环境变量提供，不会写入备份包。</p>
+<p><code>/admin/backups/restore</code> 接收备份 ZIP 原始 body，并只恢复 Sidecar SQLite 数据库。备份包里的配置文件不会被自动应用，避免上传包覆盖运行配置或引入密钥风险。恢复范围不包含 Memos 主库、Memos 附件文件或外部对象存储。</p>
 <h2>taxonomy.yaml</h2>
 <p><code>config/taxonomy.yaml</code> 保存系统标签、初始业务标签、别名和禁用标签。路径由 <code>config/app.yaml</code> 中的 <code>taxonomy.path</code> 指定。</p>
 <p>当前 P2 本地整理草案会读取该配置：</p>
@@ -161,7 +184,7 @@ providers:
 <p>worker 会先从 Memos 下载附件。<code>.txt</code> 和 <code>.md</code> 在本地安全解码；<code>.doc</code>、<code>.docx</code>、<code>.xls</code>、<code>.xlsx</code>、<code>.ppt</code>、<code>.pptx</code> 和 <code>.pdf</code> 会调用文档解析 provider 转成 Markdown。Markdown 会写入 <code>artifacts</code> 表，并在调用 LLM 前拼接进原 memo 正文，后续 AI 整理和自动标签流程保持不变。provider 设计为可替换，后续可以接入本地 LibreOffice、unstructured 或其他在线解析服务。</p>
 <p>如果原 memo 正文为空且至少一个附件成功进入解析结果，LLM 返回标题后，worker 会调用 Memos 内容更新接口把该标题回写到原 memo。job 结果中会记录 <code>original_memo_title_updated</code> 和 <code>original_memo_title</code>，便于在管理页或 API 中排查。</p>
 <h2>limits</h2>
-<p><code>limits.max_attachment_mb</code> 控制单个附件解析大小上限。<code>limits.allowed_parse_extensions</code> 控制允许进入解析流程的扩展名。<code>limits.max_ai_active_tags</code> 控制单条 memo 最多接收多少个 AI 补充的正式标签，默认 <code>5</code>；<code>limits.max_ai_candidate_tags</code> 控制单条 memo 最多接收多少个 AI 新候选标签，默认 <code>2</code>。用户在正文里手动写出的标签不会因为该限制被吞掉。</p>
+<p><code>limits.max_attachment_mb</code> 控制单个附件解析大小上限。<code>limits.allowed_parse_extensions</code> 控制允许进入解析流程的扩展名。<code>limits.max_ai_active_tags</code> 控制单条无标签 memo 最多接收多少个 AI 补充的正式标签，默认 <code>5</code>；<code>limits.max_ai_candidate_tags</code> 控制单条无标签 memo 最多接收多少个 AI 新候选标签，默认 <code>2</code>。用户在正文里手动写出的标签不会因为该限制被吞掉。</p>
 <p>当前已实现 <code>.txt</code>、<code>.md</code>、Word、Excel、PPT 和 PDF 解析。<code>.drawio</code>、<code>.drawio.svg</code> 和 <code>.json</code> 仍保留在配置中，后续接入专用解析器前会被跳过，不会主动执行未知格式内容。</p>
 
 </article>

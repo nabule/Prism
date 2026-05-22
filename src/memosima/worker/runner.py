@@ -6,6 +6,10 @@ import hashlib
 import json
 import logging
 import os
+from datetime import UTC, datetime
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+import httpx
 
 from memosima.core.attachments import (
     ParsedAttachment,
@@ -14,13 +18,14 @@ from memosima.core.attachments import (
     is_document_attachment,
     parse_text_attachment,
 )
+from memosima.core.admin_entry import ADMIN_ENTRY_MARKER, build_admin_entry_memo_content, build_summary_admin_links
 from memosima.core.config import AppConfig, ModelsConfig
 from memosima.core.document_parsers import create_document_parser
 from memosima.core.prompts import PromptTemplate, load_prompts_or_default
 from memosima.core.summary import build_summary_memo_content
 from memosima.core.taxonomy import OrganizationPlan, TagCandidate, TaxonomyConfig
-from memosima.db.store import Job, Store
-from memosima.llm.provider import LLMOrganizationDraft, OpenAICompatibleClient
+from memosima.db.store import Job, ReminderRecord, Store, utc_now
+from memosima.llm.provider import LLMOrganizationDraft, LLMReminderExtraction, LLMReminderItem, OpenAICompatibleClient
 from memosima.memos.client import MemosClient
 
 LOGGER = logging.getLogger(__name__)
@@ -33,8 +38,12 @@ class Worker:
         self.models_config = models_config
 
     async def run_once(self) -> bool:
+        if await self._send_due_reminders_once():
+            return True
         job = self.store.claim_next_job()
         if job is None:
+            if await self._ensure_admin_entry_memo_once():
+                return True
             if await self._poll_memos_once():
                 return True
             return False
@@ -96,6 +105,85 @@ class Worker:
             created_any = created_any or created
         return created_any
 
+    async def _ensure_admin_entry_memo_once(self) -> bool:
+        if not self.config.memos_admin_entry_enabled:
+            return False
+        if not self.config.memos_base_url or not self.config.memos_api_token:
+            return False
+
+        client = MemosClient(
+            base_url=self.config.memos_base_url,
+            api_token=self.config.memos_api_token,
+            timeout_seconds=self.config.memos_timeout_seconds,
+        )
+        desired_content = build_admin_entry_memo_content(
+            public_base_url=self.config.public_base_url,
+            title=self.config.memos_admin_entry_title,
+        )
+        existing = self.store.list_memos(
+            workspace_id=self.config.workspace_id,
+            memo_type="admin_entry",
+            limit=1,
+        )
+        if existing:
+            memo_uid = existing[0].memos_uid
+            try:
+                current = await client.get_memo(memo_uid)
+            except Exception as exc:
+                LOGGER.warning("Failed to read Memosima admin entry memo %s: %s", memo_uid, exc)
+            else:
+                if current.get("content") != desired_content:
+                    await client.update_memo_content(memo_uid, desired_content)
+                    self.store.upsert_memo(
+                        workspace_id=self.config.workspace_id,
+                        memos_uid=memo_uid,
+                        memo_type="admin_entry",
+                        status="updated",
+                        content_hash=_memo_hash({"content": desired_content}),
+                    )
+                    return True
+                return False
+
+        response = await client.list_memos(
+            page_size=self.config.memos_poll_page_size,
+            filter_text=ADMIN_ENTRY_MARKER,
+        )
+        memos = response.get("memos", [])
+        if isinstance(memos, list):
+            for memo in memos:
+                if not isinstance(memo, dict) or not _is_admin_entry_memo(memo):
+                    continue
+                memo_uid = _memo_uid(memo)
+                if not memo_uid:
+                    continue
+                if memo.get("content") != desired_content:
+                    await client.update_memo_content(memo_uid, desired_content)
+                    status = "updated"
+                else:
+                    status = "synced"
+                self.store.upsert_memo(
+                    workspace_id=self.config.workspace_id,
+                    memos_uid=memo_uid,
+                    memo_type="admin_entry",
+                    status=status,
+                    content_hash=_memo_hash({"content": desired_content}),
+                )
+                return status == "updated"
+
+        created = await client.create_memo(
+            desired_content,
+            visibility=self.config.memos_admin_entry_visibility,
+        )
+        memo_uid = _extract_memo_uid(created)
+        self.store.upsert_memo(
+            workspace_id=self.config.workspace_id,
+            memos_uid=memo_uid,
+            memo_type="admin_entry",
+            status="created",
+            content_hash=_memo_hash(created),
+        )
+        return True
+
     async def handle_job(self, job: Job) -> dict[str, object]:
         if job.type != "process_memo":
             raise ValueError(f"Unsupported job type: {job.type}")
@@ -133,7 +221,15 @@ class Worker:
             memo=memo,
         )
         source_content = _build_source_content(memo_content, attachment_markdowns)
-        organization_plan = taxonomy.build_organization_plan(source_content)
+        user_tags = _extract_user_business_tags(memo_content)
+        allow_ai_tags = not user_tags
+        reminder_result = await self._handle_reminders(
+            client=client,
+            workspace_id=job.workspace_id,
+            memo_uid=memo_uid,
+            source_content=source_content,
+        )
+        organization_plan = taxonomy.build_organization_plan_from_tags(source_content, user_tags)
         self._upsert_tag_candidates(job.workspace_id, memo_uid, organization_plan.candidate_tags)
 
         if organization_plan.needs_clarification:
@@ -145,6 +241,7 @@ class Worker:
                 "content_hash": content_hash,
                 "ai_plan": organization_plan.to_dict(),
                 "attachments": attachment_results,
+                "reminder": reminder_result,
                 "clarification_comment_created": True,
                 "clarification_comment": comment,
             }
@@ -164,10 +261,11 @@ class Worker:
                 "ai_plan": organization_plan.to_dict(),
                 "ai_source": "llm",
                 "attachments": attachment_results,
+                "reminder": reminder_result,
                 "clarification_comment_created": True,
                 "clarification_comment": comment,
             }
-        if llm_draft:
+        if llm_draft and allow_ai_tags:
             organization_plan = self._merge_llm_tags(
                 taxonomy=taxonomy,
                 local_plan=organization_plan,
@@ -192,6 +290,12 @@ class Worker:
             taxonomy=taxonomy,
             llm_draft=llm_draft,
             show_candidate_tags=self.config.memos_show_candidate_tags,
+            admin_links=build_summary_admin_links(
+                public_base_url=self.config.public_base_url,
+                has_candidate_tags=bool(organization_plan.candidate_tags),
+            )
+            if self.config.memos_admin_entry_enabled
+            else None,
         )
         summary_memo = await client.create_memo(summary_content)
         summary_memo_uid = _extract_memo_uid(summary_memo)
@@ -220,6 +324,7 @@ class Worker:
             "ai_plan": organization_plan.to_dict(),
             "ai_source": "llm" if llm_draft else "local",
             "attachments": attachment_results,
+            "reminder": reminder_result,
             "comment_created": comment_created,
             "original_memo_title_updated": original_memo_title_updated,
             "original_memo_title": _extract_backfilled_title(original_title_content) if original_title_content else None,
@@ -320,6 +425,125 @@ class Worker:
             local_plan=organization_plan,
             prompt_template=self._load_prompt_template(job),
         )
+
+    async def _handle_reminders(
+        self,
+        *,
+        client: MemosClient,
+        workspace_id: str,
+        memo_uid: str,
+        source_content: str,
+    ) -> dict[str, object]:
+        if not self.config.reminders_enabled:
+            return {"status": "disabled"}
+        if self.config.reminders_trigger_tag not in source_content:
+            return {"status": "not_triggered"}
+        if self.models_config is None:
+            return {"status": "skipped", "reason": "models_not_configured"}
+        provider = self.models_config.providers[self.models_config.default_provider]
+        api_key = os.getenv(provider.api_key_env)
+        if not api_key:
+            return {"status": "skipped", "reason": "llm_key_not_configured"}
+
+        llm_client = OpenAICompatibleClient(
+            provider=provider,
+            api_key=api_key,
+            timeout_seconds=self.config.memos_timeout_seconds,
+        )
+        try:
+            extraction = await llm_client.extract_reminders(
+                content=source_content,
+                timezone=self.config.timezone,
+                now=_now_in_timezone(self.config.timezone).isoformat(timespec="seconds"),
+                trigger_tag=self.config.reminders_trigger_tag,
+            )
+        except Exception as exc:
+            LOGGER.warning("Reminder extraction failed for memo %s: %s", memo_uid, exc)
+            return {"status": "skipped", "reason": "extract_failed"}
+
+        created: list[dict[str, object]] = []
+        skipped: list[dict[str, object]] = []
+        clarification_questions: list[str] = []
+        now_utc = datetime.now(UTC)
+
+        for item in extraction.items:
+            due_at = _parse_due_at(item.due_at, item.timezone or self.config.timezone)
+            if item.confidence < self.config.reminders_confidence_threshold:
+                skipped.append({"reason": "low_confidence", "title": item.title, "confidence": item.confidence})
+                continue
+            if due_at is None:
+                skipped.append({"reason": "invalid_due_at", "title": item.title})
+                continue
+            if due_at <= now_utc:
+                skipped.append({"reason": "past_due_at", "title": item.title, "due_at": due_at.isoformat(timespec="seconds")})
+                continue
+            reminder, inserted = self.store.create_reminder(
+                workspace_id=workspace_id,
+                source_memo_uid=memo_uid,
+                title=item.title,
+                body=item.body or item.raw_text or item.title,
+                due_at=due_at.isoformat(timespec="seconds"),
+                timezone=item.timezone or self.config.timezone,
+                confidence=item.confidence,
+                raw_text=item.raw_text or source_content[:1000],
+            )
+            created.append({"id": reminder.id, "created": inserted, "due_at": reminder.due_at, "title": reminder.title})
+
+        if extraction.needs_clarification and extraction.clarification_question:
+            clarification_questions.append(extraction.clarification_question)
+        if skipped and not created:
+            clarification_questions.append("请补充明确的提醒日期和时间，例如：#提醒 明天 09:30 提醒我提交周报。")
+        if clarification_questions:
+            comment = _reminder_clarification_comment(_dedupe(clarification_questions)[0])
+            await client.create_comment(memo_uid, comment)
+            return {
+                "status": "waiting_user",
+                "created": created,
+                "skipped": skipped,
+                "clarification_comment_created": True,
+                "clarification_comment": comment,
+            }
+
+        if created:
+            return {"status": "created", "created": created, "skipped": skipped}
+        if extraction.has_reminder:
+            return {"status": "skipped", "reason": "no_valid_items", "skipped": skipped}
+        return {"status": "not_triggered"}
+
+    async def _send_due_reminders_once(self) -> bool:
+        if not self.config.reminders_enabled:
+            return False
+        reminders = self.store.list_due_reminders(
+            workspace_id=self.config.workspace_id,
+            now=utc_now(),
+            limit=20,
+        )
+        if not reminders:
+            return False
+        for reminder in reminders:
+            await self._send_reminder(reminder)
+        return True
+
+    async def _send_reminder(self, reminder: ReminderRecord) -> None:
+        webhook_url = self.config.reminders_webhook_url
+        if not webhook_url:
+            self.store.mark_reminder_failed(reminder.id, "REMINDER_WEBHOOK_URL is not configured")
+            return
+        title = f"Memosima 提醒：{reminder.title}"
+        body = (
+            f"{reminder.body}\n\n"
+            f"到期时间：{reminder.due_at}\n"
+            f"来源 memo UID：{reminder.source_memo_uid}"
+        )
+        try:
+            async with httpx.AsyncClient(timeout=self.config.reminders_request_timeout_seconds) as client:
+                response = await client.post(webhook_url, data={"title": title, "body": body})
+            response.raise_for_status()
+        except Exception as exc:
+            LOGGER.warning("Reminder send failed for id %s: %s", reminder.id, exc)
+            self.store.mark_reminder_failed(reminder.id, _sanitize_error(str(exc)))
+            return
+        self.store.mark_reminder_sent(reminder.id)
 
     def _load_prompt_template(self, job: Job) -> PromptTemplate:
         override = job.payload.get("llm_prompt_override")
@@ -468,19 +692,40 @@ def _memo_uid(memo: dict[str, object]) -> str | None:
 
 
 def _is_sidecar_summary_memo(memo: dict[str, object]) -> bool:
-    sidecar_tags = {"系统/AI整理", "系统/标签总结"}
+    sidecar_tags = {"系统/AI整理", "系统/标签总结", "系统/Memosima"}
     tags = memo.get("tags")
     if isinstance(tags, list) and sidecar_tags.intersection({str(tag) for tag in tags}):
         return True
     content = memo.get("content")
-    return isinstance(content, str) and any(
-        content.lstrip().startswith(f"#{tag}") for tag in sidecar_tags
+    return isinstance(content, str) and (
+        ADMIN_ENTRY_MARKER in content
+        or any(content.lstrip().startswith(f"#{tag}") for tag in sidecar_tags)
     )
+
+
+def _is_admin_entry_memo(memo: dict[str, object]) -> bool:
+    content = memo.get("content")
+    return isinstance(content, str) and ADMIN_ENTRY_MARKER in content
+
+
+def _extract_user_business_tags(content: str) -> tuple[str, ...]:
+    tags: list[str] = []
+    for token in content.replace("\n", " ").split():
+        if not token.startswith("#"):
+            continue
+        tag = token.rstrip(".,;:!?，。；：！？）)")
+        if tag.strip("#") and not tag.startswith("#系统/"):
+            tags.append(tag)
+    return tuple(_dedupe(tags))
 
 
 def _clarification_comment(reason: str | None) -> str:
     message = reason or "内容需要进一步澄清。"
     return f"Memosima 需要补充信息后再整理：{message}"
+
+
+def _reminder_clarification_comment(reason: str) -> str:
+    return f"Memosima 提醒需要补充信息：{reason}"
 
 
 def _dedupe(values: list[str] | tuple[str, ...]) -> list[str]:
@@ -538,6 +783,36 @@ def _extract_backfilled_title(content: str) -> str:
 
 def _should_parse_with_document_parser(skipped: SkippedAttachment) -> bool:
     return skipped.reason == "parser_not_implemented" and is_document_attachment(skipped.resource)
+
+
+def _now_in_timezone(timezone: str) -> datetime:
+    try:
+        return datetime.now(ZoneInfo(timezone))
+    except ZoneInfoNotFoundError:
+        return datetime.now(UTC)
+
+
+def _parse_due_at(value: str, timezone: str) -> datetime | None:
+    text = value.strip()
+    if not text:
+        return None
+    if text.endswith("Z"):
+        text = f"{text[:-1]}+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        try:
+            parsed = parsed.replace(tzinfo=ZoneInfo(timezone))
+        except ZoneInfoNotFoundError:
+            parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
+
+
+def _sanitize_error(error: str) -> str:
+    text = error.strip().replace("\n", " ")
+    return text[:500]
 
 
 async def _run(args: argparse.Namespace) -> None:

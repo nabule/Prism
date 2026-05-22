@@ -223,3 +223,72 @@ def test_artifact_upsert_and_list_flow(tmp_path):
     assert len(artifacts) == 1
     assert artifacts[0].content_markdown == "updated\n"
     assert artifacts[0].metadata == {"filename": "note.txt", "size": 7}
+
+
+def test_reminder_create_due_send_retry_and_cancel_flow(tmp_path):
+    store = Store(tmp_path / "sidecar.db")
+    store.migrate()
+    store.ensure_workspace("default")
+
+    first, first_created = store.create_reminder(
+        workspace_id="default",
+        source_memo_uid="abc123",
+        title="提交周报",
+        body="记得提交周报",
+        due_at="2026-05-21T01:00:00+00:00",
+        timezone="Asia/Shanghai",
+        confidence=0.91,
+        raw_text="#提醒 明天提交周报",
+    )
+    second, second_created = store.create_reminder(
+        workspace_id="default",
+        source_memo_uid="abc123",
+        title="提交周报",
+        body="重复提醒",
+        due_at="2026-05-21T01:00:00+00:00",
+        timezone="Asia/Shanghai",
+        confidence=0.91,
+        raw_text="#提醒 明天提交周报",
+    )
+
+    assert first.id == second.id
+    assert first_created is True
+    assert second_created is False
+    assert store.list_due_reminders(
+        workspace_id="default",
+        now="2026-05-21T01:00:00+00:00",
+    )[0].id == first.id
+
+    failed = store.mark_reminder_failed(first.id, "webhook failed")
+    assert failed is not None
+    assert failed.status == "failed"
+    assert failed.error == "webhook failed"
+
+    retried = store.retry_reminder(first.id)
+    assert retried is not None
+    assert retried.status == "pending"
+    assert retried.error is None
+
+    sent = store.mark_reminder_sent(first.id)
+    assert sent is not None
+    assert sent.status == "sent"
+    assert sent.sent_at is not None
+    assert store.list_due_reminders(
+        workspace_id="default",
+        now="2026-05-22T01:00:00+00:00",
+    ) == []
+
+    another, _ = store.create_reminder(
+        workspace_id="default",
+        source_memo_uid="def456",
+        title="开会",
+        body="项目会",
+        due_at="2026-05-22T01:00:00+00:00",
+        timezone="Asia/Shanghai",
+        confidence=0.85,
+        raw_text="#提醒 开会",
+    )
+    cancelled = store.cancel_reminder(another.id)
+    assert cancelled is not None
+    assert cancelled.status == "cancelled"
+    assert store.list_reminders(workspace_id="default", status="cancelled")[0].id == another.id

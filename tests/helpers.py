@@ -29,6 +29,9 @@ memos:
   request_timeout_seconds: 5
   ingestion_mode: webhook
   poll_page_size: 20
+  admin_entry_enabled: true
+  admin_entry_title: Memosima 管理入口
+  admin_entry_visibility: PRIVATE
 worker:
   poll_interval_seconds: 0.01
   max_attempts: 2

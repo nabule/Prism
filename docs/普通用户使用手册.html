@@ -42,7 +42,7 @@
     </thead>
     <tbody>
       <tr><td>Memos Web 或客户端</td><td>日常记录、查看原始 memo、查看 AI 生成的整理 memo。这是普通用户的主要入口。</td></tr>
-      <tr><td>Memosima 管理页面 <code>/admin/ui</code></td><td>调试、查看后台任务、重试失败任务、审核 AI 提出的候选标签、按标签生成整体总结。普通记录不需要打开它。</td></tr>
+      <tr><td>Memosima 管理页面 <code>/admin/ui</code></td><td>调试、查看后台任务、重试失败任务、审核 AI 提出的候选标签、按标签生成整体总结、备份和恢复 Sidecar 数据。普通记录不需要打开它。</td></tr>
     </tbody>
   </table>
   <p class="note">管理员需要先部署好 Memosima、配置 Memos 访问 token 和模型 key。普通用户不需要接触 API key、Docker 或命令行。本地部署默认由 Sidecar 主动轮询 Memos，不需要公网 webhook。</p>
@@ -75,6 +75,10 @@ Memos 负责快速记录，Sidecar 负责后台整理、生成摘要和标签建
   </ul>
   <p>如果模型 key 没有配置，系统仍会做本地模板整理和显式 <code>#tag</code> 识别，但不会调用大模型生成更完整的摘要和标签建议。</p>
 
+  <h2>4.1 从 Memos 打开管理界面</h2>
+  <p>管理员启用默认配置后，Memos 中会出现一条 <code>#系统/Memosima</code> 管理入口 memo，里面有打开管理界面、查看任务、审核候选标签、生成标签总结和下载备份的链接。AI 整理 memo 底部也会附带“打开管理界面”链接；如果本次整理产生候选标签，会额外显示“审核候选标签”链接。</p>
+  <p>这些链接会打开 <code>/admin/ui</code>，页面仍需要输入 <code>SIDECAR_ADMIN_TOKEN</code>。token 只保存在当前浏览器，不会写入 Memos memo。</p>
+
   <h2>5. 标签如何自动生成</h2>
   <p>Memosima 使用两层标签机制：</p>
   <table>
@@ -87,8 +91,8 @@ Memos 负责快速记录，Sidecar 负责后台整理、生成摘要和标签建
       <tr><td>禁用标签</td><td>管理员明确禁用的标签。</td><td><span class="warn">不会使用</span></td></tr>
     </tbody>
   </table>
-  <p>AI 返回的 <code>active_tags</code> 只有命中正式标签集合时才会直接使用。AI 提出的新标签会进入 <code>candidate_tags</code>，不会自动变成正式标签。系统会优先复用已有正式标签，并控制单条 memo 的 AI 自动标签数量，避免生成过多相近标签。</p>
-  <p>当前默认不把待审核业务标签写成 Memos 原生 <code>#tag</code>，所以它们不会在 Memos Web 的标签筛选中出现。AI 整理 memo 仍会在“待审核”区域列出这些标签名称，管理员可以在 Memosima 管理页面审核。</p>
+  <p>只有原始用户 memo 没有任何业务标签时，AI 才会自动建议标签。AI 返回的 <code>active_tags</code> 只有命中正式标签集合时才会直接使用；AI 提出的新标签会进入 <code>candidate_tags</code>，不会自动变成正式标签。用户已经手写业务标签时，系统只使用用户标签，不再接收 AI 额外补充的标签。</p>
+  <p>AI 整理 memo 本身不会再写入业务 <code>#tag</code>，避免 AI 生成内容污染 Memos 标签筛选；它只保留 <code>#系统/AI整理</code>、<code>#系统/标签待审核</code> 等系统标签。业务标签会在“标签”区域以普通文本显示，管理员可以在 Memosima 管理页面审核候选标签。</p>
   <p>同名业务标签不能同时出现在不同层级。比如系统已有 <code>#项目/数管</code> 时，用户只写 <code>#数管</code>，后台会归一到已有正式标签；AI 也不能再新增 <code>#其他/数管</code> 这类同名候选。</p>
 
   <h2>6. 手动写标签</h2>
@@ -101,11 +105,11 @@ Memos 负责快速记录，Sidecar 负责后台整理、生成摘要和标签建
   <p>不写任何标签也可以。AI 会根据正文内容判断适合的正式标签，并在需要时提出新标签建议。</p>
   <pre><code>今天把 的 qwen 模型接入到知识库整理流程。
 模型参数改成配置文件控制，并验证了真实接口调用。</code></pre>
-  <p>如果系统已有 <code>#项目/个人AI知识库</code>，AI 可以直接使用它。如果 AI 认为需要 <code>#模型/</code>，但这个标签还不是正式标签，它会进入候选列表。默认每条 memo 最多接收少量 AI 补充标签，用户手动写出的标签不受这个数量限制。</p>
+  <p>如果系统已有 <code>#项目/个人AI知识库</code>，AI 可以直接使用它。如果 AI 认为需要 <code>#模型/</code>，但这个标签还不是正式标签，它会进入候选列表。默认每条无标签 memo 最多接收少量 AI 补充标签；用户手动写了业务标签时，AI 标签建议会被忽略。</p>
 
   <h2>8. 审核 AI 提出的新标签</h2>
-  <p>有权限的用户打开管理页面：</p>
-  <pre><code>http://localhost:8080/admin/ui</code></pre>
+  <p>有权限的用户可以从 <code>#系统/Memosima</code> 管理入口 memo 或 AI 整理 memo 底部链接打开管理页面，也可以直接访问：</p>
+  <pre><code>http://localhost:8080/admin/ui#tag-candidates</code></pre>
   <p>在页面中输入 <code>SIDECAR_ADMIN_TOKEN</code>，进入“候选标签”区域。</p>
   <ul>
     <li>点击“通过”：候选标签会变成正式标签，后续同类 memo 可直接使用。</li>
@@ -128,7 +132,14 @@ Memos 负责快速记录，Sidecar 负责后台整理、生成摘要和标签建
   <p>解析后的 Markdown 会和 memo 正文一起进入 AI 整理流程，因此附件里的内容也会参与摘要、标签识别和 AI 整理 memo 生成。drawio 和 Mind Elixir 专用解析仍属于后续范围。</p>
   <p>如果你只上传附件、不写正文，AI 分析成功后会自动给原始 memo 补一个标题，例如 <code># 项目方案</code>。这个标题用于在 Memos 列表里快速识别附件内容；详细摘要、要点和标签仍在新生成的 <code>AI整理</code> memo 中查看。</p>
 
-  <h2>11. 常见问题</h2>
+  <h2>11. 使用提醒</h2>
+  <p>如果管理员配置了提醒通知出口，可以在 memo 中写 <code>#提醒</code> 和明确时间：</p>
+  <pre><code>#提醒 明天 09:30 提交周报
+周报需要发给项目群，并同步本周风险。</code></pre>
+  <p>Sidecar 会在后台识别时间并创建一次性提醒。到点后，系统会通过管理员配置的 webhook 发送通知，通知正文包含提醒内容、到期时间和来源 memo UID。</p>
+  <p>建议写清楚日期和时间，例如 <code>#提醒 2026-05-22 14:00 跟进合同</code>。如果只写“有空提醒我”或时间已经过去，系统会在原 memo 下评论要求补充具体时间，但普通 AI 整理仍会继续。</p>
+
+  <h2>12. 常见问题</h2>
   <h3>为什么没有生成 AI 整理 memo？</h3>
   <p>常见原因是 webhook 没有送达、worker 没有运行、模型 key 没配置、任务失败，或 memo 被判定为待澄清。可以在 <code>/admin/ui</code> 查看任务状态。</p>
 
@@ -141,10 +152,14 @@ Memos 负责快速记录，Sidecar 负责后台整理、生成摘要和标签建
   <h3>普通用户使用客户端还是 Web？</h3>
   <p>日常记录使用 Memos 客户端或 Memos Web 都可以。Memosima 的 Web 管理页面主要用于调试、任务重试和标签审核，不是日常记录入口。</p>
 
-  <h2>12. 如何查看某个标签的整体总结</h2>
+  <h2>13. 如何查看某个标签的整体总结</h2>
   <p>管理员可以在 <code>/admin/ui</code> 的“标签总结”区域输入一个标签，例如 <code>#项目/个人AI知识库</code> 或高层级标签 <code>#项目</code>，点击“生成总结”。系统会把该标签下最近的普通来源 memos 整理成一条新的 Memos memo；输入高层级标签时，也会包含其子标签下的 memo，例如 <code>#项目/个人AI知识库</code>。如果原始 memo 没有手动标签，但 AI 整理结果命中了该标签，也会纳入总结。总结 memo 会通过 Memos 原生引用关联到参与整理的 memo，普通用户可以在 Memos Web 或客户端里点击相关 memo 回看来源；已有 AI 整理和历史标签总结不会被再次作为来源。</p>
 
-  <h2>13. 更多文档</h2>
+  <h2>14. 备份和恢复 Sidecar 数据</h2>
+  <p>管理员可以在 <code>/admin/ui</code> 的“备份恢复”区域下载备份 ZIP。备份包含 Sidecar SQLite 数据和非机密配置文件，用于保留任务、候选标签、提醒、artifact 和 memo 映射等 Sidecar 状态。</p>
+  <p>恢复时选择备份 ZIP 并确认上传，系统只替换 Sidecar SQLite 数据库，不会自动覆盖配置文件，也不会备份或恢复 Memos 主库中的原始 memo。恢复前建议先下载一份当前备份。</p>
+
+  <h2>15. 更多文档</h2>
   <ul>
     <li><a href="../README.html">项目入口</a></li>
     <li><a href="使用手册.html">部署与管理使用手册</a></li>

@@ -128,6 +128,96 @@ ADMIN_UI_HTML = """<!doctype html>
       .field { flex-basis: 100%; min-width: 0; }
       button { min-height: 36px; }
     }
+    
+    /* Q&A Pills and Autocomplete Styles */
+    .pills-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 6px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+      min-height: 40px;
+      align-items: center;
+      position: relative;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--codebg);
+      color: var(--fg);
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 0.85rem;
+      border: 1px solid var(--border);
+    }
+    .pill .remove {
+      cursor: pointer;
+      color: var(--muted);
+      font-weight: bold;
+      font-size: 0.9rem;
+      margin-left: 2px;
+    }
+    .pill .remove:hover {
+      color: var(--danger);
+    }
+    .pill-input {
+      border: none !important;
+      outline: none !important;
+      padding: 4px 6px !important;
+      flex: 1;
+      min-width: 120px;
+      background: transparent !important;
+      color: var(--fg);
+    }
+    .autocomplete-list {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      z-index: 1000;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      max-height: 200px;
+      overflow-y: auto;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      margin-top: 4px;
+      display: none;
+    }
+    .autocomplete-item {
+      padding: 8px 12px;
+      cursor: pointer;
+    }
+    .autocomplete-item:hover {
+      background: var(--accent);
+      color: #fff;
+    }
+    .prompt-container {
+      position: relative;
+    }
+    .copy-btn-floating {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      background: var(--accent);
+      color: white;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      z-index: 10;
+      transition: background 0.2s, transform 0.1s;
+    }
+    .copy-btn-floating:hover {
+      background: var(--accent-strong);
+    }
+    .copy-btn-floating:active {
+      transform: scale(0.95);
+    }
     @media (prefers-color-scheme: dark) {
       :root {
         --bg: #0b1220;
@@ -174,6 +264,7 @@ ADMIN_UI_HTML = """<!doctype html>
     <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="models">模型</button>
     <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="reminders">提醒</button>
     <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="backup">备份</button>
+    <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="qa">QA 离线问答</button>
   </nav>
 
   <section class="tab-panel active" data-panel="overview">
@@ -443,6 +534,49 @@ ADMIN_UI_HTML = """<!doctype html>
       <div class="muted">备份包含 Sidecar SQLite 和非机密配置文件；恢复只替换 Sidecar SQLite，不自动覆盖配置。</div>
     </div>
   </section>
+
+  <section class="tab-panel" data-panel="qa">
+    <div class="grid">
+      <div class="panel stack">
+        <h2>QA 离线问答 & Prompt 编译器</h2>
+        <div class="field">
+          <label>知识库标签范围 (精确标签/模糊检索词)</label>
+          <div class="pills-container" id="pillsContainer">
+            <!-- Pills go here -->
+            <input type="text" id="pillInput" class="pill-input" placeholder="输入并回车或选择..." autocomplete="off">
+            <div id="autocompleteList" class="autocomplete-list"></div>
+          </div>
+          <div class="muted" style="margin-top: 4px;">输入标签以 # 开头（如 #项目/个人AI知识库），回车可直接添加模糊检索词（如 部署）。</div>
+        </div>
+        
+        <div class="field">
+          <label for="qaSystemPrompt">系统提示词 (System Prompt)</label>
+          <textarea id="qaSystemPrompt" class="prompt" spellcheck="false" placeholder="输入系统提示词...">你是一个专业的知识库问答助手。请基于提供的【知识库参考上下文】，专业、客观、严谨地回答【用户提问】。如果在上下文中找不到相关内容，请明确告知，不要胡乱编造。</textarea>
+        </div>
+
+        <div class="field">
+          <label for="qaQuery">用户提问 (Query)</label>
+          <textarea id="qaQuery" class="prompt" style="min-height: 80px;" placeholder="输入您的问题..."></textarea>
+        </div>
+
+        <div class="toolbar">
+          <button id="btnGeneratePrompt" class="primary" type="button">编译并生成 Prompt</button>
+        </div>
+      </div>
+
+      <div class="panel stack">
+        <h2>编译结果 (可直接一键复制)</h2>
+        <div class="prompt-container">
+          <button id="btnCopyPrompt" class="copy-btn-floating" type="button">一键复制</button>
+          <textarea id="assembledPromptOutput" class="prompt" style="min-height: 460px; width: 100%;" readonly placeholder="生成后，完整的 Prompt 内容将在此处显示，可一键复制并粘贴到任意网页大模型进行问答。"></textarea>
+        </div>
+        <div>
+          <h3>召回来源概要 (<span id="retrievedCount">0</span> 个知识片段)</h3>
+          <pre id="qaSourcesSummary" style="max-height: 120px; font-size: 0.8rem;">（暂无召回来源）</pre>
+        </div>
+      </div>
+    </div>
+  </section>
 </main>
 
 <dialog id="promptDialog">
@@ -507,7 +641,8 @@ const hashPanelMap = {
   prompts: { panel: "prompts" },
   models: { panel: "models" },
   reminders: { panel: "reminders" },
-  backup: { panel: "backup" }
+  backup: { panel: "backup" },
+  qa: { panel: "qa" }
 };
 
 function setNotice(message, kind = "") {
@@ -1044,6 +1179,165 @@ for (const tab of panelTriggers) {
   });
 }
 
+/* QA 离线问答 & Prompt 编译器逻辑 */
+let qaSelectedTags = [];
+let qaAvailableTags = [];
+
+const pillsContainer = document.getElementById("pillsContainer");
+const pillInput = document.getElementById("pillInput");
+const autocompleteList = document.getElementById("autocompleteList");
+const btnGeneratePrompt = document.getElementById("btnGeneratePrompt");
+const btnCopyPrompt = document.getElementById("btnCopyPrompt");
+const qaSystemPrompt = document.getElementById("qaSystemPrompt");
+const qaQuery = document.getElementById("qaQuery");
+const assembledPromptOutput = document.getElementById("assembledPromptOutput");
+const retrievedCount = document.getElementById("retrievedCount");
+const qaSourcesSummary = document.getElementById("qaSourcesSummary");
+
+function renderPills() {
+  const pills = pillsContainer.querySelectorAll(".pill");
+  for (const p of pills) {
+    p.remove();
+  }
+  for (const tag of qaSelectedTags) {
+    const pill = document.createElement("div");
+    pill.className = "pill";
+    pill.textContent = tag;
+    const remove = document.createElement("span");
+    remove.className = "remove";
+    remove.textContent = "×";
+    remove.onclick = (e) => {
+      e.stopPropagation();
+      qaSelectedTags = qaSelectedTags.filter((t) => t !== tag);
+      renderPills();
+    };
+    pill.append(remove);
+    pillsContainer.insertBefore(pill, pillInput);
+  }
+}
+
+function addPill(tag) {
+  const val = tag.trim();
+  if (!val) return;
+  if (!qaSelectedTags.includes(val)) {
+    qaSelectedTags.push(val);
+    renderPills();
+  }
+  pillInput.value = "";
+  autocompleteList.style.display = "none";
+}
+
+async function loadQABusinessTags() {
+  try {
+    const tags = await requestJson("/admin/tags/business");
+    if (Array.isArray(tags)) {
+      qaAvailableTags = tags;
+    }
+  } catch (e) {
+    console.warn("Failed to load business tags:", e);
+  }
+}
+
+pillInput.addEventListener("input", () => {
+  const val = pillInput.value.trim().toLowerCase();
+  if (!val) {
+    autocompleteList.style.display = "none";
+    return;
+  }
+  const matches = qaAvailableTags.filter(
+    (t) => t.toLowerCase().includes(val) && !qaSelectedTags.includes(t)
+  );
+  if (matches.length === 0) {
+    autocompleteList.style.display = "none";
+    return;
+  }
+  autocompleteList.replaceChildren(
+    ...matches.map((m) => {
+      const div = document.createElement("div");
+      div.className = "autocomplete-item";
+      div.textContent = m;
+      div.onclick = () => addPill(m);
+      return div;
+    })
+  );
+  autocompleteList.style.display = "block";
+});
+
+pillInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    addPill(pillInput.value);
+  } else if (e.key === "Backspace" && !pillInput.value && qaSelectedTags.length > 0) {
+    qaSelectedTags.pop();
+    renderPills();
+  }
+});
+
+document.addEventListener("click", (e) => {
+  if (!pillsContainer.contains(e.target)) {
+    autocompleteList.style.display = "none";
+  }
+});
+
+pillsContainer.addEventListener("click", () => {
+  pillInput.focus();
+});
+
+btnGeneratePrompt.addEventListener("click", async () => {
+  const system = qaSystemPrompt.value.trim();
+  const query = qaQuery.value.trim();
+  if (!query) {
+    alert("请输入提问内容！");
+    return;
+  }
+  btnGeneratePrompt.disabled = true;
+  btnGeneratePrompt.textContent = "编译中...";
+  try {
+    const data = await requestJson("/admin/qa/generate-prompt", {
+      method: "POST",
+      body: JSON.stringify({
+        tags: qaSelectedTags,
+        system_prompt: system,
+        query: query
+      })
+    });
+    assembledPromptOutput.value = data.assembled_prompt;
+    retrievedCount.textContent = data.retrieved_count;
+    if (data.sources && data.sources.length > 0) {
+      qaSourcesSummary.textContent = JSON.stringify(data.sources, null, 2);
+    } else {
+      qaSourcesSummary.textContent = "（未找到符合所选标签或检索词的知识库内容）";
+    }
+    setNotice("Prompt 编译生成成功，已展示在右侧区域！", "ok");
+  } catch (err) {
+    setNotice("QA Prompt 编译失败：" + String(err.message || err), "error");
+  } finally {
+    btnGeneratePrompt.disabled = false;
+    btnGeneratePrompt.textContent = "编译并生成 Prompt";
+  }
+});
+
+btnCopyPrompt.addEventListener("click", () => {
+  const text = assembledPromptOutput.value;
+  if (!text) {
+    alert("没有可复制的内容！请先编译生成 Prompt。");
+    return;
+  }
+  navigator.clipboard.writeText(text).then(
+    () => {
+      btnCopyPrompt.textContent = "✓ 已复制！";
+      btnCopyPrompt.style.background = "var(--ok)";
+      setTimeout(() => {
+        btnCopyPrompt.textContent = "一键复制";
+        btnCopyPrompt.style.background = "var(--accent)";
+      }, 2000);
+    },
+    (err) => {
+      alert("复制失败，请手动选择复制：" + err);
+    }
+  );
+});
+
 tokenInput.value = localStorage.getItem(storageKey) || "";
 loadHealth();
 if (token()) {
@@ -1052,6 +1346,7 @@ if (token()) {
   loadReminders();
   loadPrompts();
   loadModels();
+  loadQABusinessTags();
 }
 window.addEventListener("hashchange", showPanelFromHash);
 showPanelFromHash();

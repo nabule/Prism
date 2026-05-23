@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import io
 import json
+import logging
 import os
 import re
 import shutil
@@ -12,6 +13,8 @@ import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+LOGGER = logging.getLogger("memosima.api")
 
 import uvicorn
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, status
@@ -175,6 +178,25 @@ class HealthResponse(BaseModel):
     models_api_key_present: bool
     reminders_enabled: bool
     reminders_webhook_configured: bool
+
+
+class QA_Source(BaseModel):
+    memos_uid: str
+    content_excerpt: str
+    tags: list[str]
+
+
+class GeneratePromptRequest(BaseModel):
+    tags: list[str]
+    system_prompt: str
+    query: str
+    top_k: int = 15
+
+
+class GeneratePromptResponse(BaseModel):
+    assembled_prompt: str
+    retrieved_count: int
+    sources: list[QA_Source]
 
 
 def create_app(
@@ -560,6 +582,131 @@ def create_app(
         if candidate is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tag candidate not found")
         return _tag_candidate_view(candidate)
+
+    @app.get(
+        "/admin/tags/business",
+        response_model=list[str],
+        dependencies=[Depends(require_admin)],
+    )
+    async def get_business_tags() -> list[str]:
+        tags = store.list_business_tags(workspace_id=config.workspace_id)
+        return [tag.path for tag in tags if tag.status == "active"]
+
+    @app.post(
+        "/admin/qa/generate-prompt",
+        response_model=GeneratePromptResponse,
+        dependencies=[Depends(require_admin)],
+    )
+    async def generate_prompt(request_data: GeneratePromptRequest) -> GeneratePromptResponse:
+        if not config.memos_base_url or not config.memos_api_token:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Memos base URL or API token is not configured",
+            )
+        
+        memos_client = MemosClient(
+            base_url=config.memos_base_url,
+            api_token=config.memos_api_token,
+            timeout_seconds=config.memos_timeout_seconds,
+        )
+        
+        retrieved_memos = []
+        seen_memos = set()
+        
+        # If there are no tags, we can just fetch recent memos
+        if not request_data.tags:
+            try:
+                response = await memos_client.list_memos(page_size=50)
+                memos = response.get("memos", [])
+                if isinstance(memos, list):
+                    for memo in memos:
+                        uid = memo.get("uid") or memo.get("name")
+                        if uid and uid not in seen_memos:
+                            seen_memos.add(uid)
+                            retrieved_memos.append(memo)
+            except Exception as exc:
+                LOGGER.warning("QA list_memos failed: %s", exc)
+        else:
+            for tag_or_word in request_data.tags:
+                tag_or_word = tag_or_word.strip()
+                if not tag_or_word:
+                    continue
+                
+                # Check if it's a tag or a keyword
+                if tag_or_word.startswith("#"):
+                    filter_str = f"tag in ['{tag_or_word}']"
+                else:
+                    filter_str = f"content.contains('{tag_or_word}')"
+                
+                try:
+                    response = await memos_client.list_memos(page_size=50, filter_text=filter_str)
+                    memos = response.get("memos", [])
+                    if isinstance(memos, list):
+                        for memo in memos:
+                            uid = memo.get("uid") or memo.get("name")
+                            if uid and uid not in seen_memos:
+                                seen_memos.add(uid)
+                                retrieved_memos.append(memo)
+                except Exception as exc:
+                    LOGGER.warning("QA list_memos failed for %s: %s", tag_or_word, exc)
+                    
+        # Limit to top_k
+        retrieved_memos = retrieved_memos[:request_data.top_k]
+        
+        sources = []
+        context_parts = []
+        
+        for memo in retrieved_memos:
+            uid = memo.get("uid") or memo.get("name")
+            if not uid:
+                continue
+            clean_uid = uid.split("/")[-1] if "/" in uid else uid
+            content = memo.get("content", "")
+            
+            # Find any artifacts associated with this memo
+            artifacts = store.list_artifacts(workspace_id=config.workspace_id, memo_uid=clean_uid)
+            
+            memo_tags = []
+            for part in content.split():
+                if part.startswith("#") and len(part) > 1:
+                    memo_tags.append(part)
+                    
+            sources.append(
+                QA_Source(
+                    memos_uid=clean_uid,
+                    content_excerpt=content[:200] + "..." if len(content) > 200 else content,
+                    tags=memo_tags,
+                )
+            )
+            
+            snippet = f"### 来源 Memo [ID: {clean_uid}]\n"
+            snippet += f"创建时间: {memo.get('createTime') or memo.get('create_time') or '未知'}\n"
+            if memo_tags:
+                snippet += f"标签: {', '.join(memo_tags)}\n"
+            snippet += f"内容:\n{content}\n"
+            
+            if artifacts:
+                snippet += "\n-- 关联解析附件 --\n"
+                for art in artifacts:
+                    snippet += f"附件名称: {art.resource_uid}\n"
+                    snippet += f"内容:\n{art.content_markdown}\n"
+                    
+            context_parts.append(snippet)
+            
+        assembled_prompt = ""
+        assembled_prompt += f"# 系统提示\n{request_data.system_prompt}\n\n"
+        assembled_prompt += "# 知识库参考上下文\n"
+        if context_parts:
+            assembled_prompt += "\n\n".join(context_parts)
+        else:
+            assembled_prompt += "（未找到符合所选标签或检索词的知识库内容）\n"
+        assembled_prompt += f"\n\n# 用户提问\n{request_data.query}\n"
+        
+        return GeneratePromptResponse(
+            assembled_prompt=assembled_prompt,
+            retrieved_count=len(retrieved_memos),
+            sources=sources,
+        )
 
     return app
 

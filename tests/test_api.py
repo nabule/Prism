@@ -7,6 +7,7 @@ import zipfile
 from fastapi.testclient import TestClient
 
 from memosima.api.app import create_app
+from memosima.llm.provider import LLMClientError
 
 from helpers import app_config_text, models_config_text, prompts_config_text, write_yaml
 
@@ -80,28 +81,111 @@ def test_admin_prompts_can_be_read_and_updated(tmp_path, monkeypatch):
     assert listed.status_code == 200
     assert "测试系统提示词" in listed.json()["organize_memo"]["system"]
     assert updated.status_code == 200
+    assert listed.json()["organize_memo"]["provider"] is None
+    assert listed.json()["reminder_extraction"]["provider"] is None
     assert updated.json()["system"] == "新的系统提示 {active_tags}"
+    assert updated.json()["provider"] is None
     assert listed_again.json()["organize_memo"]["user"] == "新的用户提示 {content}"
     assert "测试标签总结系统提示词" in listed_again.json()["tag_summary"]["system"]
+    assert "提醒时间抽取器" in listed_again.json()["reminder_extraction"]["system"]
 
 
-def test_admin_tag_summary_prompt_can_be_updated(tmp_path, monkeypatch):
+def test_admin_ai_call_prompts_can_store_provider_selection(tmp_path, monkeypatch):
     app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
     models_path = write_yaml(tmp_path / "models.yaml", models_config_text())
     write_yaml(tmp_path / "prompts.yaml", prompts_config_text())
     monkeypatch.setenv("SIDECAR_ADMIN_TOKEN", "admin-token")
 
     client = TestClient(create_app(str(app_path), str(models_path)))
-    updated = client.put(
+    tag_updated = client.put(
         "/admin/prompts/tag-summary",
         headers={"Authorization": "Bearer admin-token"},
-        json={"system": "标签总结系统", "user": "标签总结用户 {tag} {memos_markdown}"},
+        json={"provider": "deepseek", "system": "标签总结系统", "user": "标签总结用户 {tag} {memos_markdown}"},
+    )
+    reminder_updated = client.put(
+        "/admin/prompts/reminder-extraction",
+        headers={"Authorization": "Bearer admin-token"},
+        json={
+            "provider": "",
+            "system": "提醒系统 {trigger_tag}",
+            "user": "提醒用户 {now} {timezone} {content}",
+        },
     )
     listed = client.get("/admin/prompts", headers={"Authorization": "Bearer admin-token"})
 
-    assert updated.status_code == 200
-    assert updated.json()["system"] == "标签总结系统"
+    assert tag_updated.status_code == 200
+    assert tag_updated.json()["provider"] == "deepseek"
+    assert tag_updated.json()["system"] == "标签总结系统"
+    assert reminder_updated.status_code == 200
+    assert reminder_updated.json()["provider"] == ""
     assert listed.json()["tag_summary"]["user"] == "标签总结用户 {tag} {memos_markdown}"
+    assert listed.json()["tag_summary"]["provider"] == "deepseek"
+    assert listed.json()["reminder_extraction"]["provider"] == ""
+    assert listed.json()["reminder_extraction"]["user"] == "提醒用户 {now} {timezone} {content}"
+
+
+def test_admin_models_can_be_read_and_updated_without_exposing_key(tmp_path, monkeypatch):
+    app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
+    models_path = write_yaml(tmp_path / "models.yaml", models_config_text())
+    monkeypatch.setenv("SIDECAR_ADMIN_TOKEN", "admin-token")
+
+    client = TestClient(create_app(str(app_path), str(models_path)))
+    listed = client.get("/admin/models", headers={"Authorization": "Bearer admin-token"})
+    updated = client.put(
+        "/admin/models",
+        headers={"Authorization": "Bearer admin-token"},
+        json={
+            "default_provider": "deepseek",
+            "base_url": "https://api.deepseek.com",
+            "api_key_env": "DEEPSEEK_API_KEY",
+            "default_model": "deepseek-v4-flash",
+            "temperature": 0.1,
+            "max_tokens": 1024,
+            "response_format": "json_object",
+            "extra_body": {"metadata": {"source": "admin-ui-test"}},
+            "api_key": "deepseek-secret-key",
+        },
+    )
+    health = client.get("/health")
+
+    assert listed.status_code == 200
+    assert "deepseek-secret-key" not in listed.text
+    assert updated.status_code == 200
+    assert updated.json()["default_provider"] == "deepseek"
+    default_provider = [item for item in updated.json()["providers"] if item["is_default"]][0]
+    assert default_provider["default_model"] == "deepseek-v4-flash"
+    assert default_provider["api_key_present"] is True
+    assert "deepseek-secret-key" not in updated.text
+    assert "deepseek-secret-key" not in models_path.read_text(encoding="utf-8")
+    assert "default_provider: deepseek" in models_path.read_text(encoding="utf-8")
+    assert "default_model: deepseek-v4-flash" in models_path.read_text(encoding="utf-8")
+    env_text = (tmp_path / ".env.local").read_text(encoding="utf-8")
+    assert "DEEPSEEK_API_KEY=deepseek-secret-key" in env_text
+    assert health.json()["models_default_provider"] == "deepseek"
+    assert health.json()["models_default_model"] == "deepseek-v4-flash"
+    assert health.json()["models_api_key_present"] is True
+
+
+def test_admin_models_rejects_multiline_api_key(tmp_path, monkeypatch):
+    app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
+    models_path = write_yaml(tmp_path / "models.yaml", models_config_text())
+    monkeypatch.setenv("SIDECAR_ADMIN_TOKEN", "admin-token")
+
+    client = TestClient(create_app(str(app_path), str(models_path)))
+    response = client.put(
+        "/admin/models",
+        headers={"Authorization": "Bearer admin-token"},
+        json={
+            "default_provider": "deepseek",
+            "base_url": "https://api.deepseek.com",
+            "api_key_env": "DEEPSEEK_API_KEY",
+            "default_model": "deepseek-v4-flash",
+            "api_key": "one-line\nINJECTED=value",
+        },
+    )
+
+    assert response.status_code == 400
+    assert not (tmp_path / ".env.local").exists()
 
 
 def test_admin_retry_job_can_store_temporary_prompt_override(tmp_path, monkeypatch):
@@ -152,10 +236,30 @@ def test_admin_ui_returns_debug_page_without_exposing_token(tmp_path, monkeypatc
     assert "/admin/backups/download" in response.text
     assert "/admin/backups/restore" in response.text
     assert "/admin/prompts" in response.text
+    assert "/admin/models" in response.text
+    assert "AI 调用配置" in response.text
+    assert "单条 memo 整理使用的模型配置" in response.text
+    assert "标签总结使用的模型配置" in response.text
+    assert "提醒抽取使用的模型配置" in response.text
+    assert 'class="shell"' in response.text
+    assert 'role="tablist"' in response.text
+    assert 'data-tab-target="overview"' in response.text
+    assert 'data-tab-target="jobs"' in response.text
+    assert 'data-tab-target="tags"' in response.text
+    assert 'data-tab-target="prompts"' in response.text
+    assert 'data-tab-target="models"' in response.text
+    assert 'data-tab-target="reminders"' in response.text
+    assert 'data-tab-target="backup"' in response.text
+    assert 'data-panel="overview"' in response.text
+    assert 'data-panel="tags"' in response.text
+    assert 'data-panel="backup"' in response.text
+    assert "showPanelFromHash" in response.text
+    assert "hashPanelMap" in response.text
     assert 'id="jobs"' in response.text
     assert 'id="tag-candidates"' in response.text
     assert 'id="tag-summary"' in response.text
     assert 'id="backup"' in response.text
+    assert 'id="models"' in response.text
     assert "scrollToHashTarget" in response.text
     assert "admin-token" not in response.text
     assert "secret-key" not in response.text
@@ -445,3 +549,115 @@ def test_admin_tag_summary_creates_summary_memo(tmp_path, monkeypatch):
         ("tag-summary-1", "source-content-child"),
         ("tag-summary-1", "source-from-summary"),
     ]
+
+
+def test_admin_tag_summary_uses_configured_prompt_provider(tmp_path, monkeypatch):
+    app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
+    models_path = write_yaml(tmp_path / "models.yaml", models_config_text())
+    write_yaml(
+        tmp_path / "prompts.yaml",
+        prompts_config_text()
+        + """
+tag_summary:
+  provider: deepseek
+  system: 标签总结系统
+  user: 标签总结用户 {tag} {memo_count} {memos_markdown}
+""",
+    )
+    monkeypatch.setenv("SIDECAR_ADMIN_TOKEN", "admin-token")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "deepseek-key")
+    monkeypatch.setenv("MEMOS_BASE_URL", "http://memos.local")
+    monkeypatch.setenv("MEMOS_API_TOKEN", "memos-token")
+
+    class FakeMemosClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def list_memos(self, *, page_size, page_token=None, filter_text=None):
+            return {
+                "memos": [
+                    {
+                        "name": "memos/source1",
+                        "createTime": "2026-05-21T03:00:00Z",
+                        "content": "个人 AI 知识库推进记录 #项目/个人AI知识库",
+                        "tags": ["项目/个人AI知识库"],
+                    }
+                ]
+            }
+
+        async def create_memo(self, content):
+            return {"name": "memos/tag-summary-provider", "content": content}
+
+        async def upsert_memo_reference_relation(self, *, source_memo_uid, related_memo_uid):
+            return {}
+
+    class FakeLLMClient:
+        seen_provider = ""
+        seen_api_key = ""
+
+        def __init__(self, *, provider, api_key, timeout_seconds):
+            FakeLLMClient.seen_provider = provider.name
+            FakeLLMClient.seen_api_key = api_key
+
+        async def summarize_tag(self, *, tag, memos_markdown, memo_count, prompt_template):
+            return "## 总览\n\n使用独立模型生成。"
+
+    monkeypatch.setattr("memosima.api.app.MemosClient", FakeMemosClient)
+    monkeypatch.setattr("memosima.api.app.OpenAICompatibleClient", FakeLLMClient)
+
+    client = TestClient(create_app(str(app_path), str(models_path)))
+    response = client.post(
+        "/admin/tag-summaries",
+        headers={"Authorization": "Bearer admin-token"},
+        json={"tag": "#项目/个人AI知识库", "limit": 20},
+    )
+
+    assert response.status_code == 200
+    assert FakeLLMClient.seen_provider == "deepseek"
+    assert FakeLLMClient.seen_api_key == "deepseek-key"
+
+
+def test_admin_tag_summary_returns_bad_gateway_when_llm_fails(tmp_path, monkeypatch):
+    app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
+    models_path = write_yaml(tmp_path / "models.yaml", models_config_text())
+    write_yaml(tmp_path / "prompts.yaml", prompts_config_text())
+    monkeypatch.setenv("SIDECAR_ADMIN_TOKEN", "admin-token")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    monkeypatch.setenv("MEMOS_BASE_URL", "http://memos.local")
+    monkeypatch.setenv("MEMOS_API_TOKEN", "memos-token")
+
+    class FakeMemosClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def list_memos(self, *, page_size, page_token=None, filter_text=None):
+            return {
+                "memos": [
+                    {
+                        "name": "memos/source1",
+                        "createTime": "2026-05-21T03:00:00Z",
+                        "content": "个人 AI 知识库推进记录 #项目/个人AI知识库",
+                        "tags": ["项目/个人AI知识库"],
+                    }
+                ]
+            }
+
+    class FakeLLMClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def summarize_tag(self, *, tag, memos_markdown, memo_count, prompt_template):
+            raise LLMClientError("LLM request failed: POST /chat/completions -> 500")
+
+    monkeypatch.setattr("memosima.api.app.MemosClient", FakeMemosClient)
+    monkeypatch.setattr("memosima.api.app.OpenAICompatibleClient", FakeLLMClient)
+
+    client = TestClient(create_app(str(app_path), str(models_path)))
+    response = client.post(
+        "/admin/tag-summaries",
+        headers={"Authorization": "Bearer admin-token"},
+        json={"tag": "#项目/个人AI知识库", "limit": 20},
+    )
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == "LLM tag summary request failed"

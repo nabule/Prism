@@ -2,7 +2,8 @@
   "name": "memosima",
   "private": true,
   "devDependencies": {
-    "nx": "^22.1.0"
+    "nx": "^22.1.0",
+    "@colbymchenry/codegraph": "^0.9.3"
   },
   "scripts": {
     "test": "nx test sidecar",

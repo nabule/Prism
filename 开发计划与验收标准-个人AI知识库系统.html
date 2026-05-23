@@ -65,7 +65,7 @@
 <h3>3.2 任务</h3>
 <ul>
 <li>初始化代码仓库。</li>
-<li>创建 Docker Compose 草案。</li>
+<li>创建 Docker Compose，并提供 Caddy 统一入口网关。</li>
 <li>固定 Memos 镜像版本。</li>
 <li>启动本地 Memos 实例。</li>
 <li>创建测试账号和 API token。</li>
@@ -271,7 +271,7 @@
 </thead>
 <tbody><tr>
 <td>M0</td>
-<td>API 探针记录、项目骨架、Docker Compose 草案</td>
+<td>API 探针记录、项目骨架、Docker Compose 与 Caddy 网关</td>
 </tr>
 <tr>
 <td>M1</td>
@@ -339,7 +339,7 @@
 <ul>
 <li>创建 Python 项目。</li>
 <li>配置依赖管理。</li>
-<li>创建 Docker Compose。</li>
+<li>创建 Docker Compose 和 Caddy 统一入口。</li>
 <li>添加 lint/test 命令。</li>
 <li>初始化文档目录。</li>
 </ul>
@@ -391,14 +391,14 @@
 <p>已完成：</p>
 <ul>
 <li>Python/FastAPI 项目骨架。</li>
-<li>Docker Compose 与 Dockerfile 草案。</li>
+<li>Docker Compose、Caddy 网关与 Dockerfile。</li>
 <li>配置示例：<code>app.yaml</code>、<code>models.yaml</code>、<code>taxonomy.yaml</code>。</li>
 <li>Memos webhook 接收与 SQLite 幂等任务创建。</li>
 <li>Memos 用户 webhook 自动配置探针。</li>
 <li>jobs 管理查询与 retry 接口。</li>
 <li>SQLite worker 轮询与 <code>process_memo</code> 基础处理。</li>
 <li>Memos Client 基础 API 封装。</li>
-<li>OpenRouter 默认模型配置为 <code>deepseek/deepseek-v4-flash:free</code>。</li>
+<li>DeepSeek 默认模型配置为 <code>deepseek-v4-flash</code>。</li>
 <li>开发运行、配置、API 探针和验收记录文档。</li>
 <li>P2 第一片：标签树配置加载、本地整理草案生成、worker job result 输出 <code>ai_plan</code>。</li>
 <li>P2 第二片：候选标签落库，提供 <code>/admin/tag-candidates</code> 查询、approve、reject 管理接口。</li>

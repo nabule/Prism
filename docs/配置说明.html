@@ -83,7 +83,8 @@
 <li><code>worker.create_probe_comment</code>：P0 探针是否在 memo 下写入测试评论，默认关闭。</li>
 </ul>
 <p>本地部署推荐使用 <code>poll</code> 模式，不需要暴露公网地址。Memos <code>0.28.0</code> 会拒绝 webhook URL 指向本机、Docker 内网或其他保留/私有 IP；只有在需要 webhook 模式时，才需要配置公网可达 URL 或公网隧道。</p>
-<p>管理入口 memo 和 AI 整理 memo 中的管理链接由 <code>app.public_base_url</code> 生成；如果用户从其他设备访问 Memos，应把该值配置为浏览器可访问的 Sidecar 地址，例如 <code>http://192.168.1.10:8080</code> 或反向代理域名。管理页面按「概览、任务、标签、AI 配置、模型、提醒、备份」聚合功能，并支持 <code>#overview</code>、<code>#jobs</code>、<code>#tag-candidates</code>、<code>#tag-summary</code>、<code>#prompts</code>、<code>#models</code>、<code>#reminders</code> 和 <code>#backup</code> 锚点直达。</p>
+<p>默认 Docker Compose 包含 <code>gateway</code>、<code>memos</code>、<code>sidecar</code> 和 <code>sidecar-worker</code> 四个服务。<code>gateway</code> 使用 Caddy 按路径分流：<code>/admin/*</code>、<code>/health</code>、<code>/webhooks/*</code> 到 Sidecar，其余路径到 Memos。默认只暴露 <code>http://localhost:8080</code> 一个宿主机入口；Memos 的 <code>5230</code> 和 Sidecar 容器内部 <code>8080</code> 不直接暴露。可以通过 <code>GATEWAY_PORT</code> 修改宿主机端口。</p>
+<p>管理入口 memo 和 AI 整理 memo 中的管理链接由 <code>app.public_base_url</code> 生成；如果用户从其他设备访问 Memos，应把该值配置为浏览器可访问的统一网关地址，例如 <code>http://192.168.1.10:8080</code> 或反向代理域名。管理页面按「概览、任务、标签、AI 配置、模型、提醒、备份」聚合功能，并支持 <code>#overview</code>、<code>#jobs</code>、<code>#tag-candidates</code>、<code>#tag-summary</code>、<code>#prompts</code>、<code>#models</code>、<code>#reminders</code> 和 <code>#backup</code> 锚点直达。</p>
 <h2>reminders</h2>
 <p><code>reminders</code> 控制 <code>#提醒</code> 时间识别和定时通知：</p>
 <pre><code class="language-yaml">reminders:

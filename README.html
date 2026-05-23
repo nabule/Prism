@@ -33,8 +33,9 @@
   <h2>当前状态</h2>
   <p>已完成 P0、P1、P2 核心闭环，并开始 P3 文本附件解析基础。</p>
   <ul>
+    <li>Caddy 网关统一入口，默认从 <code>http://localhost:8080/</code> 访问 Memos，从 <code>/admin/*</code>、<code>/health</code>、<code>/webhooks/*</code> 访问 Sidecar。</li>
     <li>Memos webhook 接入和 SQLite 任务系统。</li>
-    <li>AI 整理 memo 创建，支持/OpenRouter 等 OpenAI-compatible LLM 和本地模板回退。</li>
+    <li>AI 整理 memo 创建，支持 DeepSeek、、OpenRouter 等 OpenAI-compatible LLM 和本地模板回退。</li>
     <li>Memos 原生 <code>REFERENCE</code> relation 关联原始 memo 与 AI memo。</li>
     <li>内置 <code>/admin/ui</code> 调试管理页面，用于查看任务、重试任务、审核候选标签、备份和恢复 Sidecar 数据。</li>
     <li>worker 可在 Memos 中自动维护 <code>#系统/Memosima</code> 管理入口 memo，AI 整理 memo 也会附带管理页面和候选标签审核链接。</li>
@@ -52,7 +53,8 @@
   <pre><code>cp .env.example .env
 npx nx run sidecar:up
 curl http://localhost:8080/health</code></pre>
-  <p>调试管理页面：<code>http://localhost:8080/admin/ui</code>。页面不会读取服务器端密钥，需要手动输入 <code>SIDECAR_ADMIN_TOKEN</code>，并只保存在当前浏览器的 <code>localStorage</code>。页面也可以编辑默认 LLM 提示词，或在重试任务时只临时覆盖当前任务使用的提示词。默认开启 Memos 内管理入口，worker 空闲时会自动创建或更新一条 <code>#系统/Memosima</code> memo，入口链接由 <code>app.public_base_url</code> 生成。</p>
+  <p>默认 Docker Compose 会启动 <code>gateway</code>、<code>memos</code>、<code>sidecar</code> 和 <code>sidecar-worker</code>。Caddy 网关只暴露一个宿主机入口：<code>http://localhost:8080/</code> 进入 Memos，<code>http://localhost:8080/admin/ui</code> 进入 Sidecar 管理页面，<code>http://localhost:8080/health</code> 返回 Sidecar 健康状态。Memos 的 <code>5230</code> 和 Sidecar 容器内部 <code>8080</code> 默认不直接暴露到宿主机；需要改宿主机端口时可设置 <code>GATEWAY_PORT</code>。</p>
+  <p>调试管理页面不会读取服务器端密钥，需要手动输入 <code>SIDECAR_ADMIN_TOKEN</code>，并只保存在当前浏览器的 <code>localStorage</code>。页面也可以编辑默认 LLM 提示词，或在重试任务时只临时覆盖当前任务使用的提示词。默认开启 Memos 内管理入口，worker 空闲时会自动创建或更新一条 <code>#系统/Memosima</code> memo，入口链接由 <code>app.public_base_url</code> 生成。</p>
 
   <h2>常用命令</h2>
   <pre><code>npx nx test sidecar

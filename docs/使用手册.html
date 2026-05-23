@@ -35,9 +35,9 @@
   <h2>当前完成状态</h2>
   <p>已经完成并通过真实测试的范围：</p>
   <ul>
-    <li>Memos、Sidecar API、worker 的 Docker Compose 启动。</li>
+    <li>Memos、Caddy 网关、Sidecar API、worker 的 Docker Compose 启动。</li>
     <li>Memos webhook 接入、任务入队、后台处理和管理接口。</li>
-    <li>OpenAI-compatible LLM 整理，默认使用 OpenRouter <code>google/gemma-3-27b-it</code>。</li>
+    <li>OpenAI-compatible LLM 整理，默认使用 DeepSeek <code>deepseek-v4-flash</code>。</li>
     <li>AI 整理 memo 创建，并写入 Memos 原生 <code>REFERENCE</code> relation，由整理 memo 指向原始 memo。</li>
     <li>内置 <code>/admin/ui</code> 调试管理页面，可查看任务、重试任务和审核候选标签。</li>
     <li>候选标签创建、审核、审核后 active 生效。</li>
@@ -70,6 +70,9 @@
   <h2>2. 启动服务</h2>
   <p>所有常用命令通过 Nx 入口执行。</p>
   <pre><code>npx nx run sidecar:up</code></pre>
+  <p>默认 Compose 会启动 <code>gateway</code>、<code>memos</code>、<code>sidecar</code> 和 <code>sidecar-worker</code>。Caddy 网关使用同域路径分流：<code>/admin/*</code>、<code>/health</code>、<code>/webhooks/*</code> 转发到 Sidecar，其余路径转发到 Memos。默认只暴露 <code>http://localhost:8080</code> 一个宿主机入口；Memos 的 <code>5230</code> 和 Sidecar 容器内部 <code>8080</code> 不直接暴露。需要改端口时可以执行 <code>GATEWAY_PORT=8090 npx nx run sidecar:up</code>。</p>
+  <p>打开 Memos：</p>
+  <pre><code>http://localhost:8080/</code></pre>
   <p>检查健康状态：</p>
   <pre><code>curl http://localhost:8080/health</code></pre>
 
@@ -92,7 +95,7 @@
 
   <h2>5. 配置内容入口</h2>
   <p>本地部署默认使用 <code>poll</code> 模式，Sidecar 会主动轮询 Memos 最近 memo，不需要公网 webhook，也不需要在 Memos Web 中配置内网回调地址。</p>
-  <p>如果要使用 Memos 内置 webhook，Memos 0.28.0 会拒绝 webhook URL 指向 localhost、Docker 内网或私有 IP，需要公网 URL，或者用公网隧道转发到 <code>http://localhost:8080</code>。</p>
+  <p>如果要使用 Memos 内置 webhook，Memos 0.28.0 会拒绝 webhook URL 指向 localhost、Docker 内网或私有 IP，需要公网 URL，或者用公网隧道转发到 Caddy 网关公开入口。</p>
   <pre><code>npx nx run sidecar:probe-memos -- \
   --bootstrap-username test \
   --bootstrap-password testtest \

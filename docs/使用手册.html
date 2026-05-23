@@ -45,9 +45,10 @@
     <li>AI 调用配置可编辑；单条 memo 整理、标签总结和提醒抽取都支持单独选择大模型配置和提示词。</li>
     <li>按标签生成整体总结，可把同一标签下的零散 memos 整理成一条人可读的展示 memo。</li>
     <li>待澄清评论和 <code>waiting_user</code> 任务状态。</li>
-    <li><code>.txt</code>、<code>.md</code> 附件解析到 <code>artifacts</code> 表；Word、Excel、PPT、PDF 附件可通过 MinerU 在线服务转成 Markdown 后参与 AI 整理。</li>
+    <li><code>.txt</code>、<code>.md</code> 附件解析到 <code>artifacts</code> 表；Word、Excel、PPT、PDF 附件通过 MinerU 服务转成 Markdown 参与整理；特别支持 <code>.drawio</code>（.drawio.svg）与 Mind Elixir <code>.json</code> 脑图本地高保真离线解析。</li>
+    <li>管理端内置 AI 离线问答与 RAG Prompt 编译器，支持多标签药丸胶囊选择、模糊匹配、一键生成并复制完整 Prompt。</li>
   </ul>
-  <p class="note">还没有完成：drawio/Mind Elixir 专用解析、向量索引、问答、自动文档、备份恢复。</p>
+  <p class="note">还没有完成：向量索引、自动文档、备份恢复。</p>
 
   <h2>1. 准备配置</h2>
   <p>复制环境变量示例并填写真实值。不要把真实 <code>.env</code> 提交到 git。</p>
@@ -141,10 +142,18 @@
   "http://localhost:8080/admin/jobs/1/retry"</code></pre>
 
   <h2>11. 附件解析</h2>
-  <p>上传 <code>.txt</code> 或 <code>.md</code> 附件后，worker 会下载并解析为 Markdown artifact。上传 <code>.doc</code>、<code>.docx</code>、<code>.xls</code>、<code>.xlsx</code>、<code>.ppt</code>、<code>.pptx</code> 或 <code>.pdf</code> 后，worker 会先调用 MinerU 在线服务转成 Markdown，再把 Markdown 拼接到原 memo 正文后进入现有 AI 整理、自动标签和摘要流程。解析结果记录在 job <code>result.attachments</code>，正文保存在 Sidecar SQLite 的 <code>artifacts</code> 表。</p>
+  <p>上传 <code>.txt</code> 或 <code>.md</code> 附件后，worker 会下载并解析为 Markdown artifact。上传 <code>.doc</code>、<code>.docx</code>、<code>.xls</code>、<code>.xlsx</code>、<code>.ppt</code>、<code>.pptx</code> 或 <code>.pdf</code> 后，worker 会先调用 MinerU 在线服务转成 Markdown。<strong>特别地，系统原生支持 <code>.drawio</code>（流程图，包括 .drawio.svg）与 Mind Elixir <code>.json</code> 思维脑图附件的 100% 本地离线高保真解析</strong>。后台会自动对 Draw.io 压缩流执行离线逆向 zlib 解压并提取 cell 组件文案，对脑图执行递归树形遍历，生成层级 Markdown 大纲写入 <code>artifacts</code> 数据库。解析后的内容会作为上下文一同拼装给 LLM 进行智能整理。</p>
   <p>如果原始 memo 没有任何正文、只有附件，且附件解析和 LLM 分析成功，worker 会把 LLM 生成的标题以 Markdown 一级标题形式回写到原始 memo，例如 <code># 银行智能体白皮书</code>。这样 Memos 列表中不再只显示空内容或附件名；完整整理结果仍会生成独立的 <code>AI整理</code> memo，并通过原生引用关联回原 memo。</p>
 
-  <h2>12. 验证和构建</h2>
+  <h2>12. QA 离线问答 & Prompt 编译器</h2>
+  <p>管理页面内置了专门为<strong>局域网或纯离线物理沙箱环境</strong>设计的 QA 离线问答面板（<code>http://localhost:8080/admin/ui#qa</code>）：</p>
+  <ul>
+    <li><strong>多选药丸胶囊 UI</strong>：支持从下拉列表中选择 active 业务标签，或在输入框中直接输入任意模糊关键词（按回车转化为胶囊标签），且支持拼音与中文实时联想过滤。</li>
+    <li><strong>双路检索召回</strong>：后端会自动根据前缀 `#` 判断是精确标签匹配还是 Memos 正文/已解析附件大纲 Artifact 文本的模糊 contains 召回。</li>
+    <li><strong>一键生成与复制</strong>：自动编译出完美组装了「系统提示词」、「相关 Memo 正文与关联附件大纲上下文」以及「用户提问」的超级 Prompt，支持<strong>一键复制</strong>到剪切板，方便您直接粘贴到网页大模型中获取回答。</li>
+  </ul>
+
+  <h2>13. 验证和构建</h2>
   <pre><code>npx nx test sidecar
 npx nx run sidecar:compile
 npx nx build sidecar</code></pre>

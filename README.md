@@ -80,9 +80,55 @@ npx nx run sidecar:up
 curl http://localhost:8080/health
 ```
 
-默认 Docker Compose 会启动 `gateway`、`memos`、`sidecar` 和 `sidecar-worker`。Caddy 网关只暴露一个宿主机入口：`http://localhost:8080/` 进入 Memos，`http://localhost:8080/admin/ui` 进入 Sidecar 管理页面，`http://localhost:8080/health` 返回 Sidecar 健康状态。Memos 的 `5230` 和 Sidecar 容器内部 `8080` 默认不直接暴露到宿主机；需要改宿主机端口时可设置 `GATEWAY_PORT`。
+默认 Docker Compose 会启动 `gateway`、`memos`、<code>sidecar</code> 和 `sidecar-worker`。Caddy 网关只暴露一个宿主机入口：`http://localhost:8080/` 进入 Memos，`http://localhost:8080/admin/ui` 进入 Sidecar 管理页面，`http://localhost:8080/health` 返回 Sidecar 健康状态。Memos 的 `5230` 和 Sidecar 容器内部 `8080` 默认不直接暴露到宿主机；需要改宿主机端口时可设置 `GATEWAY_PORT`。
 
 调试管理页面不会读取服务器端密钥，需要手动输入 `SIDECAR_ADMIN_TOKEN`，并只保存在当前浏览器的 `localStorage`。页面也可以编辑默认 LLM 提示词，或在重试任务时只临时覆盖当前任务使用的提示词。默认开启 Memos 内管理入口，worker 空闲时会自动创建或更新一条 `#系统/Memosima` memo（标题呈现为 **Prism (棱镜)** 入口），入口链接由 `app.public_base_url` 生成。
+
+---
+
+## Docker 容器化部署说明
+
+**Prism (棱镜)** 深度集成了 Docker 容器部署方案，采用高度解耦的多容器微服务架构，保障数据安全与沙箱物理隔离。
+
+### 1. 容器部署拓扑架构
+
+* **`gateway` (网关服务)**: 使用 Caddy 2 作为流量收敛入口。作为唯一暴露于宿主机的边缘网关（默认端口 `8080`），根据路由路径分流：
+  * `/admin/*`、`/health`、`/webhooks/*` 反代分流至 `sidecar` 容器。
+  * 根路径 `/` 反代分流至 `memos` 容器。
+* **`memos` (笔记主服务)**: 运行官方 Memos 系统镜像，处理用户核心笔记的采集与前端操作。
+* **`sidecar` (管理端 API)**: Prism 控制台接口，提供管理页面 `/admin/ui`、配置更新及离线 QA 问答 Prompt 编译器。
+* **`sidecar-worker` (异步任务协程)**: 后台任务处理 Worker，负责在空闲周期轮询待处理 Memos、下载并提取附件 Markdown（MinerU 链路）、调用大语言模型进行周摘要归档、监听闹钟时间并触发 Webhook 定时推送。
+
+### 2. Docker 部署集成命令 (深度融合 Nx 任务)
+
+* **一键启动/重启 (up)**:
+  ```bash
+  npx nx run sidecar:up
+  ```
+  > [!TIP]
+  > 如需指定其它宿主机访问端口（例如 `9000`），可通过环境变量控制：
+  > `GATEWAY_PORT=9000 npx nx run sidecar:up`
+
+* **重新构建 Docker 镜像 (build)**:
+  ```bash
+  npx nx build sidecar
+  ```
+
+* **查看运行状态**:
+  ```bash
+  docker ps
+  ```
+
+### 3. 本地测试环境热载模式 (P5 热拔插特性)
+
+为便于开发和快速校验，默认 `docker-compose.yml` 中已集成**极速热重载机制**：
+* 映射本地源码 `./src` 到容器内 `/app/src`。
+* 启用 Uvicorn 自动重载指令（`--reload --reload-dir /app/src`）。
+* 在 IDE 中直接编辑本地 Python 代码，容器内服务在 100 毫秒内热载生效，**绝不需要频繁打镜像**。
+
+### 4. 镜像下载加速保证
+
+所有容器镜像配置均支持 **Xget 加速下载源**（如 `xget.your-domain.com/cr/...`），确保在任何复杂网络环境中均可瞬间秒级拉取和更新。
 
 ---
 

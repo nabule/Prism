@@ -57,32 +57,95 @@
   </ul>
   <p class="note">还没有完成：向量索引、自动文档、Memos 主库备份恢复。</p>
 
-  <h2>1. 准备配置</h2>
-  <p>复制环境变量示例并填写真实值。不要把真实 <code>.env</code> 提交到 git。</p>
+  <h2>1. 准备配置与各 Key 详细说明</h2>
+  <p>复制环境变量示例并填写真实值。切勿把包含真实密钥的 <code>.env</code> 文件提交到 Git 仓库，确保数据隐私安全。</p>
   <pre><code>cp .env.example .env</code></pre>
 
+  <p>下表为系统中涉及到的所有核心 Key 及环境变量的配置说明与使用指南：</p>
   <table>
     <thead>
-      <tr><th>变量</th><th>说明</th></tr>
+      <tr><th>变量/配置键</th><th>使用类型</th><th>详细说明与使用指南</th></tr>
     </thead>
     <tbody>
-      <tr><td><code>SIDECAR_ADMIN_TOKEN</code></td><td>Sidecar 管理接口 token。</td></tr>
-      <tr><td><code>MEMOS_API_TOKEN</code></td><td>Memos Personal Access Token，建议用 PAT，不用短期登录 token。</td></tr>
-      <tr><td><code>MEMOS_WEBHOOK_URL</code></td><td>Memos 可访问的公网 Sidecar webhook URL。</td></tr>
-      <tr><td><code></code></td><td> API key，当前默认 LLM provider 使用。</td></tr>
-      <tr><td><code>OPENROUTER_API_KEY</code></td><td>OpenRouter API key，作为备选 provider 使用。</td></tr>
-      <tr><td><code>DEEPSEEK_API_KEY</code></td><td>DeepSeek API key，用于 DeepSeek OpenAI-compatible provider。</td></tr>
+      <tr>
+        <td><code>SIDECAR_ADMIN_TOKEN</code></td>
+        <td>管理认证</td>
+        <td>Sidecar 专属管理接口和 <code>/admin/ui</code> 调试控制台的身份认证 Bearer 令牌。您可以将其设置为任意高强度的强随机密码字符串。该 token 由浏览器端读取并存入本地 <code>localStorage</code> 用于 API 交互鉴权，服务端绝不会主动泄漏此值。</td>
+      </tr>
+      <tr>
+        <td><code>MEMOS_BASE_URL</code></td>
+        <td>地址解析</td>
+        <td>Memos 服务的宿主机可访问地址。在 Docker 容器网络下，Compose 服务间已经自动将该值覆盖并连接为 <code>http://memos:5230</code>。如果您在非 Docker 环境下独立运行，请修改为对应的物理地址。</td>
+      </tr>
+      <tr>
+        <td><code>MEMOS_API_TOKEN</code></td>
+        <td>数据读写</td>
+        <td>Memos 用户的个人访问令牌（Personal Access Token / PAT）。用于 Sidecar 后台轮询或 webhook 状态下读取新 Memo 记录、将整理后的归档 Markdown 回写写入、建立 Memo 原生 REFERENCE 关联引用、发表澄清评论等核心读写操作。<strong>建议在 Memos 个人设置中生成永久有效的 PAT</strong>，避免使用可能随时失效的短期 Session 登录 Token。</td>
+      </tr>
+      <tr>
+        <td><code>MEMOS_WEBHOOK_URL</code></td>
+        <td>事件驱动</td>
+        <td>非必填。仅在 Sidecar 的 <code>app.yaml</code> 将内容摄入模式 <code>memos.ingestion_mode</code> 配置为 <code>webhook</code> 或 <code>both</code> 时有效。由于新版 Memos 默认会拦截 localhost 或 Docker 局域网私有 IP 的 Webhook 触发，如果您使用此模式，需要将此变量配置为公网可访问的 Sidecar 接收地址（或使用内网隧道反代服务生成的公网域名 URL）。在默认 <code>poll</code> 主动轮询模式下，此项可留空。</td>
+      </tr>
+      <tr>
+        <td><code>REMINDER_WEBHOOK_URL</code></td>
+        <td>定时推送</td>
+        <td>时间提醒（带有 <code>#提醒</code> 标签）功能的推送出口网关。符合 Bark 兼容接口规范。当任务后台检测到设定的闹钟/提醒时间到期后，系统会发起 <code>POST</code> 请求并自动拼接 <code>title</code>（任务标题）和 <code>body</code>（Memo 精炼正文）进行消息推送。常用的配置格式例如：<code>https://api.day.app/your-bark-key/</code>。</td>
+      </tr>
+      <tr>
+        <td><code>MINERU_API_TOKEN</code></td>
+        <td>文档解析</td>
+        <td>MinerU 文档高保真解析服务的 API Key。系统检测到上传了 PDF、Word、Excel 或 PPT 等富媒体附件后，会调用该服务进行在线精准转写排版，提取出格式工整的 Markdown 内容作为上下文供 AI 理解。您可以注册 MinerU 开发者平台并获取 API Key 填写至此。该 Key 会在运行期安全加载，不会保存进 app 配置文件或随备份包导出。</td>
+      </tr>
+      <tr>
+        <td><code>DEEPSEEK_API_KEY</code></td>
+        <td>AI 智能整理</td>
+        <td>DeepSeek 大语言模型服务的 API Key。<strong>作为系统的默认 AI 整理引擎</strong>，默认使用极速、高性价比且通过 specific 机制优化了思维链（已在 extra_body 中禁用 thinking 模式以防止摘要阶段出现延迟和空响应错误）的 <code>deepseek-v4-flash</code> 官方模型。填入此 Key 即可瞬间拉起全自动的内容摘要、标签归纳与周总结。</td>
+      </tr>
+      <tr>
+        <td><code></code> / <code>OPENROUTER_API_KEY</code> / <code>OPENAI_API_KEY</code></td>
+        <td>AI 备选模型</td>
+        <td>非必填。分别为中国移动 平台、OpenRouter 聚合模型入口以及 OpenAI 官方大模型的 API 密钥。可用作系统内置的备用 Provider，或者您可以在调试管理界面的“AI 配置”板块中为特定任务（例如只对提醒抽取、标签总结）单独绑定不同的第三方模型提供商。</td>
+      </tr>
     </tbody>
   </table>
 
-  <h2>2. 启动服务</h2>
-  <p>所有常用命令通过 Nx 入口执行。</p>
-  <pre><code>npx nx run sidecar:up</code></pre>
-  <p>默认 Compose 会启动 <code>gateway</code>、<code>memos</code>、<code>sidecar</code> 和 <code>sidecar-worker</code>。Caddy 网关使用同域路径分流：<code>/admin/*</code>、<code>/health</code>、<code>/webhooks/*</code> 转发到 Sidecar，其余路径转发到 Memos。默认只暴露 <code>http://localhost:8080</code> 一个宿主机入口；Memos 的 <code>5230</code> 和 Sidecar 容器内部 <code>8080</code> 不直接暴露。需要改端口时可以执行 <code>GATEWAY_PORT=8090 npx nx run sidecar:up</code>。</p>
-  <p>打开 Memos：</p>
-  <pre><code>http://localhost:8080/</code></pre>
-  <p>检查健康状态：</p>
-  <pre><code>curl http://localhost:8080/health</code></pre>
+  <h2>2. Docker 容器化部署说明</h2>
+  <p>Prism (棱镜) 采用先进 of Docker 容器拓扑进行标准化发布与本地沙箱运行。默认的部署栈包含 4 个高度隔离的容器服务：</p>
+  
+  <h3>📌 1. 容器部署拓扑架构</h3>
+  <ul>
+    <li><strong>网关服务 (<code>gateway</code>)</strong>: 采用超轻量高性能的 Caddy 2 代理。作为系统唯一对外暴露的安全收敛入口，负责按同域路径进行安全隔离分流：<code>/admin/*</code>、<code>/health</code>、<code>/webhooks/*</code> 安全反向代理至 Sidecar 后台，根路径 <code>/</code> 转发至 Memos 容器。</li>
+    <li><strong>主应用 (<code>memos</code>)</strong>: 提供核心笔记的在线发布、记录以及用户交互前端环境。</li>
+    <li><strong>Sidecar 核心 API (<code>sidecar</code>)</strong>: 宿主管理端，提供配置持久化、候选标签模块和离线 QA Prompt 编译器等轻量接口服务。</li>
+    <li><strong>后台工作流 (<code>sidecar-worker</code>)</strong>: 异步任务消费协程，负责在空闲周期内轮询新 Memo、分析高保真图表大纲、向 LLM 请求摘要、解析提醒并触发 Webhook 推送。</li>
+  </ul>
+
+  <h3>🚀 2. Docker 部署常用 Nx 集成命令</h3>
+  <p>项目所有的 Docker 容器操作均深度封装到了 Nx 任务管理器中，无需手动敲击繁琐的 compose 指令：</p>
+  <ul>
+    <li><strong>一键启动/部署更新 (up)</strong>:
+      <pre><code>npx nx run sidecar:up</code></pre>
+      <p class="note">该命令将自动在后台拉起 4 个容器服务。默认通过网关安全收敛，只向宿主机暴露 <code>http://localhost:8080</code> 入口。Memos 默认的 <code>5230</code> 端口和 Sidecar 的 <code>8080</code> 内部端口均不暴露，完全由网关隔离保护。需要修改宿主机端口时，可指定环境变量运行：<code>GATEWAY_PORT=9000 npx nx run sidecar:up</code>。</p>
+    </li>
+    <li><strong>重新编译 Docker 镜像 (build)</strong>:
+      <p>当您修改了底层源码或需要进行大版本发布更新时，可以通过 Nx 启动生产级全栈镜像打包构建：</p>
+      <pre><code>npx nx build sidecar</code></pre>
+    </li>
+    <li><strong>检查部署健康状态</strong>:
+      <pre><code>curl http://localhost:8080/health</code></pre>
+    </li>
+  </ul>
+
+  <h3>⚡ 3. 极速实机开发热重载配置 (P5 特性)</h3>
+  <p>为了免除本地研发和快速验证时反复构建镜像（Build Image）的损耗，开发与测试环境中已对 <code>docker-compose.yml</code> 进行了极速优化：</p>
+  <ul>
+    <li><strong>挂载本地源码</strong>：通过 <code>- ./src:/app/src</code> 卷挂载，本地 IDE 修改任何代码将即时反应在容器中。</li>
+    <li><strong>Uvicorn 实时监听</strong>：Sidecar 容器启动命令已加载 <code>--reload --reload-dir /app/src</code>，一旦检测到本地代码修改，容器 Web服务将在 100 毫秒内轻量热重启并使代码生效，极大提高了实机部署的校验和研发效率。</li>
+  </ul>
+
+  <h3>🔒 4. Xget 镜像拉取加速保障 (Rule 5)</h3>
+  <p>为了保障在国内或受限网络下依然能够实现容器镜像的秒级拉取，<code>Dockerfile</code>、<code>docker-compose.yml</code> 中的所有第三方公共镜像（如 Caddy、Memos、uv 运行底座等）均已默认配置了 <strong>Xget 加速分发源</strong>（如 <code>xget.your-domain.com/cr/...</code>），无需进行额外的 Docker Registry 配置即可畅享极速部署。</p>
 
   <h2>3. 打开调试管理页面</h2>
   <p>浏览器打开：</p>

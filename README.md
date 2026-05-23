@@ -108,11 +108,11 @@ npx nx run sidecar:probe-memos
 
 ## 相关文档
 
-- [普通用户使用手册](docs/普通用户使用手册.html)
-- [使用手册](docs/使用手册.html)
-- [配置说明](docs/配置说明.html)
-- [开发运行说明](docs/开发运行说明.html)
-- [API 探针记录](docs/API探针记录.html)
-- [开发计划与验收标准](开发计划与验收标准-个人AI知识库系统.html)
-- [技术架构设计](技术架构设计-个人AI知识库系统.html)
-- [PRD](PRD-个人AI知识库系统.html)
+- [普通用户使用手册 🌐](https://htmlpreview.github.io/?https://github.com/nabule/memosima/blob/master/docs/普通用户使用手册.html)
+- [使用手册 🌐](https://htmlpreview.github.io/?https://github.com/nabule/memosima/blob/master/docs/使用手册.html)
+- [配置说明 🌐](https://htmlpreview.github.io/?https://github.com/nabule/memosima/blob/master/docs/配置说明.html)
+- [开发运行说明 🌐](https://htmlpreview.github.io/?https://github.com/nabule/memosima/blob/master/docs/开发运行说明.html)
+- [API 探针记录 🌐](https://htmlpreview.github.io/?https://github.com/nabule/memosima/blob/master/docs/API探针记录.html)
+- [开发计划与验收标准 🌐](https://htmlpreview.github.io/?https://github.com/nabule/memosima/blob/master/开发计划与验收标准-个人AI知识库系统.html)
+- [技术架构设计 🌐](https://htmlpreview.github.io/?https://github.com/nabule/memosima/blob/master/技术架构设计-个人AI知识库系统.html)
+- [PRD 🌐](https://htmlpreview.github.io/?https://github.com/nabule/memosima/blob/master/PRD-个人AI知识库系统.html)

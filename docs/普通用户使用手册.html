@@ -128,8 +128,8 @@ Memos 负责快速记录，Sidecar 负责后台整理、生成摘要和标签建
   </ol>
 
   <h2>10. 附件内容</h2>
-  <p>普通用户可以上传 <code>.txt</code>、<code>.md</code>、Word、Excel、PPT 或 PDF 附件。后台会下载附件并转成 Markdown artifact，其中 Office/PDF 使用 MinerU 在线服务解析。</p>
-  <p>解析后的 Markdown 会和 memo 正文一起进入 AI 整理流程，因此附件里的内容也会参与摘要、标签识别和 AI 整理 memo 生成。drawio 和 Mind Elixir 专用解析仍属于后续范围。</p>
+  <p>普通用户可以上传 <code>.txt</code>、<code>.md</code>、Word、Excel、PPT、PDF、<strong><code>.drawio</code>（及 .drawio.svg）流程图以及 Mind Elixir 脑图（.json）</strong>附件。后台会下载附件并转成 Markdown artifact，其中 Office/PDF 使用 MinerU 在线服务解析，而 <strong>Draw.io 与思维脑图则使用 100% 本地高保真离线解析</strong>（自动解压流程图组件文字与脑图递归大纲），安全快捷，零 Token 开销。</p>
+  <p>解析后的 Markdown 会和 memo 正文一起进入 AI 整理流程，因此附件里的内容也会参与摘要、标签识别和 AI 整理 memo 生成。</p>
   <p>如果你只上传附件、不写正文，AI 分析成功后会自动给原始 memo 补一个标题，例如 <code># 项目方案</code>。这个标题用于在 Memos 列表里快速识别附件内容；详细摘要、要点和标签仍在新生成的 <code>AI整理</code> memo 中查看。</p>
 
   <h2>11. 使用提醒</h2>

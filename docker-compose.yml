@@ -37,7 +37,8 @@ services:
       - ./config:/app/config
       - ./data/sidecar:/app/data/sidecar
       - ./logs:/app/logs
-    command: uvicorn memosima.api.app:create_app --factory --host 0.0.0.0 --port 8080
+      - ./src:/app/src
+    command: uvicorn memosima.api.app:create_app --factory --host 0.0.0.0 --port 8080 --reload --reload-dir /app/src
 
   sidecar-worker:
     build: .
@@ -54,4 +55,5 @@ services:
       - ./config:/app/config
       - ./data/sidecar:/app/data/sidecar
       - ./logs:/app/logs
+      - ./src:/app/src
     command: memosima-worker

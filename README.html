@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Memosima</title>
+  <title>Prism (棱镜)</title>
   <style>
     :root { color-scheme: light dark; --bg:#f7f8fa; --fg:#1f2937; --muted:#667085; --panel:#fff; --border:#d0d5dd; --accent:#2563eb; --code:#101828; --codebg:#eef2f6; }
     * { box-sizing: border-box; }
@@ -18,6 +18,8 @@
     code { background: var(--codebg); color: var(--code); padding: .12rem .28rem; border-radius: 4px; }
     pre code { background: transparent; padding: 0; }
     .note { background: #f9fafb; border: 1px solid var(--border); border-radius: 8px; padding: 1rem; color: var(--muted); }
+    .ok { color: #047857; font-weight: 600; }
+    .warn { color: #b45309; font-weight: 600; }
     @media (prefers-color-scheme: dark) {
       :root { --bg:#0b1220; --fg:#e5e7eb; --muted:#9ca3af; --panel:#111827; --border:#374151; --accent:#60a5fa; --code:#e5e7eb; --codebg:#1f2937; }
       .note { background: #1f2937; }
@@ -27,34 +29,55 @@
 <body>
 <main>
 <article>
-  <h1>Memosima</h1>
-  <p>Memosima 是基于 Memos 的个人 AI 知识库 Sidecar 服务。Memos 负责采集和保存原始知识，Sidecar 负责 AI 整理、标签治理、澄清评论、附件解析和后续检索能力。</p>
+  <div style="text-align: center; margin-bottom: 2.5rem;">
+    <img src="./Prism.png" alt="Prism Logo" style="width: 220px; height: auto;" />
+    <h1 style="margin-top: 1rem;">Prism (棱镜)</h1>
+    <p style="font-style: italic; color: var(--muted); max-width: 680px; margin: 0 auto; text-align: left; padding: 14px; border-left: 4px solid var(--accent); background: var(--codebg);">
+      🌈 <strong>Prism (棱镜)：光的折射与思维的绚烂</strong><br>
+      您随手丢进 Memos 的原始笔记，就像一束朴素的白光。当它穿过 <strong>Prism</strong> 时，被 AI 优雅地折射开来，化作了标签、结构化 Markdown（MinerU 解析）和清晰的知识脉络。零散的想法进去了，出来的是一抹绚丽的知识彩虹。
+    </p>
+  </div>
+
+  <p><strong>Prism</strong> 是基于 Memos 的个人 AI 知识库 Sidecar 服务。Memos 负责采集和保存原始知识，Sidecar (Prism) 负责 AI 整理、标签治理、澄清评论、附件解析和后续检索能力。</p>
 
   <h2>当前状态</h2>
-  <p>已完成 P0、P1、P2 核心闭环，并开始 P3 文本附件解析基础。</p>
+  <p>已完成 P0、P1、P2 核心闭环，以及 P3 阶段附件离线高保真解析与离线 QA RAG 问答 Prompter。</p>
   <ul>
     <li>Caddy 网关统一入口，默认从 <code>http://localhost:8080/</code> 访问 Memos，从 <code>/admin/*</code>、<code>/health</code>、<code>/webhooks/*</code> 访问 Sidecar。</li>
     <li>Memos webhook 接入和 SQLite 任务系统。</li>
     <li>AI 整理 memo 创建，支持 DeepSeek、、OpenRouter 等 OpenAI-compatible LLM 和本地模板回退。</li>
     <li>Memos 原生 <code>REFERENCE</code> relation 关联原始 memo 与 AI memo。</li>
     <li>内置 <code>/admin/ui</code> 调试管理页面，用于查看任务、重试任务、审核候选标签、备份和恢复 Sidecar 数据。</li>
-    <li>worker 可在 Memos 中自动维护 <code>#系统/Memosima</code> 管理入口 memo，AI 整理 memo 也会附带管理页面和候选标签审核链接。</li>
+    <li>worker 可在 Memos 中自动维护 <code>#系统/Memosima</code> 管理入口 memo（标题自动呈现为 <strong>Prism (棱镜)</strong> 管理入口），AI 整理 memo 也会附带管理页面和候选标签审核链接。</li>
     <li>候选标签审核和审核后 active 生效。</li>
     <li>当用户原始 memo 没有业务标签时，LLM 可从正文自动建议正式标签和候选标签；新标签仍需人工审核。</li>
     <li>LLM 提示词从 <code>config/prompts.yaml</code> 加载，管理页面可保存默认提示词，也可在重试时临时覆盖。</li>
     <li>待澄清评论和 <code>waiting_user</code> 状态。</li>
-    <li><code>.txt</code>、<code>.md</code> 附件解析为 artifact；Word、Excel、PPT、PDF 附件可通过 MinerU 在线服务转成 Markdown 后进入同一 AI 整理流程。</li>
+    <li><strong>附件离线高保真解析：</strong> <code>.txt</code>、<code>.md</code> 附件解析为 artifact；Word/Excel/PPT/PDF 支持通过 MinerU 在线服务转换；特别原生支持 <strong><code>.drawio</code>（包括 .drawio.svg）流程图解压提取</strong>与 <strong><code>Mind Elixir</code> 思维脑图递归转换</strong>，100% 离线，零网络 Token 开销。</li>
+    <li><strong>离线 QA & Prompt 编译器：</strong> 提供专属的 RAG 问答页面，支持多标签药丸胶囊选择、拼音模糊过滤、双路精确/模糊检索召回，并一键编译与复制附带完整上下文的超级 Prompt。</li>
     <li><code>#提醒</code> 时间识别和一次性定时通知，支持 Bark 兼容 webhook。</li>
     <li>管理页面支持下载 Sidecar 备份包，并从备份包恢复 Sidecar SQLite 数据库。</li>
   </ul>
-  <p class="note">未完成范围：drawio/Mind Elixir 专用解析、向量索引、问答、自动文档、Memos 主库备份恢复。</p>
+  <p class="note">未完成范围：向量索引、自动文档、Memos 主库备份恢复。</p>
+
+  <h2>多用户与安全隔离说明</h2>
+  <p class="note" style="border-left: 4px solid var(--danger);"><strong>⚠️ 隐私安全警示：</strong><br>
+  Prism 本质定位为<strong>个人 AI 知识库服务</strong>。在单 Sidecar 实例架构下，任务仅绑定单一 <code>MEMOS_API_TOKEN</code>。若多个用户在同一个 Memos 实例下直接共享该 Sidecar 实例，则由于系统标签治理缓存与解析后的附件大纲统一存放在同一个 SQLite 数据库中，在离线 QA 页面进行提问匹配时，可能会在上下文 Prompt 编译时召回其他用户的私密 Memo，导致<strong>严重的隐私泄露与数据混淆风险</strong>。目前系统<strong>不支持</strong>多账号无隔离直接混用。</p>
+  
+  <h3>🚀 官方推荐：独立容器化部署模式（SaaS/多租户物理隔离）</h3>
+  <p>若您需要为多人、团队成员或不同账户提供各自独立的 AI 自动标签归档和离线 QA Prompter 功能，最安全、隔离性最好的方式是<strong>为每个用户部署一套物理隔离的独立容器栈</strong>：</p>
+  <ul>
+    <li><strong>目录与代码物理隔离</strong>：为每个用户在宿主机创建独立的部署工作目录（例如 <code>/home/abc/code/prism_userA</code>），克隆相同的项目代码。</li>
+    <li><strong>独立配置文件</strong>：在各自的 <code>.env</code> 文件中填写该用户专属的 <code>MEMOS_API_TOKEN</code>、<code>SIDECAR_ADMIN_TOKEN</code> 以及各自偏爱的大模型 API Key。</li>
+    <li><strong>端口与反代隔离</strong>：在各自的 <code>.env</code> 中指定不同的 <code>GATEWAY_PORT</code>（例如用户 A 的网关暴露端口设为 <code>8080</code>，用户 B 设为 <code>8081</code>），在宿主机使用 Nginx 或反代工具将不同的二级域名（如 <code>usera.memos.local</code>）映射至对应的容器网关入口。</li>
+  </ul>
 
   <h2>快速开始</h2>
   <pre><code>cp .env.example .env
 npx nx run sidecar:up
 curl http://localhost:8080/health</code></pre>
   <p>默认 Docker Compose 会启动 <code>gateway</code>、<code>memos</code>、<code>sidecar</code> 和 <code>sidecar-worker</code>。Caddy 网关只暴露一个宿主机入口：<code>http://localhost:8080/</code> 进入 Memos，<code>http://localhost:8080/admin/ui</code> 进入 Sidecar 管理页面，<code>http://localhost:8080/health</code> 返回 Sidecar 健康状态。Memos 的 <code>5230</code> 和 Sidecar 容器内部 <code>8080</code> 默认不直接暴露到宿主机；需要改宿主机端口时可设置 <code>GATEWAY_PORT</code>。</p>
-  <p>调试管理页面不会读取服务器端密钥，需要手动输入 <code>SIDECAR_ADMIN_TOKEN</code>，并只保存在当前浏览器的 <code>localStorage</code>。页面也可以编辑默认 LLM 提示词，或在重试任务时只临时覆盖当前任务使用的提示词。默认开启 Memos 内管理入口，worker 空闲时会自动创建或更新一条 <code>#系统/Memosima</code> memo，入口链接由 <code>app.public_base_url</code> 生成。</p>
+  <p>调试管理页面不会读取服务器端密钥，需要手动输入 <code>SIDECAR_ADMIN_TOKEN</code>，并只保存在当前浏览器的 <code>localStorage</code>。页面也可以编辑默认 LLM 提示词，或在重试任务时只临时覆盖当前任务使用的提示词。默认开启 Memos 内管理入口，worker 空闲时会自动创建或更新一条 <code>#系统/Memosima</code> memo（标题呈现为 **Prism (棱镜)** 入口），入口链接由 <code>app.public_base_url</code> 生成。</p>
 
   <h2>常用命令</h2>
   <pre><code>npx nx test sidecar

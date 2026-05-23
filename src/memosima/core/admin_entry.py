@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 ADMIN_ENTRY_MARKER = "<!-- memosima:admin-entry -->"
+ADMIN_ENTRY_SEARCH_FILTER = 'content.contains("memosima:admin-entry")'
 
 
 def admin_ui_url(public_base_url: str, anchor: str | None = None) -> str:

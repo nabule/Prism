@@ -129,6 +129,10 @@ async def test_openai_compatible_client_parses_reminder_extraction(tmp_path, mon
         timezone="Asia/Shanghai",
         now="2026-05-21T10:00:00+08:00",
         trigger_tag="#提醒",
+        prompt_template=PromptTemplate(
+            system="自定义提醒系统 {trigger_tag}",
+            user="自定义提醒用户 {now} {timezone} {content}",
+        ),
     )
 
     assert extraction.has_reminder is True
@@ -139,5 +143,7 @@ async def test_openai_compatible_client_parses_reminder_extraction(tmp_path, mon
     payload = seen["payload"]
     assert isinstance(payload, dict)
     assert payload["response_format"] == {"type": "json_object"}
+    assert payload["messages"][0]["content"] == "自定义提醒系统 #提醒"
+    assert payload["messages"][1]["content"].startswith("自定义提醒用户")
     assert "#提醒" in payload["messages"][1]["content"]
     assert "2026-05-21T10:00:00+08:00" in payload["messages"][1]["content"]

@@ -8,7 +8,7 @@ import httpx
 from pydantic import BaseModel, Field, ValidationError
 
 from memosima.core.config import ProviderConfig
-from memosima.core.prompts import PromptTemplate, default_organize_memo_prompt
+from memosima.core.prompts import PromptTemplate, default_organize_memo_prompt, default_reminder_extraction_prompt
 from memosima.core.taxonomy import OrganizationPlan, TaxonomyConfig
 
 
@@ -92,18 +92,21 @@ class OpenAICompatibleClient:
         timezone: str,
         now: str,
         trigger_tag: str,
+        prompt_template: PromptTemplate | None = None,
     ) -> LLMReminderExtraction:
-        rendered_prompt = _render_reminder_prompt(
-            content=content,
-            timezone=timezone,
-            now=now,
-            trigger_tag=trigger_tag,
+        rendered_prompt = (prompt_template or default_reminder_extraction_prompt()).render(
+            {
+                "content": content,
+                "timezone": timezone,
+                "now": now,
+                "trigger_tag": trigger_tag,
+            }
         )
         payload = {
             "model": self.provider.default_model,
             "messages": [
-                {"role": "system", "content": rendered_prompt["system"]},
-                {"role": "user", "content": rendered_prompt["user"]},
+                {"role": "system", "content": rendered_prompt.system},
+                {"role": "user", "content": rendered_prompt.user},
             ],
             "temperature": self.provider.temperature,
         }
@@ -248,35 +251,6 @@ def _render_prompt(
             "content": content,
         }
     )
-
-
-def _render_reminder_prompt(*, content: str, timezone: str, now: str, trigger_tag: str) -> dict[str, str]:
-    system = (
-        "你是提醒时间抽取器，只返回 JSON 对象，不要输出 Markdown。"
-        "只处理用户明确使用触发标签的提醒请求。"
-        "把相对时间换算成带时区的 ISO 8601 时间；无法确定具体时间时要求澄清。"
-    )
-    user = (
-        f"触发标签：{trigger_tag}\n"
-        f"当前时间：{now}\n"
-        f"默认时区：{timezone}\n\n"
-        "请返回 JSON：\n"
-        "{"
-        '"has_reminder": boolean, '
-        '"items": [{"title": string, "body": string, "due_at": string, "timezone": string, '
-        '"confidence": number, "raw_text": string}], '
-        '"needs_clarification": boolean, '
-        '"clarification_question": string|null'
-        "}\n\n"
-        "规则：\n"
-        "- 只有正文包含触发标签时才提取提醒。\n"
-        "- due_at 必须是可解析的 ISO 8601 时间，优先包含时区偏移。\n"
-        "- 如果只有日期没有具体时刻、时间已无法确定或语义模糊，needs_clarification=true。\n"
-        "- title 简短概括提醒事项，body 保留必要上下文。\n\n"
-        f"memo 内容：\n{content}"
-    )
-    return {"system": system, "user": user}
-
 
 def _join_url(base_url: str, path: str) -> str:
     return f"{base_url.rstrip('/')}/{path.lstrip('/')}"

@@ -18,8 +18,13 @@ from memosima.core.attachments import (
     is_document_attachment,
     parse_text_attachment,
 )
-from memosima.core.admin_entry import ADMIN_ENTRY_MARKER, build_admin_entry_memo_content, build_summary_admin_links
-from memosima.core.config import AppConfig, ModelsConfig
+from memosima.core.admin_entry import (
+    ADMIN_ENTRY_MARKER,
+    ADMIN_ENTRY_SEARCH_FILTER,
+    build_admin_entry_memo_content,
+    build_summary_admin_links,
+)
+from memosima.core.config import AppConfig, ModelsConfig, ProviderConfig
 from memosima.core.document_parsers import create_document_parser
 from memosima.core.prompts import PromptTemplate, load_prompts_or_default
 from memosima.core.summary import build_summary_memo_content
@@ -32,10 +37,17 @@ LOGGER = logging.getLogger(__name__)
 
 
 class Worker:
-    def __init__(self, config: AppConfig, store: Store, models_config: ModelsConfig | None = None):
+    def __init__(
+        self,
+        config: AppConfig,
+        store: Store,
+        models_config: ModelsConfig | None = None,
+        models_path: str = "config/models.yaml",
+    ):
         self.config = config
         self.store = store
         self.models_config = models_config
+        self.models_path = models_path
 
     async def run_once(self) -> bool:
         if await self._send_due_reminders_once():
@@ -146,7 +158,7 @@ class Worker:
 
         response = await client.list_memos(
             page_size=self.config.memos_poll_page_size,
-            filter_text=ADMIN_ENTRY_MARKER,
+            filter_text=ADMIN_ENTRY_SEARCH_FILTER,
         )
         memos = response.get("memos", [])
         if isinstance(memos, list):
@@ -410,7 +422,9 @@ class Worker:
     ) -> LLMOrganizationDraft | None:
         if self.models_config is None:
             return None
-        provider = self.models_config.providers[self.models_config.default_provider]
+        models_config = self._load_models_config()
+        prompt_template = self._load_prompt_template(job)
+        provider = _provider_for_prompt(models_config, prompt_template)
         api_key = os.getenv(provider.api_key_env)
         if not api_key:
             return None
@@ -423,7 +437,7 @@ class Worker:
             content=source_content,
             taxonomy=taxonomy,
             local_plan=organization_plan,
-            prompt_template=self._load_prompt_template(job),
+            prompt_template=prompt_template,
         )
 
     async def _handle_reminders(
@@ -440,7 +454,9 @@ class Worker:
             return {"status": "not_triggered"}
         if self.models_config is None:
             return {"status": "skipped", "reason": "models_not_configured"}
-        provider = self.models_config.providers[self.models_config.default_provider]
+        models_config = self._load_models_config()
+        prompt_template = load_prompts_or_default(self.config.prompts_path).reminder_extraction
+        provider = _provider_for_prompt(models_config, prompt_template)
         api_key = os.getenv(provider.api_key_env)
         if not api_key:
             return {"status": "skipped", "reason": "llm_key_not_configured"}
@@ -456,6 +472,7 @@ class Worker:
                 timezone=self.config.timezone,
                 now=_now_in_timezone(self.config.timezone).isoformat(timespec="seconds"),
                 trigger_tag=self.config.reminders_trigger_tag,
+                prompt_template=prompt_template,
             )
         except Exception as exc:
             LOGGER.warning("Reminder extraction failed for memo %s: %s", memo_uid, exc)
@@ -509,6 +526,10 @@ class Worker:
         if extraction.has_reminder:
             return {"status": "skipped", "reason": "no_valid_items", "skipped": skipped}
         return {"status": "not_triggered"}
+
+    def _load_models_config(self) -> ModelsConfig:
+        self.models_config = ModelsConfig.load(self.models_path)
+        return self.models_config
 
     async def _send_due_reminders_once(self) -> bool:
         if not self.config.reminders_enabled:
@@ -742,6 +763,14 @@ def _tag_leaf(tag: str) -> str:
     return tag.rsplit("/", maxsplit=1)[-1].removeprefix("#")
 
 
+def _provider_for_prompt(models: ModelsConfig, prompt: PromptTemplate) -> ProviderConfig:
+    provider_name = prompt.provider or models.default_provider
+    try:
+        return models.providers[provider_name]
+    except KeyError as exc:
+        raise RuntimeError(f"LLM provider is not configured: {provider_name}") from exc
+
+
 def _build_source_content(memo_content: str, attachment_markdowns: list[str]) -> str:
     parts = [memo_content.strip()] if memo_content.strip() else []
     parts.extend(markdown.strip() for markdown in attachment_markdowns if markdown.strip())
@@ -821,7 +850,7 @@ async def _run(args: argparse.Namespace) -> None:
     store = Store(config.database_path)
     store.migrate()
     store.ensure_workspace(config.workspace_id)
-    worker = Worker(config, store, models)
+    worker = Worker(config, store, models, models_path=args.models)
     if args.once:
         await worker.run_once()
     else:

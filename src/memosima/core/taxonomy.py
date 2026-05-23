@@ -198,7 +198,7 @@ class TaxonomyConfig:
             candidate_tags=tuple(candidates),
             disabled_tags=tuple(_dedupe(disabled)),
             needs_clarification=needs_clarification,
-            clarification_reason="content is too short or contains an explicit question mark"
+            clarification_reason="content is too short"
             if needs_clarification
             else None,
         )
@@ -276,7 +276,7 @@ def _similar_tags(tag: str, active_tags: tuple[str, ...]) -> tuple[str, ...]:
 
 def _needs_clarification(content: str) -> bool:
     text = content.strip()
-    return len(text) < 12 or "?" in text or "？" in text
+    return len(text) < 12
 
 
 def _dedupe(values: list[str] | tuple[str, ...]) -> list[str]:

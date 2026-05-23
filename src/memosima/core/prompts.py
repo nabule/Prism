@@ -40,11 +40,34 @@ memo 数量：{memo_count}
 memo 列表：
 {memos_markdown}"""
 
+DEFAULT_REMINDER_EXTRACTION_SYSTEM = (
+    "你是提醒时间抽取器，只返回 JSON 对象，不要输出 Markdown。"
+    "只处理用户明确使用触发标签的提醒请求。"
+    "把相对时间换算成带时区的 ISO 8601 时间；无法确定具体时间时要求澄清。"
+)
+
+DEFAULT_REMINDER_EXTRACTION_USER = """触发标签：{trigger_tag}
+当前时间：{now}
+默认时区：{timezone}
+
+请返回 JSON：
+{"has_reminder": boolean, "items": [{"title": string, "body": string, "due_at": string, "timezone": string, "confidence": number, "raw_text": string}], "needs_clarification": boolean, "clarification_question": string|null}
+
+规则：
+- 只有正文包含触发标签时才提取提醒。
+- due_at 必须是可解析的 ISO 8601 时间，优先包含时区偏移。
+- 如果只有日期没有具体时刻、时间已无法确定或语义模糊，needs_clarification=true。
+- title 简短概括提醒事项，body 保留必要上下文。
+
+memo 内容：
+{content}"""
+
 
 @dataclass(frozen=True)
 class PromptTemplate:
     system: str
     user: str
+    provider: str | None = None
 
     def render(self, context: dict[str, str]) -> "RenderedPrompt":
         return RenderedPrompt(
@@ -53,7 +76,10 @@ class PromptTemplate:
         )
 
     def to_dict(self) -> dict[str, str]:
-        return {"system": self.system, "user": self.user}
+        payload = {"system": self.system, "user": self.user}
+        if self.provider:
+            payload["provider"] = self.provider
+        return payload
 
 
 @dataclass(frozen=True)
@@ -66,6 +92,7 @@ class RenderedPrompt:
 class PromptsConfig:
     organize_memo: PromptTemplate
     tag_summary: PromptTemplate
+    reminder_extraction: PromptTemplate
 
     @classmethod
     def load(cls, path: str | Path = "config/prompts.yaml") -> "PromptsConfig":
@@ -83,9 +110,15 @@ class PromptsConfig:
         tag_summary = raw.get("tag_summary", {})
         if tag_summary and not isinstance(tag_summary, dict):
             raise ConfigError("prompts tag_summary must be a mapping")
+        reminder_extraction = raw.get("reminder_extraction", {})
+        if reminder_extraction and not isinstance(reminder_extraction, dict):
+            raise ConfigError("prompts reminder_extraction must be a mapping")
         return cls(
             organize_memo=_template_from_mapping(organize_memo, "organize_memo"),
             tag_summary=_template_from_mapping(tag_summary, "tag_summary") if tag_summary else default_tag_summary_prompt(),
+            reminder_extraction=_template_from_mapping(reminder_extraction, "reminder_extraction")
+            if reminder_extraction
+            else default_reminder_extraction_prompt(),
         )
 
     def save(self, path: str | Path) -> None:
@@ -94,6 +127,7 @@ class PromptsConfig:
         payload = {
             "organize_memo": self.organize_memo.to_dict(),
             "tag_summary": self.tag_summary.to_dict(),
+            "reminder_extraction": self.reminder_extraction.to_dict(),
         }
         with config_path.open("w", encoding="utf-8") as file:
             yaml.safe_dump(payload, file, allow_unicode=True, sort_keys=False)
@@ -106,6 +140,7 @@ def load_prompts_or_default(path: str | Path) -> PromptsConfig:
     return PromptsConfig(
         organize_memo=default_organize_memo_prompt(),
         tag_summary=default_tag_summary_prompt(),
+        reminder_extraction=default_reminder_extraction_prompt(),
     )
 
 
@@ -123,14 +158,29 @@ def default_tag_summary_prompt() -> PromptTemplate:
     )
 
 
+def default_reminder_extraction_prompt() -> PromptTemplate:
+    return PromptTemplate(
+        system=DEFAULT_REMINDER_EXTRACTION_SYSTEM,
+        user=DEFAULT_REMINDER_EXTRACTION_USER,
+    )
+
+
 def _template_from_mapping(raw: dict[str, Any], name: str) -> PromptTemplate:
+    provider = _optional_prompt_provider(raw.get("provider"))
     system = str(raw.get("system", "")).strip()
     user = str(raw.get("user", "")).strip()
     if not system:
         raise ConfigError(f"{name} system prompt must not be empty")
     if not user:
         raise ConfigError(f"{name} user prompt must not be empty")
-    return PromptTemplate(system=system, user=user)
+    return PromptTemplate(system=system, user=user, provider=provider)
+
+
+def _optional_prompt_provider(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
 
 
 def _replace_placeholders(text: str, context: dict[str, str]) -> str:

@@ -35,4 +35,4 @@ providers:
     response_format: json_object
     extra_body:
       thinking:
-        type: disabled
+        type: enabled

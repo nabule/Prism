@@ -44,6 +44,10 @@ npx nx build sidecar
 <h2>启动 API</h2>
 <pre><code class="language-bash">npx nx run sidecar:up
 </code></pre>
+<p>默认 Compose 会启动 <code>gateway</code>、<code>memos</code>、<code>sidecar</code> 和 <code>sidecar-worker</code>。Caddy 网关只暴露一个宿主机入口：<code>http://localhost:8080/</code> 进入 Memos，<code>/admin/*</code>、<code>/health</code>、<code>/webhooks/*</code> 进入 Sidecar。Memos 的 <code>5230</code> 和 Sidecar 容器内部 <code>8080</code> 默认不直接暴露；需要更换宿主机端口时使用 <code>GATEWAY_PORT=8090 npx nx run sidecar:up</code>。</p>
+<p>Memos 页面：</p>
+<pre><code class="language-text">http://localhost:8080/
+</code></pre>
 <p>健康检查：</p>
 <pre><code class="language-bash">curl http://localhost:8080/health
 </code></pre>
@@ -74,7 +78,7 @@ npx nx build sidecar
   --bootstrap-password testtest \
   --configure-webhook-url &quot;https://your-public-sidecar.example.com/webhooks/memos&quot;
 </code></pre>
-<p>也可以通过 <code>.env</code> 配置 <code>MEMOS_WEBHOOK_URL</code>，然后直接执行探针。Memos <code>0.28.0</code> 会拒绝 webhook URL 解析到本机、Docker 内网或其他保留/私有 IP，例如 <code>http://sidecar:8080/webhooks/memos</code>、<code>http://localhost:8080/webhooks/memos</code> 和 <code>http://172.x.x.x:8080/webhooks/memos</code>。本地测试不需要绕过该限制，使用默认轮询模式即可。</p>
+<p>也可以通过 <code>.env</code> 配置 <code>MEMOS_WEBHOOK_URL</code>，然后直接执行探针。Memos <code>0.28.0</code> 会拒绝 webhook URL 解析到本机、Docker 内网或其他保留/私有 IP，例如 <code>http://sidecar:8080/webhooks/memos</code>、<code>http://localhost:8080/webhooks/memos</code> 和 <code>http://172.x.x.x:8080/webhooks/memos</code>。本地测试不需要绕过该限制，使用默认轮询模式即可；公网部署时把 webhook 指向 Caddy 网关公开入口的 <code>/webhooks/memos</code>。</p>
 <p>配置 webhook、创建 memo 并轮询 Sidecar 任务状态：</p>
 <pre><code class="language-bash">npx nx run sidecar:probe-memos -- \
   --bootstrap-username test \
@@ -151,7 +155,7 @@ curl -X POST -H &quot;Authorization: Bearer&lt;空格&gt;$SIDECAR_ADMIN_TOKEN&qu
 </code></pre>
 <p>当前已通过自动化测试：</p>
 <pre><code class="language-text">npx nx test sidecar
-61 passed
+全部测试通过
 </code></pre>
 <h2>P2 本地整理草案</h2>
 <p>worker 处理 memo 时会加载 <code>config/taxonomy.yaml</code>，在 job <code>result.ai_plan</code> 中写入本地整理草案：</p>
@@ -206,8 +210,8 @@ curl -X POST -H &quot;Authorization: Bearer&lt;空格&gt;$SIDECAR_ADMIN_TOKEN&qu
 <p>对于正文为空、只有附件的原 memo，worker 会在 LLM 分析完成后使用 <code>PATCH /api/v1/memos/{memo_uid}</code> 回写一级标题。标题来自 LLM draft 的 <code>title</code> 字段，并会去掉多余的 <code>AI整理</code> 前缀和 Markdown <code>#</code> 符号，避免把原 memo 变成标签或覆盖已有正文。</p>
 <p>解析结果会出现在 job <code>result.attachments</code> 中，状态可能是 <code>parsed</code>、<code>skipped</code> 或 <code>failed</code>。如果未配置 <code>MINERU_API_TOKEN</code>，Office/PDF 附件会记录为 <code>document_parser_not_configured</code>，不会阻塞普通正文整理。</p>
 <h2>Docker 状态</h2>
-<p>仓库已提供 <code>docker-compose.yml</code> 和 <code>Dockerfile</code> 草案。Docker Hub 镜像下载优先使用 Xget 加速地址，例如 <code>xget.your-domain.com/cr/docker/neosmemo/memos:stable</code>。</p>
-<p>最近一次 <code>docker compose pull memos</code> 与 <code>npx nx build sidecar</code> 已通过 <code>xget.your-domain.com</code> 成功完成镜像拉取和构建。真实 Memos 手动 webhook 联调已通过；Memos 内置 webhook 自动配置接口已验证，但自动回调需要公网可达的 Sidecar webhook URL。</p>
+<p>仓库已提供可发布的 <code>docker-compose.yml</code>、<code>Dockerfile</code> 和 <code>gateway/Caddyfile</code>。Docker Hub/GHCR 镜像下载优先使用 Xget 加速地址，例如 <code>xget.your-domain.com/cr/docker/neosmemo/memos:stable</code> 和 <code>xget.your-domain.com/cr/docker/library/caddy:2.10.2</code>。</p>
+<p><code>npx nx build sidecar</code> 会执行 <code>docker compose build</code>，覆盖 Sidecar、worker 和网关发布栈。真实联调时需先确认 Compose 正在运行最新镜像和当前挂载配置，再从实际监听的 Caddy 网关端口访问 Memos、<code>/admin/ui</code> 和 <code>/health</code>。</p>
 <p>Dockerfile 已将第三方依赖安装与项目源码拷贝分层，后续普通代码变更不会反复下载全部 Python 依赖。</p>
 <p>Compose 中 Sidecar 和 worker 的 <code>./config:/app/config</code> 挂载保持可写，便于管理页面保存 <code>config/prompts.yaml</code>。不要把真实密钥写入 config 文件；密钥仍只通过环境变量或部署密钥管理提供。</p>
 

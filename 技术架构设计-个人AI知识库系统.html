@@ -45,7 +45,7 @@ Attachment Parsers
 txt/md/docx/xlsx/pdf/drawio/mind-elixir-json
 </code></pre>
 <h2>3. 部署架构</h2>
-<p>第一版采用 Docker Compose，部署在 NAS 或 Linux。</p>
+<p>当前发布版采用 Docker Compose，部署在 NAS 或 Linux，并由 Caddy 网关提供统一入口。</p>
 <pre><code class="language-text">memosima/
   docker-compose.yml
   .env
@@ -69,23 +69,23 @@ txt/md/docx/xlsx/pdf/drawio/mind-elixir-json
 </tr>
 </thead>
 <tbody><tr>
-<td><code>memos</code></td>
-<td>Memos 主服务</td>
+<td><code>gateway</code></td>
+<td>Caddy 统一入口。<code>/admin/*</code>、<code>/health</code>、<code>/webhooks/*</code> 转发到 Sidecar，其余路径转发到 Memos。</td>
 </tr>
 <tr>
-<td><code>sidecar-api</code></td>
+<td><code>memos</code></td>
+<td>Memos 主服务，只在 Compose 网络内暴露 <code>5230</code>。</td>
+</tr>
+<tr>
+<td><code>sidecar</code></td>
 <td>FastAPI 接收 webhook、管理接口</td>
 </tr>
 <tr>
 <td><code>sidecar-worker</code></td>
 <td>后台任务、附件解析、AI 调用、索引、文档生成</td>
 </tr>
-<tr>
-<td><code>backup</code></td>
-<td>可选定时备份任务，可与 worker 合并</td>
-</tr>
 </tbody></table>
-<p>MVP 可将 <code>sidecar-api</code> 与 <code>sidecar-worker</code> 放在同一进程中，后续再拆分。</p>
+<p>默认只暴露 Caddy 网关宿主机端口 <code>${GATEWAY_PORT:-8080}:80</code>。用户访问 <code>http://localhost:8080/</code> 进入 Memos，访问 <code>http://localhost:8080/admin/ui</code> 进入 Sidecar 管理页面。Memos 的 <code>5230</code> 和 Sidecar 容器内部 <code>8080</code> 默认不直接暴露到宿主机。</p>
 <h2>4. 模块设计</h2>
 <h3>4.1 API 模块</h3>
 <p>职责：</p>
@@ -173,7 +173,7 @@ backup_restore
 <p>当前实现状态：</p>
 <ul>
 <li>已实现 OpenAI-compatible <code>/chat/completions</code> provider。</li>
-<li>默认 provider 为 OpenRouter，默认模型为 <code>deepseek/deepseek-v4-flash:free</code>。</li>
+<li>默认 provider 为 DeepSeek，默认模型为 <code>deepseek-v4-flash</code>。</li>
 <li>API key 只从 <code>api_key_env</code> 指定的环境变量读取，不写入配置文件或仓库。</li>
 <li>模型输出按 JSON 对象校验，字段包含 <code>title</code>、<code>summary</code>、<code>key_points</code>、<code>todos</code>、<code>needs_clarification</code> 和 <code>clarification_question</code>。</li>
 <li>未配置 API key 时，worker 自动回退到本地模板整理。</li>
@@ -714,7 +714,7 @@ rules:
 <h3>6.1 <code>app.yaml</code></h3>
 <pre><code class="language-yaml">app:
   workspace_id: default
-  public_base_url: http://localhost:5230
+  public_base_url: http://localhost:8080
   timezone: Asia/Shanghai
 security:
   admin_token_env: SIDECAR_ADMIN_TOKEN
@@ -818,7 +818,7 @@ disabled:
 <li>SQLite 任务系统：<code>workspaces</code>、<code>memos</code>、<code>jobs</code> 表和幂等任务创建。</li>
 <li>Worker：轮询 <code>process_memo</code> 任务，读取 Memos memo，并记录原始 memo 映射。</li>
 <li>Memos Client：封装读取 memo、创建 memo、创建评论、资源下载。</li>
-<li>模型配置：OpenRouter，默认模型 <code>deepseek/deepseek-v4-flash:free</code>，密钥仅从 <code>OPENROUTER_API_KEY</code> 读取。</li>
+<li>模型配置：默认 provider 为 DeepSeek，默认模型 <code>deepseek-v4-flash</code>，密钥仅从 <code>DEEPSEEK_API_KEY</code> 或本地忽略的 <code>config/.env.local</code> 读取。</li>
 </ul>
 <p>当前 Linux 环境缺少 Docker，真实 Memos 容器联调尚未完成，详见 <code>docs/API探针记录.html</code> 与 <code>docs/P0-P1验收记录.html</code>。</p>
 

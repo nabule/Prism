@@ -1,10 +1,22 @@
 services:
+  gateway:
+    image: xget.your-domain.com/cr/docker/library/caddy:2.10.2
+    container_name: memosima-gateway
+    restart: unless-stopped
+    depends_on:
+      - memos
+      - sidecar
+    ports:
+      - "${GATEWAY_PORT:-8080}:80"
+    volumes:
+      - ./gateway/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./data/caddy:/data
+      - ./logs/caddy:/var/log/caddy
+
   memos:
     image: xget.your-domain.com/cr/docker/neosmemo/memos:stable
     container_name: memosima-memos
     restart: unless-stopped
-    ports:
-      - "5230:5230"
     volumes:
       - ./data/memos:/var/opt/memos
     environment:
@@ -17,8 +29,6 @@ services:
     restart: unless-stopped
     depends_on:
       - memos
-    ports:
-      - "8080:8080"
     env_file:
       - .env
     environment:

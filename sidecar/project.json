@@ -20,7 +20,7 @@
     "build": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "docker compose build sidecar sidecar-worker",
+        "command": "docker compose build",
         "cwd": "."
       }
     },

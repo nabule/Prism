@@ -14,6 +14,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 LOGGER = logging.getLogger("memosima.api")
 
 import uvicorn
@@ -24,7 +26,7 @@ from memosima import __version__
 from memosima.api.admin_ui import ADMIN_UI_HTML
 from memosima.api.security import require_admin
 from memosima.api.webhooks import build_idempotency_key, extract_memo_uid
-from memosima.core.config import AppConfig, ConfigError, ModelsConfig, ProviderConfig, load_env_file
+from memosima.core.config import AppConfig, ConfigError, ModelsConfig, ProviderConfig, _read_yaml, load_env_file
 from memosima.core.prompts import PromptTemplate, PromptsConfig, load_prompts_or_default
 from memosima.db.store import Job, MemoRecord, ReminderRecord, Store, TagCandidateRecord
 from memosima.llm.provider import LLMClientError, OpenAICompatibleClient
@@ -197,6 +199,36 @@ class GeneratePromptResponse(BaseModel):
     assembled_prompt: str
     retrieved_count: int
     sources: list[QA_Source]
+
+
+class DocumentParserConfigView(BaseModel):
+    provider: str
+    token_env: str
+    base_url: str
+    timeout_seconds: float
+    poll_interval_seconds: float
+    max_polls: int
+    model_version: str
+    language: str
+    enable_table: bool
+    enable_formula: bool
+    is_ocr: bool
+    api_key_present: bool
+
+
+class DocumentParserUpdateRequest(BaseModel):
+    provider: str = Field(default="mineru", max_length=80)
+    token_env: str = Field(default="MINERU_API_TOKEN", max_length=120, pattern=r"^[A-Z_][A-Z0-9_]*$")
+    base_url: str = Field(default="https://mineru.net", max_length=500)
+    timeout_seconds: float = Field(default=60, ge=1, le=600)
+    poll_interval_seconds: float = Field(default=3, ge=1, le=60)
+    max_polls: int = Field(default=60, ge=1, le=600)
+    model_version: str = Field(default="vlm", max_length=40)
+    language: str = Field(default="ch", max_length=20)
+    enable_table: bool = True
+    enable_formula: bool = True
+    is_ocr: bool = False
+    api_key: str | None = Field(default=None, max_length=12000)
 
 
 def create_app(
@@ -708,6 +740,71 @@ def create_app(
             sources=sources,
         )
 
+    @app.get(
+        "/admin/document-parser",
+        response_model=DocumentParserConfigView,
+        dependencies=[Depends(require_admin)],
+    )
+    async def get_document_parser_config() -> DocumentParserConfigView:
+        cfg: AppConfig = app.state.config
+        return DocumentParserConfigView(
+            provider=cfg.document_parser_provider,
+            token_env=cfg.document_parser_token_env,
+            base_url=cfg.document_parser_base_url,
+            timeout_seconds=cfg.document_parser_timeout_seconds,
+            poll_interval_seconds=cfg.document_parser_poll_interval_seconds,
+            max_polls=cfg.document_parser_max_polls,
+            model_version=cfg.mineru_model_version,
+            language=cfg.mineru_language,
+            enable_table=cfg.mineru_enable_table,
+            enable_formula=cfg.mineru_enable_formula,
+            is_ocr=cfg.mineru_is_ocr,
+            api_key_present=bool(os.getenv(cfg.document_parser_token_env)),
+        )
+
+    @app.put(
+        "/admin/document-parser",
+        response_model=DocumentParserConfigView,
+        dependencies=[Depends(require_admin)],
+    )
+    async def update_document_parser_config(request: DocumentParserUpdateRequest) -> DocumentParserConfigView:
+        if request.api_key and ("\n" in request.api_key or "\r" in request.api_key):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="API key must be a single line")
+        _update_app_yaml_document_parser(
+            config_path=Path(config_path),
+            provider=request.provider,
+            token_env=request.token_env,
+            base_url=request.base_url.strip().rstrip("/"),
+            timeout_seconds=request.timeout_seconds,
+            poll_interval_seconds=request.poll_interval_seconds,
+            max_polls=request.max_polls,
+            model_version=request.model_version.strip(),
+            language=request.language.strip(),
+            enable_table=request.enable_table,
+            enable_formula=request.enable_formula,
+            is_ocr=request.is_ocr,
+        )
+        if request.api_key is not None and request.api_key.strip():
+            env_path = Path(config_path).parent / ".env.local"
+            _upsert_env_value(env_path, request.token_env, request.api_key.strip())
+            os.environ[request.token_env] = request.api_key.strip()
+        app.state.config = AppConfig.load(config_path)
+        cfg: AppConfig = app.state.config
+        return DocumentParserConfigView(
+            provider=cfg.document_parser_provider,
+            token_env=cfg.document_parser_token_env,
+            base_url=cfg.document_parser_base_url,
+            timeout_seconds=cfg.document_parser_timeout_seconds,
+            poll_interval_seconds=cfg.document_parser_poll_interval_seconds,
+            max_polls=cfg.document_parser_max_polls,
+            model_version=cfg.mineru_model_version,
+            language=cfg.mineru_language,
+            enable_table=cfg.mineru_enable_table,
+            enable_formula=cfg.mineru_enable_formula,
+            is_ocr=cfg.mineru_is_ocr,
+            api_key_present=bool(os.getenv(cfg.document_parser_token_env)),
+        )
+
     return app
 
 
@@ -962,6 +1059,40 @@ def _upsert_env_value(path: Path, key: str, value: str) -> None:
         path.chmod(0o600)
     except OSError:
         pass
+
+
+def _update_app_yaml_document_parser(
+    *,
+    config_path: Path,
+    provider: str,
+    token_env: str,
+    base_url: str,
+    timeout_seconds: float,
+    poll_interval_seconds: float,
+    max_polls: int,
+    model_version: str,
+    language: str,
+    enable_table: bool,
+    enable_formula: bool,
+    is_ocr: bool,
+) -> None:
+    raw = _read_yaml(config_path) if config_path.exists() else {}
+    raw["document_parser"] = {
+        "provider": provider,
+        "token_env": token_env,
+        "base_url": base_url,
+        "timeout_seconds": timeout_seconds,
+        "poll_interval_seconds": poll_interval_seconds,
+        "max_polls": max_polls,
+        "mineru_model_version": model_version,
+        "language": language,
+        "enable_table": enable_table,
+        "enable_formula": enable_formula,
+        "is_ocr": is_ocr,
+    }
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    with config_path.open("w", encoding="utf-8") as file:
+        yaml.safe_dump(raw, file, allow_unicode=True, sort_keys=False)
 
 
 def _memos_tag(tag: str) -> str:

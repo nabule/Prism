@@ -285,6 +285,7 @@ ADMIN_UI_HTML = """<!doctype html>
     <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="prompts">AI 配置</button>
     <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="models">模型</button>
     <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="reminders">提醒</button>
+    <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="docparser">文档解析</button>
     <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="backup">备份</button>
     <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="qa">QA 离线问答</button>
   </nav>
@@ -557,6 +558,74 @@ ADMIN_UI_HTML = """<!doctype html>
     </div>
   </section>
 
+  <section class="tab-panel" data-panel="docparser">
+    <div id="docparser" class="panel">
+      <h2>文档解析（MinerU）</h2>
+      <div class="toolbar">
+        <button id="refreshDocParserButton" type="button">刷新</button>
+        <button id="saveDocParserButton" class="primary" type="button">保存配置</button>
+      </div>
+      <div class="muted">配置 MinerU 文档解析服务，用于将 PDF / Office 等附件转为 Markdown。API Key 写入 <span class="mono">config/.env.local</span>，不会保存到配置文件或备份中。</div>
+
+      <label for="dpProvider" style="margin-top: 14px;">Provider</label>
+      <select id="dpProvider">
+        <option value="mineru">mineru</option>
+        <option value="disabled">disabled（关闭）</option>
+      </select>
+
+      <label for="dpBaseUrl" style="margin-top: 10px;">Base URL</label>
+      <input id="dpBaseUrl" autocomplete="off" placeholder="https://mineru.net">
+
+      <label for="dpTokenEnv" style="margin-top: 10px;">Token 环境变量名</label>
+      <input id="dpTokenEnv" autocomplete="off" placeholder="MINERU_API_TOKEN">
+
+      <label for="dpApiKey" style="margin-top: 10px;">API Key</label>
+      <input id="dpApiKey" type="password" autocomplete="off" placeholder="留空则不修改已保存 key">
+      <div id="dpKeyStatus" class="muted"></div>
+
+      <label for="dpModelVersion" style="margin-top: 10px;">模型版本</label>
+      <select id="dpModelVersion">
+        <option value="vlm">vlm（视觉语言模型，推荐）</option>
+        <option value="doclayout">doclayout（布局模型）</option>
+      </select>
+
+      <label for="dpLanguage" style="margin-top: 10px;">语言</label>
+      <select id="dpLanguage">
+        <option value="ch">中文 (ch)</option>
+        <option value="en">英文 (en)</option>
+        <option value="ja">日文 (ja)</option>
+        <option value="ko">韩文 (ko)</option>
+      </select>
+
+      <div class="toolbar" style="margin-top: 14px;">
+        <div class="field">
+          <label for="dpTimeout">超时时间 (秒)</label>
+          <input id="dpTimeout" type="number" min="1" max="600" value="60">
+        </div>
+        <div class="field">
+          <label for="dpPollInterval">轮询间隔 (秒)</label>
+          <input id="dpPollInterval" type="number" min="1" max="60" value="3">
+        </div>
+        <div class="field">
+          <label for="dpMaxPolls">最大轮询次数</label>
+          <input id="dpMaxPolls" type="number" min="1" max="600" value="60">
+        </div>
+      </div>
+
+      <div class="toolbar" style="margin-top: 10px;">
+        <div class="field">
+          <label><input id="dpEnableTable" type="checkbox" checked> 启用表格识别</label>
+        </div>
+        <div class="field">
+          <label><input id="dpEnableFormula" type="checkbox" checked> 启用公式识别</label>
+        </div>
+        <div class="field">
+          <label><input id="dpIsOcr" type="checkbox"> 强制 OCR 模式</label>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <section class="tab-panel" data-panel="qa">
     <div class="grid">
       <div class="panel stack">
@@ -663,6 +732,7 @@ const hashPanelMap = {
   prompts: { panel: "prompts" },
   models: { panel: "models" },
   reminders: { panel: "reminders" },
+  docparser: { panel: "docparser" },
   backup: { panel: "backup" },
   qa: { panel: "qa" }
 };
@@ -1189,6 +1259,8 @@ document.getElementById("createTagSummaryButton").addEventListener("click", crea
 document.getElementById("downloadBackupButton").addEventListener("click", downloadBackup);
 document.getElementById("downloadBackupButtonMirror").addEventListener("click", downloadBackup);
 document.getElementById("restoreBackupButton").addEventListener("click", restoreBackup);
+document.getElementById("refreshDocParserButton").addEventListener("click", loadDocumentParser);
+document.getElementById("saveDocParserButton").addEventListener("click", saveDocumentParser);
 for (const tab of panelTriggers) {
   tab.addEventListener("click", () => {
     const panelName = tab.dataset.tabTarget;
@@ -1199,6 +1271,85 @@ for (const tab of panelTriggers) {
       window.location.hash = hash;
     }
   });
+}
+
+/* 文档解析（MinerU）配置逻辑 */
+const dpProvider = document.getElementById("dpProvider");
+const dpBaseUrl = document.getElementById("dpBaseUrl");
+const dpTokenEnv = document.getElementById("dpTokenEnv");
+const dpApiKey = document.getElementById("dpApiKey");
+const dpKeyStatus = document.getElementById("dpKeyStatus");
+const dpModelVersion = document.getElementById("dpModelVersion");
+const dpLanguage = document.getElementById("dpLanguage");
+const dpTimeout = document.getElementById("dpTimeout");
+const dpPollInterval = document.getElementById("dpPollInterval");
+const dpMaxPolls = document.getElementById("dpMaxPolls");
+const dpEnableTable = document.getElementById("dpEnableTable");
+const dpEnableFormula = document.getElementById("dpEnableFormula");
+const dpIsOcr = document.getElementById("dpIsOcr");
+
+async function loadDocumentParser() {
+  try {
+    const data = await requestJson("/admin/document-parser");
+    dpProvider.value = data.provider || "mineru";
+    dpBaseUrl.value = data.base_url || "";
+    dpTokenEnv.value = data.token_env || "";
+    dpApiKey.value = "";
+    dpKeyStatus.textContent = data.api_key_present ? "Key 已配置" : "Key 未配置";
+    dpModelVersion.value = data.model_version || "vlm";
+    dpLanguage.value = data.language || "ch";
+    dpTimeout.value = data.timeout_seconds ?? 60;
+    dpPollInterval.value = data.poll_interval_seconds ?? 3;
+    dpMaxPolls.value = data.max_polls ?? 60;
+    dpEnableTable.checked = data.enable_table !== false;
+    dpEnableFormula.checked = data.enable_formula !== false;
+    dpIsOcr.checked = !!data.is_ocr;
+    setNotice("文档解析配置已刷新", "ok");
+  } catch (error) {
+    setNotice(String(error.message || error), "error");
+  }
+}
+
+async function saveDocumentParser() {
+  try {
+    const payload = {
+      provider: dpProvider.value,
+      base_url: dpBaseUrl.value,
+      token_env: dpTokenEnv.value,
+      timeout_seconds: Number(dpTimeout.value || "60"),
+      poll_interval_seconds: Number(dpPollInterval.value || "3"),
+      max_polls: Number(dpMaxPolls.value || "60"),
+      model_version: dpModelVersion.value,
+      language: dpLanguage.value,
+      enable_table: dpEnableTable.checked,
+      enable_formula: dpEnableFormula.checked,
+      is_ocr: dpIsOcr.checked,
+    };
+    if (dpApiKey.value.trim()) {
+      payload.api_key = dpApiKey.value.trim();
+    }
+    const data = await requestJson("/admin/document-parser", {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
+    dpProvider.value = data.provider || "mineru";
+    dpBaseUrl.value = data.base_url || "";
+    dpTokenEnv.value = data.token_env || "";
+    dpApiKey.value = "";
+    dpKeyStatus.textContent = data.api_key_present ? "Key 已配置" : "Key 未配置";
+    dpModelVersion.value = data.model_version || "vlm";
+    dpLanguage.value = data.language || "ch";
+    dpTimeout.value = data.timeout_seconds ?? 60;
+    dpPollInterval.value = data.poll_interval_seconds ?? 3;
+    dpMaxPolls.value = data.max_polls ?? 60;
+    dpEnableTable.checked = data.enable_table !== false;
+    dpEnableFormula.checked = data.enable_formula !== false;
+    dpIsOcr.checked = !!data.is_ocr;
+    await loadHealth();
+    setNotice("文档解析配置已保存", "ok");
+  } catch (error) {
+    setNotice(String(error.message || error), "error");
+  }
 }
 
 /* QA 离线问答 & Prompt 编译器逻辑 */
@@ -1368,6 +1519,7 @@ if (token()) {
   loadReminders();
   loadPrompts();
   loadModels();
+  loadDocumentParser();
   loadQABusinessTags();
 }
 window.addEventListener("hashchange", showPanelFromHash);

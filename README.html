@@ -79,6 +79,17 @@ curl http://localhost:8080/health</code></pre>
   <p>默认 Docker Compose 会启动 <code>gateway</code>、<code>memos</code>、<code>sidecar</code> 和 <code>sidecar-worker</code>。Caddy 网关只暴露一个宿主机入口：<code>http://localhost:8080/</code> 进入 Memos，<code>http://localhost:8080/admin/ui</code> 进入 Sidecar 管理页面，<code>http://localhost:8080/health</code> 返回 Sidecar 健康状态。Memos 的 <code>5230</code> 和 Sidecar 容器内部 <code>8080</code> 默认不直接暴露到宿主机；需要改宿主机端口时可设置 <code>GATEWAY_PORT</code>。</p>
   <p>调试管理页面不会读取服务器端密钥，需要手动输入 <code>SIDECAR_ADMIN_TOKEN</code>，并只保存在当前浏览器的 <code>localStorage</code>。页面也可以编辑默认 LLM 提示词，或在重试任务时只临时覆盖当前任务使用的提示词。默认开启 Memos 内管理入口，worker 空闲时会自动创建或更新一条 <code>#系统/Memosima</code> memo（标题呈现为 **Prism (棱镜)** 入口），入口链接由 <code>app.public_base_url</code> 生成。</p>
 
+  <h2>持续集成与 Docker 镜像自动发布</h2>
+  <p>项目已集成基于 GitHub Actions 的持续集成流水线 <a href=".github/workflows/docker-publish.yml"><code>.github/workflows/docker-publish.yml</code></a>：</p>
+  <ul>
+    <li><strong>自动化编译与缓存：</strong>当向 <code>master</code> 分支推送代码，或者在 GitHub 侧创建并发布以 <code>v*</code> 开头的版本 Release Tag 时，GitHub CI 会自动激活，使用云端 Buildx 引擎进行多架构镜像编译与 GHA 级层级缓存。</li>
+    <li><strong>官方镜像极速部署：</strong>编译成功的 Docker 镜像将自动推送到 <strong>GitHub Container Registry (GHCR)</strong> 仓库。在部署生产或多租户隔离实例时，可以直接拉取官方最新打包好的镜像，免去本地临时 build 的编译等待：
+      <ul>
+        <li><strong>官方镜像地址：</strong><code>ghcr.io/nabule/prism:latest</code>（或携带版本号的 <code>ghcr.io/nabule/prism:v0.3.0</code>）</li>
+      </ul>
+    </li>
+  </ul>
+
   <h2>常用命令</h2>
   <pre><code>npx nx test sidecar
 npx nx run sidecar:compile

@@ -104,6 +104,16 @@ curl http://localhost:8080/health
 
 ---
 
+## 持续集成与 Docker 镜像自动发布
+
+项目已集成基于 GitHub Actions 的持续集成流水线 [`.github/workflows/docker-publish.yml`](file:///.github/workflows/docker-publish.yml)：
+
+* **自动化编译与缓存**：当您向 `master` 分支推送代码，或者在 GitHub 侧创建并发布以 `v*` 开头的版本 Release Tag 时，GitHub CI 会自动激活，使用云端 Buildx 引擎进行多架构镜像编译与 GHA 级层级缓存。
+* **官方镜像极速部署**：编译成功的 Docker 镜像将自动推送到 **GitHub Container Registry (GHCR)** 仓库。在部署生产或多租户隔离实例时，您可以直接拉取官方最新打包好的镜像，免去本地临时 build 的编译等待：
+  * **官方镜像地址**：`ghcr.io/nabule/prism:latest`（或携带版本号的 `ghcr.io/nabule/prism:v0.3.0`）
+
+---
+
 ## 常用开发命令
 
 所有依赖安装、测试、构建等命令均应优先通过 Nx target 执行：

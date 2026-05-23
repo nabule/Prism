@@ -6,7 +6,7 @@ ADMIN_UI_HTML = """<!doctype html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Memosima Admin</title>
+  <title>Prism (棱镜) Admin</title>
   <style>
     :root {
       color-scheme: light dark;
@@ -240,7 +240,29 @@ ADMIN_UI_HTML = """<!doctype html>
 <main class="shell">
   <header class="topbar">
     <div>
-      <h1>Memosima Admin</h1>
+      <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 4px;">
+        <svg class="prism-logo" viewBox="0 0 100 100" width="34" height="34" style="vertical-align: middle; flex-shrink: 0;">
+          <defs>
+            <linearGradient id="rainbow" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#ff4b4b" />
+              <stop offset="20%" stop-color="#ff8533" />
+              <stop offset="40%" stop-color="#ffdd33" />
+              <stop offset="60%" stop-color="#33cc66" />
+              <stop offset="80%" stop-color="#3399ff" />
+              <stop offset="100%" stop-color="#8033ff" />
+            </linearGradient>
+            <linearGradient id="glass" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="rgba(100,116,139,0.2)" />
+              <stop offset="100%" stop-color="rgba(100,116,139,0.05)" />
+            </linearGradient>
+          </defs>
+          <path d="M 0 50 L 45 42" stroke="#60a5fa" stroke-width="4" stroke-linecap="round" opacity="0.9" />
+          <path d="M 55 45 L 100 20 L 100 80 Z" fill="url(#rainbow)" opacity="0.8" />
+          <polygon points="50,15 20,75 80,75" fill="url(#glass)" stroke="#94a3b8" stroke-width="2.5" />
+          <path d="M 45 42 L 55 45" stroke="#93c5fd" stroke-width="2.5" opacity="0.85" />
+        </svg>
+        <h1 style="margin: 0;">Prism (棱镜) Admin</h1>
+      </div>
       <div class="muted">Sidecar 管理配置</div>
     </div>
     <div id="connection" class="panel">

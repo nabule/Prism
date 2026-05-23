@@ -75,8 +75,8 @@
 <li><code>memos.webhook_url_env</code>：Memos 内置 webhook 回调 URL 的环境变量名。</li>
 <li><code>memos.ingestion_mode</code>：memo 入口模式，默认 <code>poll</code>，由 Sidecar 主动轮询 Memos，不需要公网 webhook；也可设为 <code>webhook</code> 或 <code>both</code>。</li>
 <li><code>memos.poll_page_size</code>：轮询时每次读取最近 memo 的数量，默认 <code>20</code>。</li>
-<li><code>memos.admin_entry_enabled</code>：是否在 Memos 中自动维护 <code>#系统/Memosima</code> 管理入口 memo，默认开启。</li>
-<li><code>memos.admin_entry_title</code>：管理入口 memo 的标题，默认 <code>Memosima 管理入口</code>。</li>
+<li><code>memos.admin_entry_enabled</code>：是否在 Memos 中自动维护 <code>#系统/Memosima</code> 管理入口 memo（标题呈现为 **Prism (棱镜)** 入口），默认开启。</li>
+<li><code>memos.admin_entry_title</code>：管理入口 memo 的标题，默认 <code>Prism (棱镜)</code>。</li>
 <li><code>memos.admin_entry_visibility</code>：管理入口 memo 的 Memos 可见性，默认 <code>PRIVATE</code>。</li>
 <li><code>prompts.path</code>：LLM 默认提示词配置文件路径，默认 <code>config/prompts.yaml</code>。</li>
 <li><code>worker.max_attempts</code>：任务失败后的最大尝试次数。</li>

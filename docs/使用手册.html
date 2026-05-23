@@ -37,18 +37,18 @@
   <ul>
     <li>Memos、Caddy 网关、Sidecar API、worker 的 Docker Compose 启动。</li>
     <li>Memos webhook 接入、任务入队、后台处理和管理接口。</li>
-    <li>OpenAI-compatible LLM 整理，默认使用 DeepSeek <code>deepseek-v4-flash</code>。</li>
+    <li>OpenAI-compatible LLM 整理，默认使用 DeepSeek <code>deepseek-chat</code>。</li>
     <li>AI 整理 memo 创建，并写入 Memos 原生 <code>REFERENCE</code> relation，由整理 memo 指向原始 memo。</li>
     <li>内置 <code>/admin/ui</code> 调试管理页面，可查看任务、重试任务和审核候选标签。</li>
     <li>候选标签创建、审核、审核后 active 生效。</li>
     <li>AI 可从正文自动生成 tag 建议；未审核的新 tag 只进入候选列表。</li>
-    <li>AI 调用配置可编辑；单条 memo 整理、标签总结和提醒抽取都支持单独选择大模型配置和提示词。</li>
+    <li>AI 调用配置可编辑；单条 memo 整理、标签总结 and 提醒抽取都支持单独选择大模型配置和提示词。</li>
     <li>按标签生成整体总结，可把同一标签下的零散 memos 整理成一条人可读的展示 memo。</li>
     <li>待澄清评论和 <code>waiting_user</code> 任务状态。</li>
     <li><code>.txt</code>、<code>.md</code> 附件解析到 <code>artifacts</code> 表；Word、Excel、PPT、PDF 附件通过 MinerU 服务转成 Markdown 参与整理；特别支持 <code>.drawio</code>（.drawio.svg）与 Mind Elixir <code>.json</code> 脑图本地高保真离线解析。</li>
     <li>管理端内置 AI 离线问答与 RAG Prompt 编译器，支持多标签药丸胶囊选择、模糊匹配、一键生成并复制完整 Prompt。</li>
   </ul>
-  <p class="note">还没有完成：向量索引、自动文档、备份恢复。</p>
+  <p class="note">还没有完成：向量索引、自动文档、Memos 主库备份恢复。</p>
 
   <h2>1. 准备配置</h2>
   <p>复制环境变量示例并填写真实值。不要把真实 <code>.env</code> 提交到 git。</p>
@@ -158,7 +158,20 @@
 npx nx run sidecar:compile
 npx nx build sidecar</code></pre>
 
-  <h2>13. 更多文档</h2>
+  <h2>14. 多用户与安全隔离指南</h2>
+  <p class="note"><strong>⚠️ 隐私安全警示：</strong><br>
+  Memosima 本质定位为<strong>个人 AI 知识库服务</strong>。在单 Sidecar 实例架构下，任务仅绑定单一 <code>MEMOS_API_TOKEN</code>。若多个用户在同一个 Memos 实例下直接共享该 Sidecar 实例，则由于系统标签治理缓存与解析后的附件大纲统一存放在同一个 SQLite 数据库中，在离线 QA 页面进行提问匹配时，可能会在上下文 Prompt 编译时召回其他用户的私密 Memo，导致<strong>严重的隐私泄露与数据混淆风险</strong>。目前系统<strong>不支持</strong>多账号无隔离直接混用。</p>
+  
+  <h3>🚀 官方推荐：独立容器化部署模式（SaaS/多租户物理隔离）</h3>
+  <p>若您需要为多人、团队成员或不同账户提供各自独立的 AI 自动标签归档和离线 QA Prompter 功能，最安全、隔离性最好的方式是<strong>为每个用户部署一套物理隔离的独立容器栈</strong>：</p>
+  <ul>
+    <li><strong>目录与代码物理隔离</strong>：为每个用户在宿主机创建独立的部署工作目录（例如 <code>/home/abc/code/memosima_userA</code>），克隆相同的项目代码。</li>
+    <li><strong>独立配置文件</strong>：在各自的 <code>.env</code> 文件中填写该用户专属的 <code>MEMOS_API_TOKEN</code>、<code>SIDECAR_ADMIN_TOKEN</code> 以及各自偏爱的大模型 API Key。</li>
+    <li><strong>端口与反代隔离</strong>：在各自的 <code>.env</code> 中指定不同的 <code>GATEWAY_PORT</code>（例如用户 A 的网关暴露端口设为 <code>8080</code>，用户 B 设为 <code>8081</code>），在宿主机使用 Nginx 或反代工具将不同的二级域名（如 <code>usera.memos.local</code>）映射至对应的容器网关入口。</li>
+    <li><strong>数据防爆安全隔离</strong>：各实例的数据库、缓存文件、大模型 Key 物理隔离，100% 确保用户的隐私与数据所有权。</li>
+  </ul>
+
+  <h2>15. 更多文档</h2>
   <ul>
     <li><a href="../README.html">项目入口</a></li>
     <li><a href="普通用户使用手册.html">普通用户使用手册</a></li>

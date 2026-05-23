@@ -6,7 +6,7 @@ Memosima 是基于 Memos 的个人 AI 知识库 Sidecar 服务。Memos 负责采
 
 ## 当前状态
 
-已完成 P0、P1、P2 核心闭环，并开始 P3 文本附件解析基础。
+已完成 P0、P1、P2 核心闭环，以及 P3 阶段附件离线高保真解析与离线 QA RAG 问答 Prompter。
 
 - **Caddy 网关统一入口**：默认从 `http://localhost:8080/` 访问 Memos，从 `/admin/*`、`/health`、`/webhooks/*` 访问 Sidecar。
 - **Webhook 与任务系统**：Memos webhook 接入和 SQLite 任务系统。
@@ -18,12 +18,14 @@ Memosima 是基于 Memos 的个人 AI 知识库 Sidecar 服务。Memos 负责采
 - **无标签自动推荐**：当用户原始 memo 没有业务标签时，LLM 可从正文自动建议正式标签和候选标签；新标签仍需人工审核。
 - **提示词热加载与覆盖**：LLM 提示词从 `config/prompts.yaml` 加载，管理页面可保存默认提示词，也可在重试时临时覆盖。
 - **澄清评论机制**：待澄清评论和 `waiting_user` 状态。
-- **附件Markdown解析**：`.txt`、`.md` 附件解析为 artifact；Word、Excel、PPT、PDF 附件可通过 MinerU 在线服务转成 Markdown 后进入同一 AI 整理流程。
+- **附件离线高保真解析**：`.txt`、`.md` 附件解析为 artifact；Word/Excel/PPT/PDF 支持通过 MinerU 转换；原生支持 **`.drawio`（及 `.drawio.svg`）附件离线解压提取**与 **`Mind Elixir` 思维脑图 JSON 层级大纲**的 100% 本地离线解析与递归转换。
+- **离线 QA & Prompt 编译器**：管理端提供强大的离线 QA 问答页面，支持多标签药丸胶囊选择、拼音中文模糊过滤，自动实现基于精确标签/模糊正文的双路检索召回，并一键编译与复制带有完整上下文的超级 Prompt。
 - **智能提醒系统**：`#提醒` 时间识别和一次性定时通知，支持 Bark 兼容 webhook。
 - **备份与恢复**：管理页面支持下载 Sidecar 备份包，并从备份包恢复 Sidecar SQLite 数据库。
 
 > [!NOTE]
-> **未完成范围**：drawio/Mind Elixir 专用解析、向量索引、问答、自动文档、Memos 主库备份恢复。
+> **未完成范围**：向量索引、自动文档、Memos 主库备份恢复。
+
 
 ---
 
@@ -71,6 +73,24 @@ curl http://localhost:8080/health
 默认 Docker Compose 会启动 `gateway`、`memos`、`sidecar` 和 `sidecar-worker`。Caddy 网关只暴露一个宿主机入口：`http://localhost:8080/` 进入 Memos，`http://localhost:8080/admin/ui` 进入 Sidecar 管理页面，`http://localhost:8080/health` 返回 Sidecar 健康状态。Memos 的 `5230` 和 Sidecar 容器内部 `8080` 默认不直接暴露到宿主机；需要改宿主机端口时可设置 `GATEWAY_PORT`。
 
 调试管理页面不会读取服务器端密钥，需要手动输入 `SIDECAR_ADMIN_TOKEN`，并只保存在当前浏览器的 `localStorage`。页面也可以编辑默认 LLM 提示词，或在重试任务时只临时覆盖当前任务使用的提示词。默认开启 Memos 内管理入口，worker 空闲时会自动创建或更新一条 `#系统/Memosima` memo，入口链接由 `app.public_base_url` 生成。
+
+---
+
+## 多用户与安全隔离说明
+
+> [!WARNING]
+> **多租户与隐私安全警示**：
+> Memosima 的核心定位是**个人离线 AI 知识库系统**。当前在**单 Sidecar 实例**下，后台处理任务绑定了单一的 `MEMOS_API_TOKEN`，且所有用户的附件解析大纲、智能标签治理缓存均会集中存放在同一个 Sidecar SQLite 数据库中。
+> **请勿直接让多个独立用户共享使用同一个 Sidecar 实例**，否则在离线 QA 问答页面，用户提问的模糊/精确匹配检索可能会跨用户召回知识上下文，带来**严重的隐私泄露与数据混淆风险**。
+
+### 🚀 推荐方案：独立容器化部署（多租户物理隔离）
+
+若您需要为多个账号、团队成员或家庭成员提供独立的 AI 整理与离线 QA 问答能力，最推荐、最安全的方式是**为每个用户部署一套物理隔离的容器栈**：
+
+1. **目录隔离**：为每个用户在宿主机创建独立的部署工作目录，例如 `/home/abc/code/memosima_userA` 和 `/home/abc/code/memosima_userB`，克隆相同的代码。
+2. **配置隔离**：在各自的 `.env` 配置文件中填写该用户专属的 `MEMOS_API_TOKEN`、`SIDECAR_ADMIN_TOKEN` 以及对应大模型的 API 密钥。
+3. **端口隔离**：在各自的 `.env` 中修改 `GATEWAY_PORT` 变量（例如用户 A 的网关暴露端口为 `8080`，用户 B 为 `8081`），避免端口冲突。
+4. **统一域名分发**（可选）：使用主机的 Nginx 或其他反向代理，将 `user-a.memos.local` 和 `user-b.memos.local` 分别反代到各自容器的 `GATEWAY_PORT`，即刻实现安全、物理隔离的 SaaS 化多租户知识库体验。
 
 ---
 

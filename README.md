@@ -1,6 +1,16 @@
-# Memosima
+# Prism (棱镜)
 
-Memosima 是基于 Memos 的个人 AI 知识库 Sidecar 服务。Memos 负责采集和保存原始知识，Sidecar 负责 AI 整理、标签治理、澄清评论、附件解析和后续检索能力。
+<p align="center">
+  <img src="./Prism.png" alt="Prism Logo" width="220" />
+</p>
+
+> 🌈 **Prism (棱镜)：光的折射与思维的绚烂**
+> 
+> * **字面意思**：三棱镜。
+> * **诗意寓意**：您随手丢进 Memos 的原始笔记，就像一束朴素的白光。当它穿过 **Prism** 时，被 AI 优雅地折射开来，化作了标签、结构化 Markdown（MinerU 解析）和清晰的知识脉络。
+> * **画面感**：零散的想法进去了，出来的是一抹绚丽的知识彩虹。
+
+**Prism** 是基于 Memos 的个人 AI 知识库 Sidecar 服务。Memos 负责采集和保存原始知识，Sidecar (Prism) 负责 AI 整理、标签治理、澄清评论、附件解析和后续检索能力。
 
 ---
 
@@ -13,7 +23,7 @@ Memosima 是基于 Memos 的个人 AI 知识库 Sidecar 服务。Memos 负责采
 - **AI 智能整理**：创建 memo 时进行整理，支持 DeepSeek、、OpenRouter 等 OpenAI-compatible LLM 和本地模板回退。
 - **Memos 原生关联**：使用 Memos 原生 `REFERENCE` relation 关联原始 memo 与 AI memo。
 - **管理与调试页面**：内置 `/admin/ui` 页面，用于查看任务、重试任务、审核候选标签、备份和恢复 Sidecar 数据。
-- **系统入口自动维护**：worker 可在 Memos 中自动维护 `#系统/Memosima` 管理入口 memo，AI 整理 memo 也会附带管理页面和候选标签审核链接。
+- **系统入口自动维护**：worker 可在 Memos 中自动维护 `#系统/Memosima` 管理入口 memo（对外呈现为 **Prism 管理入口**），AI 整理 memo 也会附带管理页面和候选标签审核链接。
 - **标签治理**：支持候选标签审核和审核后 active 生效。
 - **无标签自动推荐**：当用户原始 memo 没有业务标签时，LLM 可从正文自动建议正式标签和候选标签；新标签仍需人工审核。
 - **提示词热加载与覆盖**：LLM 提示词从 `config/prompts.yaml` 加载，管理页面可保存默认提示词，也可在重试时临时覆盖。
@@ -72,7 +82,7 @@ curl http://localhost:8080/health
 
 默认 Docker Compose 会启动 `gateway`、`memos`、`sidecar` 和 `sidecar-worker`。Caddy 网关只暴露一个宿主机入口：`http://localhost:8080/` 进入 Memos，`http://localhost:8080/admin/ui` 进入 Sidecar 管理页面，`http://localhost:8080/health` 返回 Sidecar 健康状态。Memos 的 `5230` 和 Sidecar 容器内部 `8080` 默认不直接暴露到宿主机；需要改宿主机端口时可设置 `GATEWAY_PORT`。
 
-调试管理页面不会读取服务器端密钥，需要手动输入 `SIDECAR_ADMIN_TOKEN`，并只保存在当前浏览器的 `localStorage`。页面也可以编辑默认 LLM 提示词，或在重试任务时只临时覆盖当前任务使用的提示词。默认开启 Memos 内管理入口，worker 空闲时会自动创建或更新一条 `#系统/Memosima` memo，入口链接由 `app.public_base_url` 生成。
+调试管理页面不会读取服务器端密钥，需要手动输入 `SIDECAR_ADMIN_TOKEN`，并只保存在当前浏览器的 `localStorage`。页面也可以编辑默认 LLM 提示词，或在重试任务时只临时覆盖当前任务使用的提示词。默认开启 Memos 内管理入口，worker 空闲时会自动创建或更新一条 `#系统/Memosima` memo（标题呈现为 **Prism (棱镜)** 入口），入口链接由 `app.public_base_url` 生成。
 
 ---
 
@@ -80,7 +90,7 @@ curl http://localhost:8080/health
 
 > [!WARNING]
 > **多租户与隐私安全警示**：
-> Memosima 的核心定位是**个人离线 AI 知识库系统**。当前在**单 Sidecar 实例**下，后台处理任务绑定了单一的 `MEMOS_API_TOKEN`，且所有用户的附件解析大纲、智能标签治理缓存均会集中存放在同一个 Sidecar SQLite 数据库中。
+> **Prism** 的核心定位是**个人离线 AI 知识库系统**。当前在**单 Sidecar 实例**下，后台处理任务绑定了单一的 `MEMOS_API_TOKEN`，且所有用户的附件解析大纲、智能标签治理缓存均会集中存放在同一个 Sidecar SQLite 数据库中。
 > **请勿直接让多个独立用户共享使用同一个 Sidecar 实例**，否则在离线 QA 问答页面，用户提问的模糊/精确匹配检索可能会跨用户召回知识上下文，带来**严重的隐私泄露与数据混淆风险**。
 
 ### 🚀 推荐方案：独立容器化部署（多租户物理隔离）

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Memosima 使用手册</title>
+  <title>Prism (棱镜) 使用手册</title>
   <style>
     :root { color-scheme: light dark; --bg:#f7f8fa; --fg:#1f2937; --muted:#667085; --panel:#fff; --border:#d0d5dd; --accent:#2563eb; --code:#101828; --codebg:#eef2f6; }
     * { box-sizing: border-box; }
@@ -30,7 +30,14 @@
 <body>
 <main>
 <article>
-  <h1>Memosima 使用手册</h1>
+  <div style="text-align: center; margin-bottom: 2rem;">
+    <img src="../Prism.png" alt="Prism Logo" style="width: 200px; height: auto;" />
+    <h1 style="margin-top: 1rem;">Prism (棱镜) 使用手册</h1>
+    <p style="font-style: italic; color: var(--muted); max-width: 600px; margin: 0 auto; text-align: left; padding: 12px; border-left: 4px solid var(--accent); background: var(--codebg);">
+      🌈 <strong>Prism (棱镜)：光的折射与思维的绚烂</strong><br>
+      随手丢进 Memos 的原始笔记，就像一束朴素的白光。当它穿过 <strong>Prism</strong> 时，被 AI 优雅地折射开来，化作了标签、结构化 Markdown（MinerU 解析）和清晰的知识脉络。零散的想法进去了，出来的是一抹绚丽的知识彩虹。
+    </p>
+  </div>
 
   <h2>当前完成状态</h2>
   <p>已经完成并通过真实测试的范围：</p>
@@ -82,7 +89,7 @@
   <pre><code>http://localhost:8080/admin/ui</code></pre>
   <p>页面用于调试 Sidecar：查看健康状态、查询任务、筛选任务状态、重试 <code>failed</code> 或 <code>waiting_user</code> 任务、查看候选标签并执行通过/拒绝、按标签生成整体总结，以及编辑 AI 调用配置。单条 memo 整理、标签总结和提醒抽取都可以在页面中单独选择大模型配置并编辑提示词。页面不会从服务器端读取 token；需要手动输入 <code>SIDECAR_ADMIN_TOKEN</code>，保存后只写入当前浏览器的 <code>localStorage</code>。</p>
   <p>管理页面按「概览、任务、标签、AI 配置、模型、提醒、备份」聚合功能，并会根据浏览器宽度自适应布局：桌面宽度下列表和详情并排显示，窄屏下改为单列；任务、候选标签和提醒表格只在表格容器内横向滚动，不会撑开整个页面。</p>
-  <p>默认配置下，worker 空闲时会在 Memos 中自动创建或更新一条 <code>#系统/Memosima</code> 管理入口 memo，里面包含打开管理界面、查看任务、审核候选标签、生成标签总结和下载备份的链接。AI 整理 memo 底部也会附带管理链接；如果本次整理产生候选标签，会直接给出 <code>/admin/ui#tag-candidates</code> 审核入口。</p>
+  <p>默认配置下，worker 空闲时会在 Memos 中自动创建或更新一条 <code>#系统/Memosima</code> 管理入口 memo（标题自动呈现为 <strong>Prism (棱镜)</strong> 管理入口），里面包含打开管理界面、查看任务、审核候选标签、生成标签总结和下载备份的链接。AI 整理 memo 底部也会附带管理链接；如果本次整理产生候选标签，会直接给出 <code>/admin/ui#tag-candidates</code> 审核入口。</p>
   <p>管理页面支持锚点直达：<code>#overview</code>、<code>#jobs</code>、<code>#tag-candidates</code>、<code>#tag-summary</code>、<code>#prompts</code>、<code>#models</code>、<code>#reminders</code> 和 <code>#backup</code>。</p>
 
   <h2>4. 创建或更新 Memos PAT</h2>
@@ -160,12 +167,12 @@ npx nx build sidecar</code></pre>
 
   <h2>14. 多用户与安全隔离指南</h2>
   <p class="note"><strong>⚠️ 隐私安全警示：</strong><br>
-  Memosima 本质定位为<strong>个人 AI 知识库服务</strong>。在单 Sidecar 实例架构下，任务仅绑定单一 <code>MEMOS_API_TOKEN</code>。若多个用户在同一个 Memos 实例下直接共享该 Sidecar 实例，则由于系统标签治理缓存与解析后的附件大纲统一存放在同一个 SQLite 数据库中，在离线 QA 页面进行提问匹配时，可能会在上下文 Prompt 编译时召回其他用户的私密 Memo，导致<strong>严重的隐私泄露与数据混淆风险</strong>。目前系统<strong>不支持</strong>多账号无隔离直接混用。</p>
+  Prism 本质定位为<strong>个人 AI 知识库服务</strong>。在单 Sidecar 实例架构下，任务仅绑定单一 <code>MEMOS_API_TOKEN</code>。若多个用户在同一个 Memos 实例下直接共享该 Sidecar 实例，则由于系统标签治理缓存与解析后的附件大纲统一存放在同一个 SQLite 数据库中，在离线 QA 页面进行提问匹配时，可能会在上下文 Prompt 编译时召回其他用户的私密 Memo，导致<strong>严重的隐私泄露与数据混淆风险</strong>。目前系统<strong>不支持</strong>多账号无隔离直接混用。</p>
   
   <h3>🚀 官方推荐：独立容器化部署模式（SaaS/多租户物理隔离）</h3>
   <p>若您需要为多人、团队成员或不同账户提供各自独立的 AI 自动标签归档和离线 QA Prompter 功能，最安全、隔离性最好的方式是<strong>为每个用户部署一套物理隔离的独立容器栈</strong>：</p>
   <ul>
-    <li><strong>目录与代码物理隔离</strong>：为每个用户在宿主机创建独立的部署工作目录（例如 <code>/home/abc/code/memosima_userA</code>），克隆相同的项目代码。</li>
+    <li><strong>目录与代码物理隔离</strong>：为每个用户在宿主机创建独立的部署工作目录（例如 <code>/home/abc/code/prism_userA</code>），克隆相同的项目代码。</li>
     <li><strong>独立配置文件</strong>：在各自的 <code>.env</code> 文件中填写该用户专属的 <code>MEMOS_API_TOKEN</code>、<code>SIDECAR_ADMIN_TOKEN</code> 以及各自偏爱的大模型 API Key。</li>
     <li><strong>端口与反代隔离</strong>：在各自的 <code>.env</code> 中指定不同的 <code>GATEWAY_PORT</code>（例如用户 A 的网关暴露端口设为 <code>8080</code>，用户 B 设为 <code>8081</code>），在宿主机使用 Nginx 或反代工具将不同的二级域名（如 <code>usera.memos.local</code>）映射至对应的容器网关入口。</li>
     <li><strong>数据防爆安全隔离</strong>：各实例的数据库、缓存文件、大模型 Key 物理隔离，100% 确保用户的隐私与数据所有权。</li>

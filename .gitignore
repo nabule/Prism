@@ -1,4 +1,5 @@
 .env
+config/.env.local
 .venv/
 .nx/
 node_modules/

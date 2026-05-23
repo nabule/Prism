@@ -21,10 +21,10 @@ from memosima import __version__
 from memosima.api.admin_ui import ADMIN_UI_HTML
 from memosima.api.security import require_admin
 from memosima.api.webhooks import build_idempotency_key, extract_memo_uid
-from memosima.core.config import AppConfig, ConfigError, ModelsConfig
+from memosima.core.config import AppConfig, ConfigError, ModelsConfig, ProviderConfig, load_env_file
 from memosima.core.prompts import PromptTemplate, PromptsConfig, load_prompts_or_default
 from memosima.db.store import Job, MemoRecord, ReminderRecord, Store, TagCandidateRecord
-from memosima.llm.provider import OpenAICompatibleClient
+from memosima.llm.provider import LLMClientError, OpenAICompatibleClient
 from memosima.memos.client import MemosClient
 
 
@@ -98,6 +98,7 @@ class ReviewTagCandidateRequest(BaseModel):
 
 
 class PromptTemplateView(BaseModel):
+    provider: str | None = Field(default=None, max_length=80, pattern=r"^[A-Za-z0-9_.-]+$")
     system: str = Field(min_length=1, max_length=12000)
     user: str = Field(min_length=1, max_length=12000)
 
@@ -105,6 +106,37 @@ class PromptTemplateView(BaseModel):
 class PromptsResponse(BaseModel):
     organize_memo: PromptTemplateView
     tag_summary: PromptTemplateView
+    reminder_extraction: PromptTemplateView
+
+
+class LLMProviderView(BaseModel):
+    name: str
+    base_url: str
+    api_key_env: str
+    default_model: str
+    temperature: float
+    max_tokens: int | None
+    response_format: str | None
+    extra_body: dict[str, Any]
+    api_key_present: bool
+    is_default: bool
+
+
+class LLMModelsResponse(BaseModel):
+    default_provider: str
+    providers: list[LLMProviderView]
+
+
+class LLMProviderUpdateRequest(BaseModel):
+    default_provider: str = Field(min_length=1, max_length=80, pattern=r"^[A-Za-z0-9_.-]+$")
+    base_url: str = Field(min_length=1, max_length=500)
+    api_key_env: str = Field(min_length=1, max_length=120, pattern=r"^[A-Z_][A-Z0-9_]*$")
+    default_model: str = Field(min_length=1, max_length=200)
+    temperature: float = Field(default=0.2, ge=0, le=2)
+    max_tokens: int | None = Field(default=None, ge=1, le=200000)
+    response_format: str | None = Field(default="json_object", max_length=80)
+    extra_body: dict[str, Any] = Field(default_factory=dict)
+    api_key: str | None = Field(default=None, max_length=12000)
 
 
 class RetryJobRequest(BaseModel):
@@ -168,14 +200,15 @@ def create_app(
 
     @app.get("/health", response_model=HealthResponse)
     async def health() -> HealthResponse:
-        provider = models.providers[models.default_provider]
+        current_models: ModelsConfig = app.state.models
+        provider = current_models.providers[current_models.default_provider]
         return HealthResponse(
             version=__version__,
             database=str(config.database_path),
             workspace_id=config.workspace_id,
             admin_token_configured=bool(config.admin_token),
             memos_base_url_configured=bool(config.memos_base_url),
-            models_default_provider=models.default_provider,
+            models_default_provider=current_models.default_provider,
             models_default_model=provider.default_model,
             models_api_key_present=provider.api_key_present,
             reminders_enabled=config.reminders_enabled,
@@ -230,7 +263,48 @@ def create_app(
         return PromptsResponse(
             organize_memo=_prompt_view(prompts.organize_memo),
             tag_summary=_prompt_view(prompts.tag_summary),
+            reminder_extraction=_prompt_view(prompts.reminder_extraction),
         )
+
+    @app.get(
+        "/admin/models",
+        response_model=LLMModelsResponse,
+        dependencies=[Depends(require_admin)],
+    )
+    async def get_models() -> LLMModelsResponse:
+        return _models_response(app.state.models)
+
+    @app.put(
+        "/admin/models",
+        response_model=LLMModelsResponse,
+        dependencies=[Depends(require_admin)],
+    )
+    async def update_models(request: LLMProviderUpdateRequest) -> LLMModelsResponse:
+        if request.api_key and ("\n" in request.api_key or "\r" in request.api_key):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="API key must be a single line")
+        updated_provider = ProviderConfig(
+            name=request.default_provider,
+            base_url=request.base_url.strip().rstrip("/"),
+            api_key_env=request.api_key_env,
+            default_model=request.default_model.strip(),
+            temperature=request.temperature,
+            max_tokens=request.max_tokens,
+            response_format=_normalize_response_format(request.response_format),
+            extra_body=dict(request.extra_body),
+            api_key_present=_provider_api_key_present(request.api_key_env, request.api_key),
+        )
+        current_models: ModelsConfig = app.state.models
+        updated_providers = dict(current_models.providers)
+        updated_providers[request.default_provider] = updated_provider
+        updated = ModelsConfig(default_provider=request.default_provider, providers=updated_providers)
+        updated.save(models_path)
+        env_path = Path(models_path).parent / ".env.local"
+        if request.api_key is not None and request.api_key.strip():
+            _upsert_env_value(env_path, request.api_key_env, request.api_key.strip())
+            os.environ[request.api_key_env] = request.api_key.strip()
+            updated = ModelsConfig.load(models_path)
+        app.state.models = updated
+        return _models_response(updated)
 
     @app.put(
         "/admin/prompts/organize-memo",
@@ -238,9 +312,13 @@ def create_app(
         dependencies=[Depends(require_admin)],
     )
     async def update_organize_memo_prompt(prompt: PromptTemplateView) -> PromptTemplateView:
-        updated = PromptTemplate(system=prompt.system, user=prompt.user)
+        updated = PromptTemplate(system=prompt.system, user=prompt.user, provider=prompt.provider)
         prompts = load_prompts_or_default(config.prompts_path)
-        PromptsConfig(organize_memo=updated, tag_summary=prompts.tag_summary).save(config.prompts_path)
+        PromptsConfig(
+            organize_memo=updated,
+            tag_summary=prompts.tag_summary,
+            reminder_extraction=prompts.reminder_extraction,
+        ).save(config.prompts_path)
         return _prompt_view(updated)
 
     @app.put(
@@ -249,9 +327,28 @@ def create_app(
         dependencies=[Depends(require_admin)],
     )
     async def update_tag_summary_prompt(prompt: PromptTemplateView) -> PromptTemplateView:
-        updated = PromptTemplate(system=prompt.system, user=prompt.user)
+        updated = PromptTemplate(system=prompt.system, user=prompt.user, provider=prompt.provider)
         prompts = load_prompts_or_default(config.prompts_path)
-        PromptsConfig(organize_memo=prompts.organize_memo, tag_summary=updated).save(config.prompts_path)
+        PromptsConfig(
+            organize_memo=prompts.organize_memo,
+            tag_summary=updated,
+            reminder_extraction=prompts.reminder_extraction,
+        ).save(config.prompts_path)
+        return _prompt_view(updated)
+
+    @app.put(
+        "/admin/prompts/reminder-extraction",
+        response_model=PromptTemplateView,
+        dependencies=[Depends(require_admin)],
+    )
+    async def update_reminder_extraction_prompt(prompt: PromptTemplateView) -> PromptTemplateView:
+        updated = PromptTemplate(system=prompt.system, user=prompt.user, provider=prompt.provider)
+        prompts = load_prompts_or_default(config.prompts_path)
+        PromptsConfig(
+            organize_memo=prompts.organize_memo,
+            tag_summary=prompts.tag_summary,
+            reminder_extraction=updated,
+        ).save(config.prompts_path)
         return _prompt_view(updated)
 
     @app.post(
@@ -262,7 +359,9 @@ def create_app(
     async def create_tag_summary(request: TagSummaryRequest) -> TagSummaryResponse:
         if not config.memos_base_url or not config.memos_api_token:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Memos is not configured")
-        provider = models.providers[models.default_provider]
+        current_models: ModelsConfig = app.state.models
+        prompts = load_prompts_or_default(config.prompts_path)
+        provider = _provider_for_prompt(current_models, prompts.tag_summary)
         api_key = os.getenv(provider.api_key_env)
         if not api_key:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="LLM key is not configured")
@@ -283,18 +382,23 @@ def create_app(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No memos found for tag")
 
         memos_markdown = _memos_markdown(memos)
-        prompts = load_prompts_or_default(config.prompts_path)
         llm_client = OpenAICompatibleClient(
             provider=provider,
             api_key=api_key,
             timeout_seconds=config.memos_timeout_seconds,
         )
-        summary = await llm_client.summarize_tag(
-            tag=request.tag,
-            memos_markdown=memos_markdown,
-            memo_count=len(memos),
-            prompt_template=prompts.tag_summary,
-        )
+        try:
+            summary = await llm_client.summarize_tag(
+                tag=request.tag,
+                memos_markdown=memos_markdown,
+                memo_count=len(memos),
+                prompt_template=prompts.tag_summary,
+            )
+        except LLMClientError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="LLM tag summary request failed",
+            ) from exc
         content = _tag_summary_memo_content(tag=request.tag, summary=summary, memos=memos)
         created = await memos_client.create_memo(content)
         summary_uid = _memo_uid_from_name(created.get("name"))
@@ -320,7 +424,7 @@ def create_app(
     async def retry_job(job_id: int, retry: RetryJobRequest | None = None) -> JobView:
         payload_patch = None
         if retry and retry.prompt_override:
-            payload_patch = {"llm_prompt_override": retry.prompt_override.model_dump()}
+            payload_patch = {"llm_prompt_override": retry.prompt_override.model_dump(exclude_none=True)}
         job = store.retry_job_with_payload(job_id, payload_patch)
         if job is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
@@ -642,7 +746,75 @@ def _reminder_view(reminder: ReminderRecord) -> ReminderView:
 
 
 def _prompt_view(prompt: PromptTemplate) -> PromptTemplateView:
-    return PromptTemplateView(system=prompt.system, user=prompt.user)
+    return PromptTemplateView(provider=prompt.provider, system=prompt.system, user=prompt.user)
+
+
+def _provider_for_prompt(models: ModelsConfig, prompt: PromptTemplate) -> ProviderConfig:
+    provider_name = prompt.provider or models.default_provider
+    provider = models.providers.get(provider_name)
+    if provider is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"LLM provider is not configured: {provider_name}")
+    return provider
+
+
+def _models_response(models: ModelsConfig) -> LLMModelsResponse:
+    return LLMModelsResponse(
+        default_provider=models.default_provider,
+        providers=[
+            _provider_view(provider, is_default=name == models.default_provider)
+            for name, provider in models.providers.items()
+        ],
+    )
+
+
+def _provider_view(provider: ProviderConfig, *, is_default: bool) -> LLMProviderView:
+    return LLMProviderView(
+        name=provider.name,
+        base_url=provider.base_url,
+        api_key_env=provider.api_key_env,
+        default_model=provider.default_model,
+        temperature=provider.temperature,
+        max_tokens=provider.max_tokens,
+        response_format=provider.response_format,
+        extra_body=provider.extra_body,
+        api_key_present=provider.api_key_present,
+        is_default=is_default,
+    )
+
+
+def _normalize_response_format(value: str | None) -> str | None:
+    if value is None:
+        return None
+    text = value.strip()
+    return text or None
+
+
+def _provider_api_key_present(api_key_env: str, api_key: str | None) -> bool:
+    if api_key is not None and api_key.strip():
+        return True
+    load_env_file()
+    return bool(os.getenv(api_key_env))
+
+
+def _upsert_env_value(path: Path, key: str, value: str) -> None:
+    lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+    updated: list[str] = []
+    replaced = False
+    for line in lines:
+        if line.startswith(f"{key}="):
+            updated.append(f"{key}={value}")
+            replaced = True
+        else:
+            updated.append(line)
+    if not replaced:
+        if updated and updated[-1] != "":
+            updated.append("")
+        updated.append(f"{key}={value}")
+    path.write_text("\n".join(updated) + "\n", encoding="utf-8")
+    try:
+        path.chmod(0o600)
+    except OSError:
+        pass
 
 
 def _memos_tag(tag: str) -> str:

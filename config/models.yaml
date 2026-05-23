@@ -1,11 +1,11 @@
-default_provider: openrouter
+default_provider: deepseek
 providers:
   openrouter:
     base_url: https://openrouter.ai/api/v1
     api_key_env: OPENROUTER_API_KEY
     default_model: google/gemma-3-27b-it
     temperature: 0.2
-    max_tokens:
+    max_tokens: null
     response_format: json_object
     extra_body: {}
   :
@@ -13,7 +13,7 @@ providers:
     api_key_env: 
     default_model: 
     temperature: 0.2
-    max_tokens:
+    max_tokens: null
     response_format: json_object
     extra_body:
       chat_template_kwargs:
@@ -23,14 +23,16 @@ providers:
     api_key_env: OPENAI_API_KEY
     default_model: gpt-4o-mini
     temperature: 0.2
-    max_tokens:
+    max_tokens: null
     response_format: json_object
     extra_body: {}
   deepseek:
     base_url: https://api.deepseek.com
     api_key_env: DEEPSEEK_API_KEY
-    default_model: deepseek-chat
+    default_model: deepseek-v4-flash
     temperature: 0.2
-    max_tokens:
+    max_tokens: null
     response_format: json_object
-    extra_body: {}
+    extra_body:
+      thinking:
+        type: disabled

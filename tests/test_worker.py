@@ -244,6 +244,101 @@ async def test_worker_uses_llm_draft_when_model_key_is_configured(tmp_path, monk
 
 
 @pytest.mark.asyncio
+async def test_worker_uses_separate_providers_for_organize_and_reminders(tmp_path, monkeypatch):
+    app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
+    models_path = write_yaml(tmp_path / "models.yaml", models_config_text())
+    write_yaml(tmp_path / "taxonomy.yaml", taxonomy_config_text())
+    write_yaml(
+        tmp_path / "prompts.yaml",
+        """
+organize_memo:
+  provider: deepseek
+  system: 整理系统 {active_tags}
+  user: 整理用户 {content}
+tag_summary:
+  system: 标签系统
+  user: 标签用户 {tag} {memos_markdown}
+reminder_extraction:
+  provider: 
+  system: 提醒系统 {trigger_tag}
+  user: 提醒用户 {now} {timezone} {content}
+""",
+    )
+    monkeypatch.setenv("MEMOS_BASE_URL", "http://memos.local")
+    monkeypatch.setenv("MEMOS_API_TOKEN", "memos-token")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "deepseek-key")
+    monkeypatch.setenv("", "-key")
+    config = AppConfig.load(app_path)
+    models = ModelsConfig.load(models_path)
+    store = Store(config.database_path)
+    store.migrate()
+    store.ensure_workspace("default")
+    store.create_job(
+        workspace_id="default",
+        job_type="process_memo",
+        idempotency_key="memo:separate-providers",
+        payload={"memo_uid": "separate-providers"},
+    )
+
+    class FakeMemosClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def get_memo(self, memo_uid):
+            return {"name": f"memos/{memo_uid}", "content": "#提醒 明天 09:30 提交周报，整理个人 AI 知识库 #AI知识库"}
+
+        async def create_memo(self, content):
+            return {"name": "memos/summary-separate-providers", "content": content}
+
+        async def create_comment(self, memo_uid, content):
+            return {"name": f"memos/{memo_uid}/comments/1", "content": content}
+
+        async def download_resource(self, resource_name, filename=None):
+            raise AssertionError("provider selection memo has no resources")
+
+        async def upsert_memo_reference_relation(self, *, source_memo_uid, related_memo_uid):
+            return {}
+
+    class FakeLLMClient:
+        init_calls: list[tuple[str, str]] = []
+        reminder_prompt_provider = ""
+        organize_prompt_provider = ""
+
+        def __init__(self, *, provider, api_key, timeout_seconds):
+            FakeLLMClient.init_calls.append((provider.name, api_key))
+
+        async def extract_reminders(self, *, content, timezone, now, trigger_tag, prompt_template):
+            FakeLLMClient.reminder_prompt_provider = prompt_template.provider or ""
+            return LLMReminderExtraction.model_validate(
+                {
+                    "has_reminder": False,
+                    "items": [],
+                    "needs_clarification": False,
+                    "clarification_question": None,
+                }
+            )
+
+        async def organize_memo(self, *, content, taxonomy, local_plan, prompt_template):
+            FakeLLMClient.organize_prompt_provider = prompt_template.provider or ""
+            return LLMOrganizationDraft(
+                title="独立模型整理",
+                summary="整理调用使用独立模型",
+                active_tags=["#项目/个人AI知识库"],
+                needs_clarification=False,
+            )
+
+    monkeypatch.setattr("memosima.worker.runner.MemosClient", FakeMemosClient)
+    monkeypatch.setattr("memosima.worker.runner.OpenAICompatibleClient", FakeLLMClient)
+
+    processed = await Worker(config, store, models).run_once()
+
+    assert processed is True
+    assert FakeLLMClient.init_calls == [("", "-key"), ("deepseek", "deepseek-key")]
+    assert FakeLLMClient.reminder_prompt_provider == ""
+    assert FakeLLMClient.organize_prompt_provider == "deepseek"
+
+
+@pytest.mark.asyncio
 async def test_worker_creates_reminder_for_tagged_memo(tmp_path, monkeypatch):
     app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
     models_path = write_yaml(tmp_path / "models.yaml", models_config_text())
@@ -291,9 +386,10 @@ async def test_worker_creates_reminder_for_tagged_memo(tmp_path, monkeypatch):
         def __init__(self, *args, **kwargs):
             pass
 
-        async def extract_reminders(self, *, content, timezone, now, trigger_tag):
+        async def extract_reminders(self, *, content, timezone, now, trigger_tag, prompt_template):
             assert trigger_tag == "#提醒"
             assert timezone == "Asia/Shanghai"
+            assert prompt_template is not None
             return LLMReminderExtraction.model_validate(
                 {
                     "has_reminder": True,
@@ -385,7 +481,8 @@ async def test_worker_writes_reminder_clarification_without_blocking_summary(tmp
         def __init__(self, *args, **kwargs):
             pass
 
-        async def extract_reminders(self, *, content, timezone, now, trigger_tag):
+        async def extract_reminders(self, *, content, timezone, now, trigger_tag, prompt_template):
+            assert prompt_template is not None
             return LLMReminderExtraction.model_validate(
                 {
                     "has_reminder": True,
@@ -1208,7 +1305,7 @@ async def test_worker_creates_admin_entry_memo_when_idle(tmp_path, monkeypatch):
             pass
 
         async def list_memos(self, *, page_size, page_token=None, filter_text=None):
-            assert filter_text == "<!-- memosima:admin-entry -->"
+            assert filter_text == 'content.contains("memosima:admin-entry")'
             return {"memos": []}
 
         async def create_memo(self, content, visibility="PRIVATE"):

@@ -42,7 +42,7 @@
     <li>内置 <code>/admin/ui</code> 调试管理页面，可查看任务、重试任务和审核候选标签。</li>
     <li>候选标签创建、审核、审核后 active 生效。</li>
     <li>AI 可从正文自动生成 tag 建议；未审核的新 tag 只进入候选列表。</li>
-    <li>AI 提示词可配置；支持保存默认提示词，也支持任务重试时临时覆盖。</li>
+    <li>AI 调用配置可编辑；单条 memo 整理、标签总结和提醒抽取都支持单独选择大模型配置和提示词。</li>
     <li>按标签生成整体总结，可把同一标签下的零散 memos 整理成一条人可读的展示 memo。</li>
     <li>待澄清评论和 <code>waiting_user</code> 任务状态。</li>
     <li><code>.txt</code>、<code>.md</code> 附件解析到 <code>artifacts</code> 表；Word、Excel、PPT、PDF 附件可通过 MinerU 在线服务转成 Markdown 后参与 AI 整理。</li>
@@ -63,6 +63,7 @@
       <tr><td><code>MEMOS_WEBHOOK_URL</code></td><td>Memos 可访问的公网 Sidecar webhook URL。</td></tr>
       <tr><td><code></code></td><td> API key，当前默认 LLM provider 使用。</td></tr>
       <tr><td><code>OPENROUTER_API_KEY</code></td><td>OpenRouter API key，作为备选 provider 使用。</td></tr>
+      <tr><td><code>DEEPSEEK_API_KEY</code></td><td>DeepSeek API key，用于 DeepSeek OpenAI-compatible provider。</td></tr>
     </tbody>
   </table>
 
@@ -75,9 +76,10 @@
   <h2>3. 打开调试管理页面</h2>
   <p>浏览器打开：</p>
   <pre><code>http://localhost:8080/admin/ui</code></pre>
-  <p>页面用于调试 Sidecar：查看健康状态、查询任务、筛选任务状态、重试 <code>failed</code> 或 <code>waiting_user</code> 任务、查看候选标签并执行通过/拒绝、按标签生成整体总结，以及编辑默认 AI 提示词。页面不会从服务器端读取 token；需要手动输入 <code>SIDECAR_ADMIN_TOKEN</code>，保存后只写入当前浏览器的 <code>localStorage</code>。</p>
+  <p>页面用于调试 Sidecar：查看健康状态、查询任务、筛选任务状态、重试 <code>failed</code> 或 <code>waiting_user</code> 任务、查看候选标签并执行通过/拒绝、按标签生成整体总结，以及编辑 AI 调用配置。单条 memo 整理、标签总结和提醒抽取都可以在页面中单独选择大模型配置并编辑提示词。页面不会从服务器端读取 token；需要手动输入 <code>SIDECAR_ADMIN_TOKEN</code>，保存后只写入当前浏览器的 <code>localStorage</code>。</p>
+  <p>管理页面按「概览、任务、标签、AI 配置、模型、提醒、备份」聚合功能，并会根据浏览器宽度自适应布局：桌面宽度下列表和详情并排显示，窄屏下改为单列；任务、候选标签和提醒表格只在表格容器内横向滚动，不会撑开整个页面。</p>
   <p>默认配置下，worker 空闲时会在 Memos 中自动创建或更新一条 <code>#系统/Memosima</code> 管理入口 memo，里面包含打开管理界面、查看任务、审核候选标签、生成标签总结和下载备份的链接。AI 整理 memo 底部也会附带管理链接；如果本次整理产生候选标签，会直接给出 <code>/admin/ui#tag-candidates</code> 审核入口。</p>
-  <p>管理页面支持锚点直达：<code>#jobs</code>、<code>#tag-candidates</code>、<code>#tag-summary</code> 和 <code>#backup</code>。</p>
+  <p>管理页面支持锚点直达：<code>#overview</code>、<code>#jobs</code>、<code>#tag-candidates</code>、<code>#tag-summary</code>、<code>#prompts</code>、<code>#models</code>、<code>#reminders</code> 和 <code>#backup</code>。</p>
 
   <h2>4. 创建或更新 Memos PAT</h2>
   <p>可以用探针创建 PAT，并写到临时文件。命令输出默认不会显示 token 原文。</p>
@@ -103,17 +105,17 @@
   "http://localhost:8080/admin/jobs"</code></pre>
 
   <h2>7. AI 自动生成 tag</h2>
-  <p>配置 <code>OPENROUTER_API_KEY</code> 后，worker 会请求默认模型从 memo 正文中识别标签。AI 返回的 <code>active_tags</code> 只有已存在于正式标签集合时才会被直接使用；AI 发现的新标签会写入 <code>candidate_tags</code> 并进入审核列表，不会自动激活。后台会优先复用已有正式标签，并限制单次 AI 自动补充的标签数量，默认最多接收 5 个正式标签和 2 个候选标签。</p>
+  <p>配置默认 provider 对应的 API key 后，worker 会请求默认模型从 memo 正文中识别标签。AI 返回的 <code>active_tags</code> 只有已存在于正式标签集合时才会被直接使用；AI 发现的新标签会写入 <code>candidate_tags</code> 并进入审核列表，不会自动激活。后台会优先复用已有正式标签，并限制单次 AI 自动补充的标签数量，默认最多接收 5 个正式标签和 2 个候选标签。</p>
   <p>默认配置 <code>memos.show_candidate_tags: false</code> 时，待审核业务标签不会以 <code>#tag</code> 形式写进 AI 整理 memo，因此不会在 Memos Web 中显示为可筛选标签；它们仍会在 Sidecar 管理页候选标签列表中等待审核。设为 <code>true</code> 后，待审核业务标签会像正式标签一样出现在 Memos Web 标签筛选中。</p>
   <p>业务标签要求不同层级的最后一级名称唯一。例如已有正式标签 <code>#项目/数管</code> 时，后台自动整理遇到 <code>#数管</code> 或 AI 提出 <code>#其他/数管</code>，都会归一或拦截，不会再生成同名不同级别的新标签。</p>
-  <p>默认模型连接参数来自 <code>config/models.yaml</code>。当前默认 provider 为 OpenRouter <code>google/gemma-3-27b-it</code>，同时保留、OpenAI、DeepSeek 等 provider 模板。<code>base_url</code>、<code>default_model</code>、<code>temperature</code>、<code>max_tokens</code>、<code>response_format</code> 和厂商扩展 <code>extra_body</code> 都可在该文件修改；<code>max_tokens</code> 留空时不发送输出 token 限制，Sidecar 不主动截断输入正文。真实 key 只放在本地 <code>.env</code> 或部署环境变量中，不提交到 git。</p>
+  <p>默认模型连接参数来自 <code>config/models.yaml</code>。当前默认 provider 为 DeepSeek <code>deepseek-v4-flash</code>，使用 <code>https://api.deepseek.com</code> 和 <code>DEEPSEEK_API_KEY</code>；DeepSeek 模板会通过 <code>extra_body.thinking.type: disabled</code> 关闭默认 thinking mode，避免单轮摘要和标签总结返回空内容或上游错误。同时保留 OpenRouter、、OpenAI 等 provider 模板。可以在管理页面“大模型”区域直接切换 provider、修改模型名、base URL、响应格式、扩展 JSON 和 key。保存后非机密参数写回 <code>config/models.yaml</code>，真实 key 写入本地 <code>config/.env.local</code>，不提交到 git，也不会进入备份包。</p>
   <p>正式标签集合来自 <code>config/taxonomy.yaml</code> 中的 active 业务标签，以及已经通过审核写入 SQLite <code>business_tags</code> 表的标签。没有配置模型 key 时，系统仍会保留原有的显式 <code>#tag</code> 本地识别和模板整理。</p>
-  <p>默认提示词来自 <code>config/prompts.yaml</code>。在调试管理页面的“默认提示词”区域点击“保存默认”会写回该文件；点击任务“重试”时选择临时修改，只会把提示词写入当前任务 payload 的 <code>llm_prompt_override</code>，不会修改默认文件。提示词可使用 <code>{active_tags}</code>、<code>{local_plan_json}</code>、<code>{content}</code> 占位符。</p>
+  <p>AI 调用配置来自 <code>config/prompts.yaml</code>。在调试管理页面的“AI 调用配置”区域点击“保存 AI 配置”会写回该文件；每个调用点都可设置 <code>provider</code> 来单独选择 <code>config/models.yaml</code> 中的大模型配置，留空则使用默认 provider。点击任务“重试”时选择临时修改，只会把提示词写入当前任务 payload 的 <code>llm_prompt_override</code>，不会修改默认文件，也不会临时改变模型选择。单条 memo 整理可使用 <code>{active_tags}</code>、<code>{local_plan_json}</code>、<code>{content}</code> 占位符。</p>
 
   <h2>8. 按标签生成整体总结</h2>
   <p>打开 <code>http://localhost:8080/admin/ui</code>，在“标签总结”区域输入标签，例如 <code>#项目/个人AI知识库</code> 或高层级标签 <code>#项目</code>，设置最多读取 memo 数量后点击“生成总结”。Sidecar 会读取最近的 Memos 内容，在本地筛选出匹配该标签的 memo，调用默认模型生成 Markdown 总结，然后在 Memos 中创建一条新 memo。</p>
   <p>标签总结支持层级匹配：输入 <code>#项目</code> 会包含 <code>#项目</code> 本身和 <code>#项目/个人AI知识库</code>、<code>#项目/数管</code> 等子标签下的普通 memo；<code>#项目管理</code> 这类相似但不是子路径的标签不会被纳入。如果原始 memo 没有手动标签，但它对应的 AI 整理 memo 命中了该标签，Sidecar 也会通过本地来源关系把原始 memo 纳入总结。</p>
-  <p>生成内容会带有 <code>#系统/标签总结</code> 和目标标签，标题形如 <code>#项目/个人AI知识库 整体总结</code>，正文包含模型整理后的总览、主题、进展、问题和相关 memo 列表。Sidecar 还会把总结 memo 通过 Memos 原生 <code>REFERENCE</code> relation 引用到每条参与整理的普通来源 memo，相关 memo 可在 Memos 界面中直接点击打开。标签总结不会把已有 <code>#系统/AI整理</code> 或 <code>#系统/标签总结</code> memo 再次纳入来源；写入 relation 前也会跳过自引用、反向引用和多跳循环引用。标签总结使用 <code>config/prompts.yaml</code> 中的 <code>tag_summary</code> 提示词，可在管理页面保存默认提示词。</p>
+  <p>生成内容会带有 <code>#系统/标签总结</code> 和目标标签，标题形如 <code>#项目/个人AI知识库 整体总结</code>，正文包含模型整理后的总览、主题、进展、问题和相关 memo 列表。Sidecar 还会把总结 memo 通过 Memos 原生 <code>REFERENCE</code> relation 引用到每条参与整理的普通来源 memo，相关 memo 可在 Memos 界面中直接点击打开。标签总结不会把已有 <code>#系统/AI整理</code> 或 <code>#系统/标签总结</code> memo 再次纳入来源；写入 relation 前也会跳过自引用、反向引用和多跳循环引用。标签总结使用 <code>config/prompts.yaml</code> 中的 <code>tag_summary</code> 配置，可以单独选择 provider，并可在管理页面保存提示词。模型上游请求失败时接口会返回 <code>502</code> 和固定错误信息，管理页会显示该错误，便于区分模型服务问题和 Sidecar 内部异常。</p>
   <pre><code>curl -X POST -H "Authorization: Bearer&lt;空格&gt;$SIDECAR_ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"tag":"#项目/个人AI知识库","limit":50}' \
@@ -131,7 +133,7 @@
   <p>批准后标签会写入 Sidecar 的 active 标签集合，后续 worker 会直接使用。</p>
 
   <h2>10. 待澄清任务</h2>
-  <p>短内容或包含明显疑问的 memo 会触发澄清评论，任务进入 <code>waiting_user</code>。补充内容后可重试：</p>
+  <p>内容过短的 memo 会触发澄清评论，任务进入 <code>waiting_user</code>。问号、URL 参数等特殊字符不会单独触发待澄清。补充内容后可重试：</p>
   <pre><code>curl -X POST -H "Authorization: Bearer&lt;空格&gt;$SIDECAR_ADMIN_TOKEN" \
   "http://localhost:8080/admin/jobs/1/retry"</code></pre>
 

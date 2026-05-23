@@ -98,11 +98,13 @@ providers:
   deepseek:
     base_url: https://api.deepseek.com
     api_key_env: DEEPSEEK_API_KEY
-    default_model: deepseek-chat
+    default_model: deepseek-v4-flash
     temperature: 0.2
     max_tokens:
     response_format: json_object
-    extra_body: {}
+    extra_body:
+      thinking:
+        type: disabled
 """
 
 

@@ -28,6 +28,21 @@ def _env_value(name: str | None, default: str | None = None) -> str | None:
     return os.getenv(name, default)
 
 
+def load_env_file(path: str | Path = "config/.env.local", *, override: bool = False) -> None:
+    env_path = Path(path)
+    if not env_path.exists():
+        return
+    with env_path.open("r", encoding="utf-8") as file:
+        for line in file:
+            text = line.strip()
+            if not text or text.startswith("#") or "=" not in text:
+                continue
+            key, value = text.split("=", 1)
+            key = key.strip()
+            if key and (override or key not in os.environ):
+                os.environ[key] = value.strip()
+
+
 @dataclass(frozen=True)
 class AppConfig:
     workspace_id: str
@@ -75,6 +90,7 @@ class AppConfig:
 
     @classmethod
     def load(cls, path: str | Path = "config/app.yaml") -> "AppConfig":
+        load_env_file()
         config_path = Path(path)
         raw = _read_yaml(config_path)
         app = raw.get("app", {})
@@ -179,6 +195,7 @@ class ModelsConfig:
 
     @classmethod
     def load(cls, path: str | Path = "config/models.yaml") -> "ModelsConfig":
+        load_env_file(Path(path).parent / ".env.local", override=True)
         raw = _read_yaml(Path(path))
         default_provider = str(raw.get("default_provider", "openrouter"))
         raw_providers = raw.get("providers", {})
@@ -208,6 +225,27 @@ class ModelsConfig:
         if default_provider not in providers:
             raise ConfigError(f"Default provider is not configured: {default_provider}")
         return cls(default_provider=default_provider, providers=providers)
+
+    def save(self, path: str | Path) -> None:
+        config_path = Path(path)
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "default_provider": self.default_provider,
+            "providers": {
+                name: {
+                    "base_url": provider.base_url,
+                    "api_key_env": provider.api_key_env,
+                    "default_model": provider.default_model,
+                    "temperature": provider.temperature,
+                    "max_tokens": provider.max_tokens,
+                    "response_format": provider.response_format,
+                    "extra_body": provider.extra_body,
+                }
+                for name, provider in self.providers.items()
+            },
+        }
+        with config_path.open("w", encoding="utf-8") as file:
+            yaml.safe_dump(payload, file, allow_unicode=True, sort_keys=False)
 
 
 def _string_tuple(value: Any) -> tuple[str, ...]:

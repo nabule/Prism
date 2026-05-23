@@ -1,6 +1,6 @@
 app:
   workspace_id: default
-  public_base_url: http://localhost:5230
+  public_base_url: http://localhost:8080
   timezone: Asia/Shanghai
 database:
   path: data/sidecar/sidecar.db

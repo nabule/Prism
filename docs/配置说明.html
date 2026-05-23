@@ -51,8 +51,12 @@
 <td><code>OPENROUTER_API_KEY</code></td>
 <td>OpenRouter API key，作为备选 provider 使用。</td>
 </tr>
+<tr>
+<td><code>DEEPSEEK_API_KEY</code></td>
+<td>DeepSeek API key，用于 DeepSeek OpenAI-compatible provider。</td>
+</tr>
 </tbody></table>
-<p><code></code>、<code>OPENROUTER_API_KEY</code> 只通过环境变量读取，不写入仓库。不要把真实 key 提交到 git。</p>
+<p><code></code>、<code>OPENROUTER_API_KEY</code>、<code>DEEPSEEK_API_KEY</code> 只通过环境变量或本地 <code>config/.env.local</code> 读取，不写入仓库。不要把真实 key 提交到 git。</p>
 <p><code>MEMOS_API_TOKEN</code> 建议使用 Memos Personal Access Token，而不是登录接口返回的短期 access token。可通过 Nx 探针生成：</p>
 <pre><code class="language-bash">npx nx run sidecar:probe-memos -- \
   --bootstrap-username test \
@@ -79,7 +83,7 @@
 <li><code>worker.create_probe_comment</code>：P0 探针是否在 memo 下写入测试评论，默认关闭。</li>
 </ul>
 <p>本地部署推荐使用 <code>poll</code> 模式，不需要暴露公网地址。Memos <code>0.28.0</code> 会拒绝 webhook URL 指向本机、Docker 内网或其他保留/私有 IP；只有在需要 webhook 模式时，才需要配置公网可达 URL 或公网隧道。</p>
-<p>管理入口 memo 和 AI 整理 memo 中的管理链接由 <code>app.public_base_url</code> 生成；如果用户从其他设备访问 Memos，应把该值配置为浏览器可访问的 Sidecar 地址，例如 <code>http://192.168.1.10:8080</code> 或反向代理域名。管理页面支持 <code>#jobs</code>、<code>#tag-candidates</code>、<code>#tag-summary</code> 和 <code>#backup</code> 锚点直达。</p>
+<p>管理入口 memo 和 AI 整理 memo 中的管理链接由 <code>app.public_base_url</code> 生成；如果用户从其他设备访问 Memos，应把该值配置为浏览器可访问的 Sidecar 地址，例如 <code>http://192.168.1.10:8080</code> 或反向代理域名。管理页面按「概览、任务、标签、AI 配置、模型、提醒、备份」聚合功能，并支持 <code>#overview</code>、<code>#jobs</code>、<code>#tag-candidates</code>、<code>#tag-summary</code>、<code>#prompts</code>、<code>#models</code>、<code>#reminders</code> 和 <code>#backup</code> 锚点直达。</p>
 <h2>reminders</h2>
 <p><code>reminders</code> 控制 <code>#提醒</code> 时间识别和定时通知：</p>
 <pre><code class="language-yaml">reminders:
@@ -89,12 +93,12 @@
   confidence_threshold: 0.75
   request_timeout_seconds: 10
 </code></pre>
-<p>worker 只处理包含 <code>trigger_tag</code> 的 memo。命中后会调用默认 OpenAI-compatible provider 抽取 <code>title</code>、<code>body</code>、<code>due_at</code>、<code>timezone</code>、<code>confidence</code> 和 <code>raw_text</code>，并把明确、未来且置信度不低于阈值的结果写入 SQLite <code>reminders</code> 表。同一 <code>workspace_id</code>、来源 memo、到期时间和标题是幂等键，避免重复创建。</p>
+<p>worker 只处理包含 <code>trigger_tag</code> 的 memo。命中后会调用 <code>config/prompts.yaml</code> 中 <code>reminder_extraction.provider</code> 指定的 OpenAI-compatible provider；该字段为空时回退到 <code>config/models.yaml</code> 的默认 provider。模型会抽取 <code>title</code>、<code>body</code>、<code>due_at</code>、<code>timezone</code>、<code>confidence</code> 和 <code>raw_text</code>，并把明确、未来且置信度不低于阈值的结果写入 SQLite <code>reminders</code> 表。同一 <code>workspace_id</code>、来源 memo、到期时间和标题是幂等键，避免重复创建。</p>
 <p>到期扫描在 worker 空闲循环中执行，状态为 <code>pending</code> 或 <code>failed</code> 且 <code>due_at</code> 已到的提醒会发送到 <code>REMINDER_WEBHOOK_URL</code>。成功后状态变为 <code>sent</code>，失败会记录脱敏错误并保留为 <code>failed</code> 以便重试。发送内容不会把 webhook token 写入日志或 job result。</p>
 <p>如果模型 key 未配置、抽取失败或时间不明确，提醒流程会记录跳过原因；时间模糊、低置信或已过期时会在原 memo 下评论要求补充，但普通 AI 整理流程仍会继续。</p>
 <h2>models.yaml</h2>
-<p>当前默认模型配置使用 OpenRouter 的 <code>google/gemma-3-27b-it</code>，并保留、OpenAI、DeepSeek 等常用 OpenAI-compatible provider 模板：</p>
-<pre><code class="language-yaml">default_provider: openrouter
+<p>当前默认模型配置使用 DeepSeek 的 <code>deepseek-v4-flash</code>，并保留 OpenRouter、、OpenAI 等常用 OpenAI-compatible provider 模板：</p>
+<pre><code class="language-yaml">default_provider: deepseek
 providers:
   openrouter:
     base_url: https://openrouter.ai/api/v1
@@ -125,18 +129,21 @@ providers:
   deepseek:
     base_url: https://api.deepseek.com
     api_key_env: DEEPSEEK_API_KEY
-    default_model: deepseek-chat
+    default_model: deepseek-v4-flash
     temperature: 0.2
     max_tokens:
     response_format: json_object
-    extra_body: {}
+    extra_body:
+      thinking:
+        type: disabled
 </code></pre>
-<p>worker 会读取默认 provider，并在对应 <code>api_key_env</code> 环境变量存在时发起 OpenAI-compatible <code>/chat/completions</code> 调用。<code>base_url</code>、<code>default_model</code>、<code>temperature</code>、<code>max_tokens</code>、<code>response_format</code> 和 <code>extra_body</code> 都从 <code>config/models.yaml</code> 读取。<code>max_tokens</code> 留空时不会向模型请求发送输出 token 限制；Sidecar 也不会主动截断输入正文。<code>extra_body</code> 会原样合并到请求 JSON，适合配置厂商扩展参数。模型输出必须是 JSON 对象，Sidecar 会校验 <code>title</code>、<code>summary</code>、<code>key_points</code>、<code>todos</code>、<code>active_tags</code>、<code>candidate_tags</code>、<code>needs_clarification</code> 和 <code>clarification_question</code> 字段。没有配置 key 时不调用 LLM，自动回退到本地模板整理。</p>
+<p><code>config/models.yaml</code> 只定义可用 provider 及其连接参数。实际调用时，<code>organize_memo</code>、<code>tag_summary</code>、<code>reminder_extraction</code> 会优先使用各自在 <code>config/prompts.yaml</code> 中配置的 <code>provider</code>；该字段为空或缺失时才使用 <code>default_provider</code>。DeepSeek 官方 OpenAI-compatible 入口使用 <code>https://api.deepseek.com</code> 作为 <code>base_url</code>，当前模板默认模型为 <code>deepseek-v4-flash</code>。<code>base_url</code>、<code>default_model</code>、<code>temperature</code>、<code>max_tokens</code>、<code>response_format</code> 和 <code>extra_body</code> 都从 <code>config/models.yaml</code> 读取。DeepSeek V4 默认开启 thinking mode，Sidecar 模板在 <code>extra_body.thinking.type</code> 中显式设为 <code>disabled</code>，用于摘要和标签总结这类只需要最终内容的单轮任务。<code>max_tokens</code> 留空时不会向模型请求发送输出 token 限制；Sidecar 也不会主动截断输入正文。<code>extra_body</code> 会原样合并到请求 JSON，适合配置厂商扩展参数。</p>
+<p>管理页面 <code>/admin/ui#models</code> 可直接选择 provider、修改 <code>base_url</code>、模型名、响应格式、扩展 JSON 和 key。保存后，非机密参数写回 <code>config/models.yaml</code>；真实 key 写入已忽略的 <code>config/.env.local</code>，并由 API 与 worker 在后续加载模型配置时读取。备份 ZIP 不包含 <code>config/.env.local</code>。</p>
 <h2>memos</h2>
 <p>AI 整理 memo 不再写入任何业务 <code>#tag</code>。它只保留 <code>#系统/AI整理</code>、<code>#系统/标签待审核</code> 等系统标签，业务标签会在“标签”区域以普通文本显示，避免 AI 生成内容进入 Memos 原生业务标签筛选。<code>memos.show_candidate_tags</code> 保留为兼容配置，但当前生成逻辑不会用它把候选业务标签写成 Memos 原生标签。</p>
 <p>只有用户原始 memo 没有任何业务标签时，Sidecar 才会接收 LLM 返回的 <code>active_tags</code> 和 <code>candidate_tags</code>。<code>active_tags</code> 只能使用已有正式标签；如果模型把未知标签放入 <code>active_tags</code>，Sidecar 会把它降级为候选标签。<code>candidate_tags</code> 用于 AI 从无标签正文提出的新标签建议，每项包含 <code>path</code>、<code>reason</code> 和 <code>confidence</code>。用户已经手写业务标签时，AI 标签建议会被忽略，只保留用户标签解析结果。新标签不会自动激活，必须通过候选标签审核。业务标签还要求最后一级名称全局唯一：已有 <code>#项目/数管</code> 时，<code>#数管</code> 和 <code>#其他/数管</code> 都不能再作为新的业务标签。</p>
 <h2>prompts.yaml</h2>
-<p><code>config/prompts.yaml</code> 保存所有 LLM 调用点的默认提示词。当前调用点包括 <code>organize_memo</code> 和 <code>tag_summary</code>，每个调用点都包含 <code>system</code> 和 <code>user</code> 两段模板。</p>
+<p><code>config/prompts.yaml</code> 保存所有 LLM 调用点的默认提示词和模型选择。当前调用点包括 <code>organize_memo</code>、<code>tag_summary</code> 和 <code>reminder_extraction</code>，每个调用点都包含 <code>provider</code>、<code>system</code> 和 <code>user</code>。<code>provider</code> 可填写 <code>config/models.yaml</code> 中的 provider 名称；留空或省略时使用默认 provider。</p>
 <p><code>organize_memo</code> 用于单条 memo 的 AI 整理，支持以下占位符：</p>
 <ul>
 <li><code>{active_tags}</code>：当前工作区可直接使用的正式标签列表。</li>
@@ -149,9 +156,16 @@ providers:
 <li><code>{memo_count}</code>：参与整理的 memo 数量。</li>
 <li><code>{memos_markdown}</code>：匹配该标签的 memo 列表，已转换为 Markdown。</li>
 </ul>
-<p>管理页面 <code>/admin/ui</code> 的“保存默认”会写回 <code>config/prompts.yaml</code>；任务重试时选择临时修改，只会写入该任务 payload 的 <code>llm_prompt_override</code>。Compose 已将 <code>./config</code> 以可写方式挂载到 Sidecar 容器，便于从管理页面保存默认提示词。</p>
+<p><code>reminder_extraction</code> 用于从带触发标签的 memo 中抽取提醒时间，支持以下占位符：</p>
+<ul>
+<li><code>{trigger_tag}</code>：提醒触发标签，例如 <code>#提醒</code>。</li>
+<li><code>{now}</code>：按配置时区生成的当前时间。</li>
+<li><code>{timezone}</code>：默认时区。</li>
+<li><code>{content}</code>：原始 memo 正文和附件解析内容。</li>
+</ul>
+<p>管理页面 <code>/admin/ui</code> 的“AI 调用配置”区域会写回 <code>config/prompts.yaml</code>；每个调用点都能单独选择模型配置并编辑中文提示词说明。任务重试时选择临时修改，只会写入该任务 payload 的 <code>llm_prompt_override</code>，不会临时改变该任务使用的 provider。Compose 已将 <code>./config</code> 以可写方式挂载到 Sidecar 容器，便于从管理页面保存默认提示词。</p>
 <h2>备份恢复</h2>
-<p>管理接口 <code>/admin/backups/download</code> 会生成 Sidecar 备份 ZIP，内容包括 SQLite 快照 <code>database/sidecar.db</code>、<code>manifest.json</code>，以及 <code>config/app.yaml</code>、<code>config/models.yaml</code>、<code>config/prompts.yaml</code>、<code>config/taxonomy.yaml</code> 等非机密配置文件。真实密钥仍只通过环境变量提供，不会写入备份包。</p>
+<p>管理接口 <code>/admin/backups/download</code> 会生成 Sidecar 备份 ZIP，内容包括 SQLite 快照 <code>database/sidecar.db</code>、<code>manifest.json</code>，以及 <code>config/app.yaml</code>、<code>config/models.yaml</code>、<code>config/prompts.yaml</code>、<code>config/taxonomy.yaml</code> 等非机密配置文件。真实密钥仍只通过环境变量或 <code>config/.env.local</code> 提供，不会写入备份包。</p>
 <p><code>/admin/backups/restore</code> 接收备份 ZIP 原始 body，并只恢复 Sidecar SQLite 数据库。备份包里的配置文件不会被自动应用，避免上传包覆盖运行配置或引入密钥风险。恢复范围不包含 Memos 主库、Memos 附件文件或外部对象存储。</p>
 <h2>taxonomy.yaml</h2>
 <p><code>config/taxonomy.yaml</code> 保存系统标签、初始业务标签、别名和禁用标签。路径由 <code>config/app.yaml</code> 中的 <code>taxonomy.path</code> 指定。</p>
@@ -163,7 +177,7 @@ providers:
 <li><code>disabled</code>：禁用标签，命中后不会进入正式标签或候选标签。</li>
 </ul>
 <p>业务标签按路径表达层级，但唯一性按最后一级名称检查。例如 <code>#项目/数管</code> 的最后一级是 <code>数管</code>；配置、运行期审核和 AI 自动候选都不允许再出现 <code>#数管</code> 或 <code>#其他/数管</code>。如果用户在 memo 中写了 <code>#数管</code>，且系统中唯一匹配的正式标签是 <code>#项目/数管</code>，后台会归一为该正式标签。</p>
-<p>worker 会把解析结果写入 job <code>result.ai_plan</code>。内容明确时会用 <code>system_tags.ai_summary</code> 创建 AI 整理 memo；内容过短或包含问号时会用 <code>system_tags.pending_clarification</code> 标记草案，在原 memo 下写澄清评论，并把任务置为 <code>waiting_user</code>。</p>
+<p>worker 会把解析结果写入 job <code>result.ai_plan</code>。内容明确时会用 <code>system_tags.ai_summary</code> 创建 AI 整理 memo；内容过短时会用 <code>system_tags.pending_clarification</code> 标记草案，在原 memo 下写澄清评论，并把任务置为 <code>waiting_user</code>。问号、URL 参数等特殊字符不会单独触发待澄清。</p>
 <p>候选标签持久化后会进入 Sidecar SQLite 的 <code>tag_candidates</code> 表，可通过 <code>/admin/tag-candidates</code> 查询，并通过 <code>/admin/tag-candidates/{id}/approve</code> 或 <code>/admin/tag-candidates/{id}/reject</code> 审核。审核通过后会同步写入 <code>business_tags</code> 表并标记为 <code>active</code>，worker 后续会把这些标签与 <code>config/taxonomy.yaml</code> 中的 active 标签合并使用。当前审核结果不会自动改写 <code>config/taxonomy.yaml</code>。</p>
 <p>也可以打开 <code>http://localhost:8080/admin/ui</code> 使用调试管理页面审核候选标签。该页面要求手动输入 <code>SIDECAR_ADMIN_TOKEN</code>，token 只保存在当前浏览器，不会由服务端注入页面。</p>
 <h2>document_parser</h2>

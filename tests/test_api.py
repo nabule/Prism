@@ -260,7 +260,7 @@ def test_admin_ui_returns_debug_page_without_exposing_token(tmp_path, monkeypatc
     assert 'id="tag-summary"' in response.text
     assert 'id="backup"' in response.text
     assert 'id="models"' in response.text
-    assert "scrollToHashTarget" in response.text
+    assert "showPanelFromHash" in response.text
     assert "admin-token" not in response.text
     assert "secret-key" not in response.text
 

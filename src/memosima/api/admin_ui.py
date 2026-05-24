@@ -641,6 +641,24 @@ ADMIN_UI_HTML = """<!doctype html>
         </div>
         
         <div class="field">
+          <label>数据召回范围选择</label>
+          <div style="display: flex; flex-wrap: wrap; gap: 16px; margin-top: 6px;">
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;">
+              <input id="qaIncludeOriginal" type="checkbox" checked style="width: auto; margin: 0;">
+              原始 Memo 正文
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;">
+              <input id="qaIncludeAttachments" type="checkbox" checked style="width: auto; margin: 0;">
+              关联解析附件大纲
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;">
+              <input id="qaIncludeAiSummary" type="checkbox" checked style="width: auto; margin: 0;">
+              AI 整理/标签总结 Memo
+            </label>
+          </div>
+        </div>
+        
+        <div class="field">
           <label for="qaSystemPrompt">系统提示词 (System Prompt)</label>
           <textarea id="qaSystemPrompt" class="prompt" spellcheck="false" placeholder="输入系统提示词...">你是一个专业的知识库问答助手。请基于提供的【知识库参考上下文】，专业、客观、严谨地回答【用户提问】。如果在上下文中找不到相关内容，请明确告知，不要胡乱编造。</textarea>
         </div>
@@ -1367,6 +1385,10 @@ const assembledPromptOutput = document.getElementById("assembledPromptOutput");
 const retrievedCount = document.getElementById("retrievedCount");
 const qaSourcesSummary = document.getElementById("qaSourcesSummary");
 
+const qaIncludeOriginal = document.getElementById("qaIncludeOriginal");
+const qaIncludeAttachments = document.getElementById("qaIncludeAttachments");
+const qaIncludeAiSummary = document.getElementById("qaIncludeAiSummary");
+
 function renderPills() {
   const pills = pillsContainer.querySelectorAll(".pill");
   for (const p of pills) {
@@ -1471,7 +1493,10 @@ btnGeneratePrompt.addEventListener("click", async () => {
       body: JSON.stringify({
         tags: qaSelectedTags,
         system_prompt: system,
-        query: query
+        query: query,
+        include_original: qaIncludeOriginal.checked,
+        include_attachments: qaIncludeAttachments.checked,
+        include_ai_summary: qaIncludeAiSummary.checked
       })
     });
     assembledPromptOutput.value = data.assembled_prompt;

@@ -107,7 +107,7 @@ def test_admin_ai_call_prompts_can_store_provider_selection(tmp_path, monkeypatc
         "/admin/prompts/reminder-extraction",
         headers={"Authorization": "Bearer admin-token"},
         json={
-            "provider": "",
+            "provider": "openrouter",
             "system": "提醒系统 {trigger_tag}",
             "user": "提醒用户 {now} {timezone} {content}",
         },
@@ -118,10 +118,10 @@ def test_admin_ai_call_prompts_can_store_provider_selection(tmp_path, monkeypatc
     assert tag_updated.json()["provider"] == "deepseek"
     assert tag_updated.json()["system"] == "标签总结系统"
     assert reminder_updated.status_code == 200
-    assert reminder_updated.json()["provider"] == ""
+    assert reminder_updated.json()["provider"] == "openrouter"
     assert listed.json()["tag_summary"]["user"] == "标签总结用户 {tag} {memos_markdown}"
     assert listed.json()["tag_summary"]["provider"] == "deepseek"
-    assert listed.json()["reminder_extraction"]["provider"] == ""
+    assert listed.json()["reminder_extraction"]["provider"] == "openrouter"
     assert listed.json()["reminder_extraction"]["user"] == "提醒用户 {now} {timezone} {content}"
 
 

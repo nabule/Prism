@@ -158,7 +158,7 @@ def test_prompts_config_loads_provider_and_reminder_template(tmp_path):
         prompts_config_text()
         + """
 reminder_extraction:
-  provider: 
+  provider: openrouter
   system: |-
     自定义提醒系统 {trigger_tag}
   user: |-
@@ -181,7 +181,7 @@ reminder_extraction:
 
     assert config.organize_memo.provider is None
     assert config.tag_summary.provider is None
-    assert config.reminder_extraction.provider == ""
+    assert config.reminder_extraction.provider == "openrouter"
     assert "自定义提醒系统 #提醒" == rendered.system
     assert "2026-05-23T12:00:00+08:00" in rendered.user
     assert "Asia/Shanghai" in rendered.user
@@ -201,7 +201,7 @@ tag_summary:
   system: 标签系统
   user: 标签用户 {tag} {memos_markdown}
 reminder_extraction:
-  provider: 
+  provider: openrouter
   system: 提醒系统
   user: 提醒用户 {content}
 """,
@@ -213,11 +213,11 @@ reminder_extraction:
 
     assert loaded.organize_memo.provider == "deepseek"
     assert loaded.tag_summary.provider == "openai"
-    assert loaded.reminder_extraction.provider == ""
+    assert loaded.reminder_extraction.provider == "openrouter"
     text = prompts_path.read_text(encoding="utf-8")
     assert "provider: deepseek" in text
     assert "provider: openai" in text
-    assert "provider: " in text
+    assert "provider: openrouter" in text
 
 
 def test_taxonomy_config_builds_local_organization_plan(tmp_path):

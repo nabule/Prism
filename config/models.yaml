@@ -8,16 +8,6 @@ providers:
     max_tokens: null
     response_format: json_object
     extra_body: {}
-  :
-    base_url: 
-    api_key_env: 
-    default_model: 
-    temperature: 0.2
-    max_tokens: null
-    response_format: json_object
-    extra_body:
-      chat_template_kwargs:
-        enable_thinking: false
   openai:
     base_url: https://api.openai.com/v1
     api_key_env: OPENAI_API_KEY

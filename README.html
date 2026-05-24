@@ -45,7 +45,7 @@
   <ul>
     <li>Caddy 网关统一入口，默认从 <code>http://localhost:8080/</code> 访问 Memos，从 <code>/admin/*</code>、<code>/health</code>、<code>/webhooks/*</code> 访问 Sidecar。</li>
     <li>Memos webhook 接入和 SQLite 任务系统。</li>
-    <li>AI 整理 memo 创建，支持 DeepSeek、、OpenRouter 等 OpenAI-compatible LLM 和本地模板回退。</li>
+    <li>AI 整理 memo 创建，支持 DeepSeek、OpenRouter 等 OpenAI-compatible LLM 和本地模板回退。</li>
     <li>Memos 原生 <code>REFERENCE</code> relation 关联原始 memo 与 AI memo。</li>
     <li>内置 <code>/admin/ui</code> 调试管理页面，用于查看任务、重试任务、审核候选标签、备份和恢复 Sidecar 数据。</li>
     <li>worker 可在 Memos 中自动维护 <code>#系统/Memosima</code> 管理入口 memo（标题自动呈现为 <strong>Prism (棱镜)</strong> 管理入口），AI 整理 memo 也会附带管理页面和候选标签审核链接。</li>

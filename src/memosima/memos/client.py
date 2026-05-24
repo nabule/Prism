@@ -90,6 +90,9 @@ class MemosClient:
             json={"content": content},
         )
 
+    async def delete_memo(self, memo_uid: str) -> None:
+        await self._request("DELETE", f"/api/v1/{_memo_name(memo_uid)}")
+
     async def list_memo_relations(self, memo_uid: str) -> dict[str, Any]:
         return await self._request("GET", f"/api/v1/{_memo_name(memo_uid)}/relations")
 

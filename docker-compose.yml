@@ -1,6 +1,6 @@
 services:
   gateway:
-    image: caddy:2.10.2
+    image: xget.your-domain.com/cr/docker/library/caddy:2.10.2
     container_name: memosima-gateway
     restart: unless-stopped
     depends_on:
@@ -14,11 +14,9 @@ services:
       - ./logs/caddy:/var/log/caddy
 
   memos:
-    image: neosmemo/memos:stable
+    image: xget.your-domain.com/cr/docker/neosmemo/memos:stable
     container_name: memosima-memos
     restart: unless-stopped
-    ports:
-      - "5230:5230"
     volumes:
       - ./data/memos:/var/opt/memos
     environment:

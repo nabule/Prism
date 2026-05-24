@@ -137,7 +137,20 @@
     </li>
   </ul>
 
-  <h3>⚡ 3. 极速实机开发热重载配置 (P5 特性)</h3>
+  <h3>📦 3. 生产环境一键部署与 Release 发布 (P11 特性)</h3>
+  <p>自 P11 阶段起，项目已完成生产集成闭环，支持云端 Actions 自动构建与宿主机无痛一键部署：</p>
+  <ul>
+    <li><strong>GitHub Actions 自动构建</strong>：
+      <p>当开发者向 GitHub 提交语义化版本标签（如 <code>v0.3.0</code>）或向 <code>master</code> 分支推送代码时，GitHub Actions (<code>.github/workflows/docker-publish.yml</code>) 会自动拉起全新容器，将其编译并自动推送至 GitHub Container Registry 官方源：<code>ghcr.io/nabule/prism:latest</code>。</p>
+    </li>
+    <li><strong>一键部署脚本 (<code>deploy.sh</code>)</strong>：
+      <p>面向生产或搬家迁移环境，我们设计了完全自包含、免去本地 Python 环境和源码目录的 <code>deploy.sh</code> 部署脚本。您仅需拉取该脚本并执行：</p>
+      <pre><code>bash deploy.sh</code></pre>
+      <p class="note">该脚本会自动创建所需要的数据 and 日志路径，释放网关 <code>Caddyfile</code>，自动为您的环境随机生成安全的加密级 <code>SIDECAR_ADMIN_TOKEN</code> 并存入 <code>.env</code> 文件，随后直接通过生产级的 <code>docker-compose.release.yml</code> 拉取编译后的 GHCR 镜像拉起运行，免除本地手动配置！</p>
+    </li>
+  </ul>
+
+  <h3>⚡ 4. 极速实机开发热重载配置 (P5 特性)</h3>
   <p>为了免除本地研发和快速验证时反复构建镜像（Build Image）的损耗，开发与测试环境中已对 <code>docker-compose.yml</code> 进行了极速优化：</p>
   <ul>
     <li><strong>挂载本地源码</strong>：通过 <code>- ./src:/app/src</code> 卷挂载，本地 IDE 修改任何代码将即时反应在容器中。</li>

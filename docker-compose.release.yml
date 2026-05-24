@@ -1,0 +1,56 @@
+services:
+  gateway:
+    image: xget.your-domain.com/cr/docker/library/caddy:2.10.2
+    container_name: memosima-gateway
+    restart: unless-stopped
+    depends_on:
+      - memos
+      - sidecar
+    ports:
+      - "${GATEWAY_PORT:-8080}:80"
+    volumes:
+      - ./gateway/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./data/caddy:/data
+      - ./logs/caddy:/var/log/caddy
+
+  memos:
+    image: xget.your-domain.com/cr/docker/neosmemo/memos:stable
+    container_name: memosima-memos
+    restart: unless-stopped
+    volumes:
+      - ./data/memos:/var/opt/memos
+    environment:
+      MEMOS_PORT: 5230
+      MEMOS_DRIVER: sqlite
+
+  sidecar:
+    image: ghcr.io/nabule/prism:${PRISM_VERSION:-latest}
+    container_name: memosima-sidecar
+    restart: unless-stopped
+    depends_on:
+      - memos
+    env_file:
+      - .env
+    environment:
+      MEMOS_BASE_URL: http://memos:5230
+    volumes:
+      - ./config:/app/config
+      - ./data/sidecar:/app/data/sidecar
+      - ./logs:/app/logs
+
+  sidecar-worker:
+    image: ghcr.io/nabule/prism:${PRISM_VERSION:-latest}
+    container_name: memosima-sidecar-worker
+    restart: unless-stopped
+    depends_on:
+      - memos
+      - sidecar
+    env_file:
+      - .env
+    environment:
+      MEMOS_BASE_URL: http://memos:5230
+    volumes:
+      - ./config:/app/config
+      - ./data/sidecar:/app/data/sidecar
+      - ./logs:/app/logs
+    command: memosima-worker

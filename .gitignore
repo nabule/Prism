@@ -21,3 +21,8 @@ build/
 .antigravitycli/
 .local/
 .codegraph/
+
+# Backups
+backups/
+*.tar.gz
+*.zip

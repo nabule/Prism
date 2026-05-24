@@ -59,7 +59,7 @@ if [ ! -f config/app.yaml ]; then
     cat << 'EOF' > config/app.yaml
 app:
   workspace_id: default
-  public_base_url: http://localhost:8080
+  public_base_url: http://localhost:8085
   timezone: Asia/Shanghai
 database:
   path: data/sidecar/sidecar.db
@@ -131,7 +131,7 @@ if [ ! -f .env ]; then
     AUTO_ADMIN_TOKEN=$(openssl rand -hex 16 2>/dev/null || echo "token_$(date +%s)_$RANDOM")
     cat << EOF > .env
 # Memosima Sidecar Admin Token
-# 请在访问 http://localhost:8080/admin/ui 时输入该 Token 进行认证
+# 请在访问 http://localhost:8085/admin/ui 时输入该 Token 进行认证
 SIDECAR_ADMIN_TOKEN=${AUTO_ADMIN_TOKEN}
 
 # Memos 与大模型配置，可在 Sidecar 管理界面热更新
@@ -158,7 +158,7 @@ services:
       - memos
       - sidecar
     ports:
-      - "${GATEWAY_PORT:-8080}:80"
+      - "${GATEWAY_PORT:-8085}:80"
     volumes:
       - ./gateway/Caddyfile:/etc/caddy/Caddyfile:ro
       - ./data/caddy:/data
@@ -218,8 +218,8 @@ $DOCKER_COMPOSE -f docker-compose.release.yml up -d
 echo -e "${BLUE}===============================================${NC}"
 echo -e "${GREEN}        🎉 Prism (棱镜) 部署成功！             ${NC}"
 echo -e "${BLUE}===============================================${NC}"
-echo -e "${GREEN}网关宿主机入口: ${YELLOW}http://localhost:${GATEWAY_PORT:-8080}${NC}"
-echo -e "${GREEN}AI 管理端地址:  ${YELLOW}http://localhost:${GATEWAY_PORT:-8080}/admin/ui${NC}"
+echo -e "${GREEN}网关宿主机入口: ${YELLOW}http://localhost:${GATEWAY_PORT:-8085}${NC}"
+echo -e "${GREEN}AI 管理端地址:  ${YELLOW}http://localhost:${GATEWAY_PORT:-8085}/admin/ui${NC}"
 if [ -f .env ]; then
     CURRENT_TOKEN=$(grep -E "^SIDECAR_ADMIN_TOKEN=" .env | cut -d'=' -f2-)
     echo -e "${GREEN}您的管理 Token:  ${BLUE}${CURRENT_TOKEN}${NC}"

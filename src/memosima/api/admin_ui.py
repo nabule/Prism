@@ -286,6 +286,7 @@ ADMIN_UI_HTML = """<!doctype html>
     <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="models">模型</button>
     <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="reminders">提醒</button>
     <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="docparser">文档解析</button>
+    <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="vector-search">向量库</button>
     <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="memos">Memos 同步</button>
     <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="backup">备份</button>
     <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="qa">QA 离线问答</button>
@@ -307,6 +308,8 @@ ADMIN_UI_HTML = """<!doctype html>
           <button type="button" data-tab-target="jobs">查看任务</button>
           <button type="button" data-tab-target="tags">标签处理</button>
           <button type="button" data-tab-target="models">模型配置</button>
+          <button type="button" data-tab-target="vector-search">向量库配置</button>
+          <button type="button" data-tab-target="memos">Memos 同步</button>
           <button type="button" data-tab-target="backup">备份恢复</button>
         </div>
         <div class="muted">使用上方标签聚合任务、标签、AI 配置、模型、提醒和备份能力。</div>
@@ -570,17 +573,16 @@ ADMIN_UI_HTML = """<!doctype html>
         </div>
       </aside>
     </div>
+  </section>
 
-    <!-- TAB: Vector Search (Settings) -->
-    <div id="panel-settings" class="tab-panel" style="display: none;">
+  <section class="tab-panel" data-panel="vector-search">
       <div class="topbar">
         <div>
           <h1>系统配置</h1>
           <div class="muted">配置离线 RAG 问答及更多系统参数</div>
         </div>
       </div>
-      <div style="display: grid; grid-template-columns: 1fr; gap: 20px;">
-        <div class="panel stack">
+      <div class="panel stack">
           <h2>离线向量库 (Vector Search)</h2>
           <div class="field" style="margin-top: 10px;">
             <label><input id="vectorSearchEnabled" type="checkbox"> 启用离线 RAG 向量检索</label>
@@ -600,9 +602,7 @@ ADMIN_UI_HTML = """<!doctype html>
           <div style="margin-top: 16px;">
             <button id="saveVectorSearchConfigButton" class="primary">保存向量库配置</button>
           </div>
-        </div>
       </div>
-    </div>
   </section>
 
   <section class="tab-panel" data-panel="backup">
@@ -617,6 +617,14 @@ ADMIN_UI_HTML = """<!doctype html>
         <button id="restoreBackupButton" class="danger" type="button">上传恢复</button>
       </div>
       <div class="muted">备份包含 Sidecar SQLite 和非机密配置文件；恢复只替换 Sidecar SQLite，不自动覆盖配置。</div>
+    </div>
+
+    <div class="panel" style="margin-top: 20px; border-color: var(--danger);">
+      <h2 style="color: var(--danger);">危险操作</h2>
+      <div class="muted">重置数据库将清空所有已处理的笔记、任务日志、标签候选和向量索引。此操作不可撤格！</div>
+      <div class="toolbar" style="margin-top: 10px;">
+        <button id="resetDatabaseButton" class="danger" type="button">重置数据库</button>
+      </div>
     </div>
   </section>
 
@@ -797,7 +805,7 @@ const remindersTriggerTag = document.getElementById("remindersTriggerTag");
 const remindersConfidence = document.getElementById("remindersConfidence");
 const remindersTimeout = document.getElementById("remindersTimeout");
 const remindersWebhookUrl = document.getElementById("remindersWebhookUrl");
-const btnSaveRemindersConfig = document.getElementById("btnSaveRemindersConfig");
+const saveRemindersConfigButton = document.getElementById("saveRemindersConfigButton");
 const promptProvider = document.getElementById("promptProvider");
 const promptSystem = document.getElementById("promptSystem");
 const promptUser = document.getElementById("promptUser");
@@ -838,6 +846,8 @@ const hashPanelMap = {
   reminders: { panel: "reminders" },
   docparser: { panel: "docparser" },
   backup: { panel: "backup" },
+  memos: { panel: "memos" },
+  "vector-search": { panel: "vector-search" },
   qa: { panel: "qa" }
 };
 
@@ -1184,6 +1194,24 @@ async function restoreBackup() {
   }
 }
 
+async function resetDatabase() {
+  if (!window.confirm("危险！此操作将永久删除 Sidecar 的所有本地数据（不影响 Memos 主站数据）。确认重置？")) {
+    return;
+  }
+  const confirmText = window.prompt("请输入 'RESET' 以确认重置操作：");
+  if (confirmText !== "RESET") {
+    setNotice("操作已取消：确认字符不正确", "warn");
+    return;
+  }
+  try {
+    const data = await requestJson("/admin/database/reset", { method: "POST" });
+    setNotice(data.message, "ok");
+    await Promise.all([loadJobs(), loadCandidates(), loadReminders(), loadHealth()]);
+  } catch (error) {
+    setNotice(String(error.message || error), "error");
+  }
+}
+
 function renderJobRow(job) {
   const tr = document.createElement("tr");
   tr.append(
@@ -1440,9 +1468,10 @@ document.getElementById("createTagSummaryButton").addEventListener("click", crea
 document.getElementById("downloadBackupButton").addEventListener("click", downloadBackup);
 document.getElementById("downloadBackupButtonMirror").addEventListener("click", downloadBackup);
 document.getElementById("restoreBackupButton").addEventListener("click", restoreBackup);
+document.getElementById("resetDatabaseButton").addEventListener("click", resetDatabase);
 document.getElementById("refreshDocParserButton").addEventListener("click", loadDocumentParser);
 document.getElementById("saveDocParserButton").addEventListener("click", saveDocumentParser);
-document.getElementById("btnSaveRemindersConfig").addEventListener("click", saveRemindersConfig);
+saveRemindersConfigButton.addEventListener("click", saveRemindersConfig);
 /* Memos 整合配置逻辑 */
 const memosBaseUrl = document.getElementById("memosBaseUrl");
 const memosApiToken = document.getElementById("memosApiToken");

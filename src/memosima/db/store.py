@@ -259,6 +259,15 @@ class Store:
                 """
             )
 
+    def reset(self) -> None:
+        with self.connect() as connection:
+            connection.execute("PRAGMA foreign_keys = OFF")
+            rows = connection.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").fetchall()
+            for row in rows:
+                connection.execute(f"DROP TABLE IF EXISTS {row['name']}")
+            connection.execute("PRAGMA foreign_keys = ON")
+        self.migrate()
+
     def ensure_workspace(self, workspace_id: str, name: str | None = None) -> None:
         now = utc_now()
         with self.connect() as connection:

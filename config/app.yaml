@@ -35,7 +35,7 @@ document_parser:
   is_ocr: false
 reminders:
   enabled: true
-  trigger_tag: "#提醒"
+  trigger_tag: '#提醒'
   webhook_url_env: REMINDER_WEBHOOK_URL
   confidence_threshold: 0.75
   request_timeout_seconds: 10
@@ -53,15 +53,15 @@ limits:
   max_ai_active_tags: 5
   max_ai_candidate_tags: 2
   allowed_parse_extensions:
-    - .txt
-    - .md
-    - .doc
-    - .docx
-    - .xls
-    - .xlsx
-    - .ppt
-    - .pptx
-    - .pdf
-    - .drawio
-    - .drawio.svg
-    - .json
+  - .txt
+  - .md
+  - .doc
+  - .docx
+  - .xls
+  - .xlsx
+  - .ppt
+  - .pptx
+  - .pdf
+  - .drawio
+  - .drawio.svg
+  - .json

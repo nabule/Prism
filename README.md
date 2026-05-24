@@ -251,18 +251,18 @@ providers:
 
 ### `config/taxonomy.yaml` — 标签分类体系
 
-定义系统标签、正式业务标签、别名映射和禁用标签。详见 [配置参数说明手册](https://nabule.github.io/memosima/配置说明.html)。
+定义系统标签、正式业务标签、别名映射和禁用标签。详见 [配置参数说明手册](https://nabule.github.io/Prism/配置说明.html)。
 
 ## 📄 关联项目文档
 
-* [普通用户工作流指南 🌐](https://nabule.github.io/memosima/普通用户使用手册.html) - 指引普通用户如何将 Prism 折射库无缝融入日常记录中，说明各功能用途与工作流结合。
-* [使用手册 (部署与运维) 🌐](https://nabule.github.io/memosima/使用手册.html) - 系统管理员多容器拓扑部署、极速开发热载、与 Nx 任务管理指南。
-* [配置参数说明手册 🌐](https://nabule.github.io/memosima/配置说明.html) - `app.yaml` 静态配置体系及环境变量安全秘钥管理指引。
+* [普通用户工作流指南 🌐](https://nabule.github.io/Prism/普通用户使用手册.html) - 指引普通用户如何将 Prism 折射库无缝融入日常记录中，说明各功能用途与工作流结合。
+* [使用手册 (部署与运维) 🌐](https://nabule.github.io/Prism/使用手册.html) - 系统管理员多容器拓扑部署、极速开发热载、与 Nx 任务管理指南。
+* [配置参数说明手册 🌐](https://nabule.github.io/Prism/配置说明.html) - `app.yaml` 静态配置体系及环境变量安全秘钥管理指引。
 
 ### 💻 架构、设计与探针记录
-* [开发运行说明 🌐](https://nabule.github.io/memosima/开发运行说明.html) - 面向二次开发人员的本地调试、API 路由、以及核心架构说明。
-* [API 探针记录 🌐](https://nabule.github.io/memosima/API探针记录.html) - 针对 Memos 官方 API 接口的捕获、分析与探针运行测试结论。
-* [PRD 个人 AI 知识库系统说明书 🌐](https://nabule.github.io/memosima/PRD-个人AI知识库系统.html) - 系统底层需求规格说明书与设计愿景。
-* [基于 Memos 详细设计与开发计划 🌐](https://nabule.github.io/memosima/基于-Memos-的个人-AI-知识库系统详细设计与开发计划.html) - 后台同步、AI 归档的详细数据库及生命周期设计。
-* [开发计划与验收标准 🌐](https://nabule.github.io/memosima/开发计划与验收标准-个人AI知识库系统.html) - 项目里程碑、验收要点与交付规范记录。
-* [技术架构设计 🌐](https://nabule.github.io/memosima/技术架构设计-个人AI知识库系统.html) - Prism 全链路时序、并发、持久化底层架构。
+* [开发运行说明 🌐](https://nabule.github.io/Prism/开发运行说明.html) - 面向二次开发人员的本地调试、API 路由、以及核心架构说明。
+* [API 探针记录 🌐](https://nabule.github.io/Prism/API探针记录.html) - 针对 Memos 官方 API 接口的捕获、分析与探针运行测试结论。
+* [PRD 个人 AI 知识库系统说明书 🌐](https://nabule.github.io/Prism/PRD-个人AI知识库系统.html) - 系统底层需求规格说明书与设计愿景。
+* [基于 Memos 详细设计与开发计划 🌐](https://nabule.github.io/Prism/基于-Memos-的个人-AI-知识库系统详细设计与开发计划.html) - 后台同步、AI 归档的详细数据库及生命周期设计。
+* [开发计划与验收标准 🌐](https://nabule.github.io/Prism/开发计划与验收标准-个人AI知识库系统.html) - 项目里程碑、验收要点与交付规范记录。
+* [技术架构设计 🌐](https://nabule.github.io/Prism/技术架构设计-个人AI知识库系统.html) - Prism 全链路时序、并发、持久化底层架构。

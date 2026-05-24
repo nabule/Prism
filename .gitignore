@@ -26,3 +26,6 @@ build/
 backups/
 *.tar.gz
 *.zip
+
+# Local AI rules
+[Aa][Gg][Ee][Nn][Tt][Ss].[Mm][Dd]

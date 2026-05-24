@@ -291,7 +291,7 @@ if [ ! -f docker-compose.release.yml ]; then
     cat << 'EOF' > docker-compose.release.yml
 services:
   gateway:
-    image: caddy:2.10.2
+    image: xget.your-domain.com/cr/docker/library/caddy:2.10.2
     container_name: memosima-gateway
     restart: unless-stopped
     depends_on:
@@ -305,7 +305,7 @@ services:
       - ./logs/caddy:/var/log/caddy
 
   memos:
-    image: neosmemo/memos:stable
+    image: xget.your-domain.com/cr/docker/neosmemo/memos:stable
     container_name: memosima-memos
     restart: unless-stopped
     volumes:
@@ -315,7 +315,7 @@ services:
       MEMOS_DRIVER: sqlite
 
   sidecar:
-    image: ghcr.io/nabule/prism:${PRISM_VERSION:-latest}
+    image: xget.your-domain.com/cr/ghcr/nabule/prism:${PRISM_VERSION:-latest}
     container_name: memosima-sidecar
     restart: unless-stopped
     depends_on:
@@ -330,7 +330,7 @@ services:
       - ./logs:/app/logs
 
   sidecar-worker:
-    image: ghcr.io/nabule/prism:${PRISM_VERSION:-latest}
+    image: xget.your-domain.com/cr/ghcr/nabule/prism:${PRISM_VERSION:-latest}
     container_name: memosima-sidecar-worker
     restart: unless-stopped
     depends_on:

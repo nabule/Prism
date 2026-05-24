@@ -315,7 +315,7 @@ services:
       MEMOS_DRIVER: sqlite
 
   sidecar:
-    image: ghcr.io/nabule/prism:${PRISM_VERSION:-latest}
+    image: xget.your-domain.com/cr/ghcr/nabule/prism:${PRISM_VERSION:-latest}
     container_name: memosima-sidecar
     restart: unless-stopped
     depends_on:
@@ -330,7 +330,7 @@ services:
       - ./logs:/app/logs
 
   sidecar-worker:
-    image: ghcr.io/nabule/prism:${PRISM_VERSION:-latest}
+    image: xget.your-domain.com/cr/ghcr/nabule/prism:${PRISM_VERSION:-latest}
     container_name: memosima-sidecar-worker
     restart: unless-stopped
     depends_on:

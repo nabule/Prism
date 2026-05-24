@@ -50,6 +50,53 @@ class LLMReminderExtraction(BaseModel):
 
 
 @dataclass(frozen=True)
+class EmbeddingClient:
+    base_url: str
+    api_key: str
+    model: str
+    timeout_seconds: float = 30
+
+    async def get_embeddings(self, texts: list[str]) -> list[list[float]]:
+        if not texts:
+            return []
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": self.model,
+            "input": texts,
+            "encoding_format": "float",
+        }
+        base = self.base_url.rstrip("/")
+        async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
+            response = await client.post(f"{base}/embeddings", headers=headers, json=payload)
+        
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise LLMClientError(f"Embedding request failed: {response.status_code}") from exc
+        
+        try:
+            data = response.json()
+        except ValueError as exc:
+            raise LLMClientError("Embedding returned non-JSON response") from exc
+        
+        if "data" not in data or not isinstance(data["data"], list):
+            raise LLMClientError(f"Embedding response missing 'data' list: {data}")
+            
+        embeddings = [None] * len(texts)
+        for item in data["data"]:
+            if isinstance(item, dict) and "index" in item and "embedding" in item:
+                embeddings[item["index"]] = item["embedding"]
+                
+        if any(e is None for e in embeddings):
+            raise LLMClientError("Embedding response did not contain embeddings for all inputs")
+            
+        return embeddings # type: ignore
+
+
+@dataclass(frozen=True)
 class OpenAICompatibleClient:
     provider: ProviderConfig
     api_key: str

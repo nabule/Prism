@@ -286,6 +286,7 @@ ADMIN_UI_HTML = """<!doctype html>
     <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="models">模型</button>
     <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="reminders">提醒</button>
     <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="docparser">文档解析</button>
+    <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="memos">Memos 同步</button>
     <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="backup">备份</button>
     <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="qa">QA 离线问答</button>
   </nav>
@@ -563,11 +564,44 @@ ADMIN_UI_HTML = """<!doctype html>
             <input id="remindersWebhookUrl" type="password" placeholder="留空保持不变，或输入新 URL/Bark Key" style="width: 100%; box-sizing: border-box;">
             <div class="muted" style="margin-top: 4px; font-size: 11px;">例如：<code>https://api.day.app/your-bark-key/</code>。写入 <span class="mono">config/.env.local</span>。</div>
           </div>
-          <div class="toolbar" style="margin-top: 15px;">
-            <button id="btnSaveRemindersConfig" class="primary" type="button" style="width: 100%;">保存提醒配置</button>
+          <div style="margin-top: 16px;">
+            <button id="saveRemindersConfigButton" class="primary" style="width: 100%;">保存提醒配置</button>
           </div>
         </div>
       </aside>
+    </div>
+
+    <!-- TAB: Vector Search (Settings) -->
+    <div id="panel-settings" class="tab-panel" style="display: none;">
+      <div class="topbar">
+        <div>
+          <h1>系统配置</h1>
+          <div class="muted">配置离线 RAG 问答及更多系统参数</div>
+        </div>
+      </div>
+      <div style="display: grid; grid-template-columns: 1fr; gap: 20px;">
+        <div class="panel stack">
+          <h2>离线向量库 (Vector Search)</h2>
+          <div class="field" style="margin-top: 10px;">
+            <label><input id="vectorSearchEnabled" type="checkbox"> 启用离线 RAG 向量检索</label>
+          </div>
+          <div class="field" style="margin-top: 10px;">
+            <label for="vectorSearchModel" style="display: block; font-weight: bold; margin-bottom: 4px;">Embedding 模型 (SiliconFlow 等兼容接口)</label>
+            <input id="vectorSearchModel" type="text" placeholder="例如 BAAI/bge-m3" style="width: 100%; box-sizing: border-box;">
+          </div>
+          <div class="field" style="margin-top: 10px;">
+            <label for="vectorSearchBaseUrl" style="display: block; font-weight: bold; margin-bottom: 4px;">API Base URL</label>
+            <input id="vectorSearchBaseUrl" type="text" placeholder="https://api.siliconflow.cn/v1" style="width: 100%; box-sizing: border-box;">
+          </div>
+          <div class="field" style="margin-top: 10px;">
+            <label for="vectorSearchApiKey" style="display: block; font-weight: bold; margin-bottom: 4px;">API Key</label>
+            <input id="vectorSearchApiKey" type="password" placeholder="留空保持不变，输入新 Key 则覆盖保存至 .env.local" style="width: 100%; box-sizing: border-box;">
+          </div>
+          <div style="margin-top: 16px;">
+            <button id="saveVectorSearchConfigButton" class="primary">保存向量库配置</button>
+          </div>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -583,6 +617,24 @@ ADMIN_UI_HTML = """<!doctype html>
         <button id="restoreBackupButton" class="danger" type="button">上传恢复</button>
       </div>
       <div class="muted">备份包含 Sidecar SQLite 和非机密配置文件；恢复只替换 Sidecar SQLite，不自动覆盖配置。</div>
+    </div>
+  </section>
+
+  <section class="tab-panel" data-panel="memos">
+    <div id="memos-config" class="panel">
+      <h2>Memos 同步配置</h2>
+      <div class="toolbar">
+        <button id="refreshMemosConfigButton" type="button">刷新</button>
+        <button id="saveMemosConfigButton" class="primary" type="button">保存配置</button>
+      </div>
+      <div class="muted">配置 Memos 主站的同步地址与认证 Token。API Token 会写入安全存储 <span class="mono">config/.env.local</span> 中。</div>
+
+      <label for="memosBaseUrl" style="margin-top: 14px;">Memos 接口 Base URL (MEMOS_BASE_URL)</label>
+      <input id="memosBaseUrl" autocomplete="off" placeholder="例如 http://memos:5230 或 https://your-memos-domain">
+
+      <label for="memosApiToken" style="margin-top: 10px;">Memos API Token (MEMOS_API_TOKEN)</label>
+      <input id="memosApiToken" type="password" autocomplete="off" placeholder="留空保持不变">
+      <div id="memosTokenStatus" class="muted" style="margin-top: 4px; font-size: 0.85rem;"></div>
     </div>
   </section>
 
@@ -1327,6 +1379,45 @@ async function saveRemindersConfig() {
   }
 }
 
+async function loadVectorSearchConfig() {
+  try {
+    const data = await requestJson("/admin/vector-search/config");
+    document.getElementById("vectorSearchEnabled").checked = data.enabled;
+    document.getElementById("vectorSearchModel").value = data.model;
+    document.getElementById("vectorSearchBaseUrl").value = data.base_url;
+    document.getElementById("vectorSearchApiKey").value = "";
+    if (data.api_key_present) {
+      document.getElementById("vectorSearchApiKey").placeholder = `已配置（留空保持不变，写入 ${data.api_key_env}）`;
+    } else {
+      document.getElementById("vectorSearchApiKey").placeholder = `留空保持不变，或输入新 Key 保存至 ${data.api_key_env}`;
+    }
+  } catch (error) {
+    setNotice(String(error.message || error), "error");
+  }
+}
+
+async function saveVectorSearchConfig() {
+  try {
+    const payload = {
+      enabled: document.getElementById("vectorSearchEnabled").checked,
+      api_key_env: "SILICONFLOW_API_KEY",
+      base_url: document.getElementById("vectorSearchBaseUrl").value.trim() || "https://api.siliconflow.cn/v1",
+      model: document.getElementById("vectorSearchModel").value.trim() || "BAAI/bge-m3",
+      api_key: document.getElementById("vectorSearchApiKey").value.trim() || null
+    };
+    const data = await requestJson("/admin/vector-search/config", {
+      method: "PUT",
+      body: JSON.stringify(payload)
+    });
+    setNotice("向量库配置保存成功", "ok");
+    await loadVectorSearchConfig();
+  } catch (error) {
+    setNotice(String(error.message || error), "error");
+  }
+}
+
+document.getElementById("saveVectorSearchConfigButton").addEventListener("click", saveVectorSearchConfig);
+
 document.getElementById("saveTokenButton").addEventListener("click", () => {
   localStorage.setItem(storageKey, token());
   setNotice("Token 已保存到本机浏览器", "ok");
@@ -1352,17 +1443,54 @@ document.getElementById("restoreBackupButton").addEventListener("click", restore
 document.getElementById("refreshDocParserButton").addEventListener("click", loadDocumentParser);
 document.getElementById("saveDocParserButton").addEventListener("click", saveDocumentParser);
 document.getElementById("btnSaveRemindersConfig").addEventListener("click", saveRemindersConfig);
-for (const tab of panelTriggers) {
-  tab.addEventListener("click", () => {
-    const panelName = tab.dataset.tabTarget;
-    const hash = panelName === "overview" ? "overview" : panelName;
-    if (window.location.hash === `#${hash}`) {
-      activatePanel(panelName);
-    } else {
-      window.location.hash = hash;
-    }
-  });
+/* Memos 整合配置逻辑 */
+const memosBaseUrl = document.getElementById("memosBaseUrl");
+const memosApiToken = document.getElementById("memosApiToken");
+const memosTokenStatus = document.getElementById("memosTokenStatus");
+let memosBaseUrlEnv = "MEMOS_BASE_URL";
+let memosApiTokenEnv = "MEMOS_API_TOKEN";
+
+async function loadMemosConfig() {
+  try {
+    const data = await requestJson("/admin/memos/config");
+    memosBaseUrl.value = data.base_url || "";
+    memosApiToken.value = "";
+    memosBaseUrlEnv = data.base_url_env || "MEMOS_BASE_URL";
+    memosApiTokenEnv = data.api_token_env || "MEMOS_API_TOKEN";
+    memosTokenStatus.textContent = data.api_token_present ? "Token 已配置" : "Token 未配置";
+    setNotice("Memos 同步配置已刷新", "ok");
+  } catch (error) {
+    setNotice(String(error.message || error), "error");
+  }
 }
+
+async function saveMemosConfig() {
+  try {
+    const payload = {
+      base_url: memosBaseUrl.value.trim(),
+      api_token_env: memosApiTokenEnv,
+      base_url_env: memosBaseUrlEnv,
+    };
+    if (memosApiToken.value.trim()) {
+      payload.api_token = memosApiToken.value.trim();
+    }
+    const data = await requestJson("/admin/memos/config", {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
+    memosBaseUrl.value = data.base_url || "";
+    memosApiToken.value = "";
+    memosTokenStatus.textContent = data.api_token_present ? "Token 已配置" : "Token 未配置";
+    await loadHealth();
+    setNotice("Memos 同步配置已保存", "ok");
+  } catch (error) {
+    setNotice(String(error.message || error), "error");
+  }
+}
+
+document.getElementById("refreshMemosConfigButton").addEventListener("click", loadMemosConfig);
+document.getElementById("saveMemosConfigButton").addEventListener("click", saveMemosConfig);
+
 
 /* 文档解析（MinerU）配置逻辑 */
 const dpProvider = document.getElementById("dpProvider");
@@ -1616,11 +1744,26 @@ if (token()) {
   loadCandidates();
   loadReminders();
   loadRemindersConfig();
+  loadVectorSearchConfig();
   loadPrompts();
   loadModels();
   loadDocumentParser();
   loadQABusinessTags();
+  loadMemosConfig();
 }
+
+for (const tab of panelTriggers) {
+  tab.addEventListener("click", () => {
+    const panelName = tab.dataset.tabTarget;
+    const hash = panelName === "overview" ? "overview" : panelName;
+    if (window.location.hash === `#${hash}`) {
+      activatePanel(panelName);
+    } else {
+      window.location.hash = hash;
+    }
+  });
+}
+
 window.addEventListener("hashchange", showPanelFromHash);
 showPanelFromHash();
 </script>

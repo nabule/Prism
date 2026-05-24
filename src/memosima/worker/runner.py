@@ -30,7 +30,7 @@ from memosima.core.prompts import PromptTemplate, load_prompts_or_default
 from memosima.core.summary import build_summary_memo_content
 from memosima.core.taxonomy import OrganizationPlan, TagCandidate, TaxonomyConfig
 from memosima.db.store import Job, ReminderRecord, Store, utc_now
-from memosima.llm.provider import LLMOrganizationDraft, LLMReminderExtraction, LLMReminderItem, OpenAICompatibleClient
+from memosima.llm.provider import EmbeddingClient, LLMOrganizationDraft, LLMReminderExtraction, LLMReminderItem, OpenAICompatibleClient
 from memosima.memos.client import MemosClient
 
 LOGGER = logging.getLogger(__name__)
@@ -324,6 +324,12 @@ class Worker:
             related_memo_uid=memo_uid,
         )
 
+        vector_search_result = await self._handle_vector_search(
+            workspace_id=job.workspace_id,
+            memo_uid=memo_uid,
+            source_content=source_content,
+        )
+
         comment_created = False
         if self.config.worker_create_probe_comment:
             await client.create_comment(memo_uid, "Memosima P0 探针评论：Sidecar 已读取此 memo。")
@@ -337,6 +343,7 @@ class Worker:
             "ai_source": "llm" if llm_draft else "local",
             "attachments": attachment_results,
             "reminder": reminder_result,
+            "vector_search": vector_search_result,
             "comment_created": comment_created,
             "original_memo_title_updated": original_memo_title_updated,
             "original_memo_title": _extract_backfilled_title(original_title_content) if original_title_content else None,
@@ -439,6 +446,48 @@ class Worker:
             local_plan=organization_plan,
             prompt_template=prompt_template,
         )
+
+    async def _handle_vector_search(
+        self,
+        *,
+        workspace_id: str,
+        memo_uid: str,
+        source_content: str,
+    ) -> dict[str, object]:
+        if not self.config.vector_search_enabled:
+            return {"status": "disabled"}
+        
+        api_key = os.getenv(self.config.vector_search_api_key_env)
+        if not api_key:
+            return {"status": "skipped", "reason": "api_key_not_configured"}
+
+        chunks = _chunk_text(source_content, max_length=500)
+        if not chunks:
+            self.store.replace_vector_units(workspace_id=workspace_id, memo_uid=memo_uid, chunks=[])
+            return {"status": "skipped", "reason": "no_content"}
+
+        client = EmbeddingClient(
+            base_url=self.config.vector_search_base_url,
+            api_key=api_key,
+            model=self.config.vector_search_model,
+        )
+
+        try:
+            embeddings = await client.get_embeddings(chunks)
+        except Exception as exc:
+            LOGGER.warning("Vector embedding failed for memo %s: %s", memo_uid, exc)
+            return {"status": "failed", "reason": str(exc)}
+
+        if len(embeddings) != len(chunks):
+            return {"status": "failed", "reason": "embedding_count_mismatch"}
+
+        unit_data = list(zip(chunks, embeddings))
+        self.store.replace_vector_units(workspace_id=workspace_id, memo_uid=memo_uid, chunks=unit_data)
+        
+        return {
+            "status": "succeeded",
+            "chunks_count": len(chunks),
+        }
 
     async def _handle_reminders(
         self,
@@ -842,6 +891,30 @@ def _parse_due_at(value: str, timezone: str) -> datetime | None:
 def _sanitize_error(error: str) -> str:
     text = error.strip().replace("\n", " ")
     return text[:500]
+
+
+def _chunk_text(text: str, max_length: int = 500) -> list[str]:
+    lines = text.splitlines()
+    chunks = []
+    current_chunk = []
+    current_len = 0
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+        line_len = len(stripped)
+        if current_len + line_len > max_length and current_chunk:
+            chunks.append("\n".join(current_chunk))
+            current_chunk = [stripped]
+            current_len = line_len
+        else:
+            current_chunk.append(stripped)
+            current_len += line_len + 1 # +1 for newline
+    
+    if current_chunk:
+        chunks.append("\n".join(current_chunk))
+        
+    return chunks
 
 
 async def _run(args: argparse.Namespace) -> None:

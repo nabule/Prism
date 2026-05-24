@@ -29,7 +29,7 @@ from memosima.api.webhooks import build_idempotency_key, extract_memo_uid
 from memosima.core.config import AppConfig, ConfigError, ModelsConfig, ProviderConfig, _read_yaml, load_env_file
 from memosima.core.prompts import PromptTemplate, PromptsConfig, load_prompts_or_default
 from memosima.db.store import Job, MemoRecord, ReminderRecord, Store, TagCandidateRecord
-from memosima.llm.provider import LLMClientError, OpenAICompatibleClient
+from memosima.llm.provider import EmbeddingClient, LLMClientError, OpenAICompatibleClient
 from memosima.memos.client import MemosClient
 
 
@@ -234,6 +234,20 @@ class DocumentParserUpdateRequest(BaseModel):
     api_key: str | None = Field(default=None, max_length=12000)
 
 
+class MemosConfigView(BaseModel):
+    base_url: str
+    api_token_present: bool
+    api_token_env: str
+    base_url_env: str
+
+
+class MemosConfigUpdateRequest(BaseModel):
+    base_url: str = Field(..., max_length=500)
+    api_token: str | None = Field(default=None, max_length=12000)
+    api_token_env: str = Field(default="MEMOS_API_TOKEN", max_length=120, pattern=r"^[A-Z_][A-Z0-9_]*$")
+    base_url_env: str = Field(default="MEMOS_BASE_URL", max_length=120, pattern=r"^[A-Z_][A-Z0-9_]*$")
+
+
 class RemindersConfigView(BaseModel):
     enabled: bool
     trigger_tag: str
@@ -248,6 +262,22 @@ class RemindersConfigUpdateRequest(BaseModel):
     confidence_threshold: float = Field(default=0.75, ge=0.0, le=1.0)
     request_timeout_seconds: float = Field(default=10.0, ge=1.0, le=60.0)
     webhook_url: str | None = Field(default=None, max_length=12000)
+
+
+class VectorSearchConfigView(BaseModel):
+    enabled: bool
+    api_key_env: str
+    base_url: str
+    model: str
+    api_key_present: bool
+
+
+class VectorSearchConfigUpdateRequest(BaseModel):
+    enabled: bool
+    api_key_env: str = Field(default="SILICONFLOW_API_KEY", max_length=120, pattern=r"^[A-Z_][A-Z0-9_]*$")
+    base_url: str = Field(default="https://api.siliconflow.cn/v1", max_length=500)
+    model: str = Field(default="BAAI/bge-m3", max_length=80)
+    api_key: str | None = Field(default=None, max_length=12000)
 
 
 def create_app(
@@ -591,6 +621,41 @@ def create_app(
         return await get_reminders_config()
 
     @app.get(
+        "/admin/vector-search/config",
+        response_model=VectorSearchConfigView,
+        dependencies=[Depends(require_admin)],
+    )
+    async def get_vector_search_config() -> VectorSearchConfigView:
+        cfg: AppConfig = app.state.config
+        return VectorSearchConfigView(
+            enabled=cfg.vector_search_enabled,
+            api_key_env=cfg.vector_search_api_key_env,
+            base_url=cfg.vector_search_base_url,
+            model=cfg.vector_search_model,
+            api_key_present=bool(os.getenv(cfg.vector_search_api_key_env)),
+        )
+
+    @app.put(
+        "/admin/vector-search/config",
+        response_model=VectorSearchConfigView,
+        dependencies=[Depends(require_admin)],
+    )
+    async def update_vector_search_config(request: VectorSearchConfigUpdateRequest) -> VectorSearchConfigView:
+        _update_app_yaml_vector_search(
+            config_path=Path(config_path),
+            enabled=request.enabled,
+            api_key_env=request.api_key_env,
+            base_url=request.base_url,
+            model=request.model,
+        )
+        if request.api_key is not None and request.api_key.strip():
+            env_path = Path(config_path).parent / ".env.local"
+            _upsert_env_value(env_path, request.api_key_env, request.api_key.strip())
+            os.environ[request.api_key_env] = request.api_key.strip()
+        app.state.config = AppConfig.load(config_path)
+        return await get_vector_search_config()
+
+    @app.get(
         "/admin/reminders",
         response_model=RemindersResponse,
         dependencies=[Depends(require_admin)],
@@ -872,8 +937,110 @@ def create_app(
             api_key_present=bool(os.getenv(cfg.document_parser_token_env)),
         )
 
-    return app
+    @app.get(
+        "/admin/memos/config",
+        response_model=MemosConfigView,
+        dependencies=[Depends(require_admin)],
+    )
+    async def get_memos_config() -> MemosConfigView:
+        cfg: AppConfig = app.state.config
+        raw = _read_yaml(Path(config_path)) if Path(config_path).exists() else {}
+        memos_sec = raw.get("memos", {})
+        base_url_env = str(memos_sec.get("base_url_env", "MEMOS_BASE_URL"))
+        api_token_env = str(memos_sec.get("api_token_env", "MEMOS_API_TOKEN"))
+        
+        return MemosConfigView(
+            base_url=os.getenv(base_url_env, ""),
+            api_token_present=bool(os.getenv(api_token_env)),
+            api_token_env=api_token_env,
+            base_url_env=base_url_env,
+        )
 
+    @app.put(
+        "/admin/memos/config",
+        response_model=MemosConfigView,
+        dependencies=[Depends(require_admin)],
+    )
+    async def update_memos_config(request: MemosConfigUpdateRequest) -> MemosConfigView:
+        if request.api_token and ("\n" in request.api_token or "\r" in request.api_token):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="API token must be a single line")
+        
+        _update_app_yaml_memos(
+            config_path=Path(config_path),
+            base_url_env=request.base_url_env,
+            api_token_env=request.api_token_env,
+        )
+        
+        env_path = Path(config_path).parent / ".env.local"
+        _upsert_env_value(env_path, request.base_url_env, request.base_url.strip())
+        os.environ[request.base_url_env] = request.base_url.strip()
+        
+        if request.api_token is not None and request.api_token.strip():
+            _upsert_env_value(env_path, request.api_token_env, request.api_token.strip())
+            os.environ[request.api_token_env] = request.api_token.strip()
+            
+        app.state.config = AppConfig.load(config_path)
+        return await get_memos_config()
+
+    @app.post(
+        "/admin/qa/generate-prompt",
+        response_model=GeneratePromptResponse,
+        dependencies=[Depends(require_admin)],
+    )
+    async def generate_prompt(request: GeneratePromptRequest) -> GeneratePromptResponse:
+        cfg: AppConfig = app.state.config
+        if not cfg.vector_search_enabled:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Vector search is disabled")
+            
+        api_key = os.getenv(cfg.vector_search_api_key_env)
+        if not api_key:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Vector search API key is not configured")
+            
+        client = EmbeddingClient(
+            base_url=cfg.vector_search_base_url,
+            api_key=api_key,
+            model=cfg.vector_search_model,
+        )
+        
+        try:
+            embeddings = await client.get_embeddings([request.query])
+        except LLMClientError as exc:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
+            
+        if not embeddings:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to get embedding for query")
+            
+        query_embedding = embeddings[0]
+        results = store.search_similar_chunks(
+            workspace_id=config.workspace_id,
+            query_embedding=query_embedding,
+            limit=request.top_k,
+        )
+        
+        sources = []
+        context_parts = []
+        for unit, score in results:
+            # We can optionally filter by tag here if we load the tags for each memo, but for V1 we just return top similar chunks.
+            # In V2, we would inner join vector_units with memos or artifacts to apply strict tag filters.
+            sources.append(QA_Source(
+                memos_uid=unit.memo_uid,
+                content_excerpt=unit.chunk_text[:100] + "...",
+                tags=[] # Tag fetching is deferred
+            ))
+            context_parts.append(f"Source (Memo UID {unit.memo_uid}):\n{unit.chunk_text}")
+            
+        context_text = "\n\n---\n\n".join(context_parts)
+        
+        assembled = f"{request.system_prompt}\n\n[References Context]\n{context_text}\n\n[User Query]\n{request.query}"
+        
+        return GeneratePromptResponse(
+            assembled_prompt=assembled,
+            retrieved_count=len(results),
+            sources=sources,
+        )
+
+
+    return app
 
 def _job_view(job: Job) -> JobView:
     return JobView(
@@ -1178,6 +1345,42 @@ def _update_app_yaml_reminders(
         "confidence_threshold": confidence_threshold,
         "request_timeout_seconds": request_timeout_seconds,
     }
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    with config_path.open("w", encoding="utf-8") as file:
+        yaml.safe_dump(raw, file, allow_unicode=True, sort_keys=False)
+
+
+def _update_app_yaml_vector_search(
+    *,
+    config_path: Path,
+    enabled: bool,
+    api_key_env: str,
+    base_url: str,
+    model: str,
+) -> None:
+    raw = _read_yaml(config_path) if config_path.exists() else {}
+    raw["vector_search"] = {
+        "enabled": enabled,
+        "api_key_env": api_key_env,
+        "base_url": base_url,
+        "model": model,
+    }
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    with config_path.open("w", encoding="utf-8") as file:
+        yaml.safe_dump(raw, file, allow_unicode=True, sort_keys=False)
+
+
+def _update_app_yaml_memos(
+    *,
+    config_path: Path,
+    base_url_env: str,
+    api_token_env: str,
+) -> None:
+    raw = _read_yaml(config_path) if config_path.exists() else {}
+    memos_section = raw.get("memos", {})
+    memos_section["base_url_env"] = base_url_env
+    memos_section["api_token_env"] = api_token_env
+    raw["memos"] = memos_section
     config_path.parent.mkdir(parents=True, exist_ok=True)
     with config_path.open("w", encoding="utf-8") as file:
         yaml.safe_dump(raw, file, allow_unicode=True, sort_keys=False)

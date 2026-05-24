@@ -263,7 +263,10 @@ ADMIN_UI_HTML = """<!doctype html>
         </svg>
         <h1 style="margin: 0;">Prism (棱镜) Memosima Admin</h1>
       </div>
-      <div class="muted">Sidecar 管理配置</div>
+      <div class="muted" style="display: flex; align-items: center; gap: 8px;">
+        <span>Sidecar 管理配置</span>
+        <span id="version-display" style="font-size: 11px; font-family: monospace; background: var(--codebg); color: var(--muted); border: 1px solid var(--border); padding: 1px 6px; border-radius: 4px;"></span>
+      </div>
     </div>
     <div id="connection" class="panel">
       <div class="token-row">
@@ -1030,6 +1033,10 @@ async function loadHealth() {
   try {
     const data = await requestJson("/health");
     healthOutput.textContent = JSON.stringify(data, null, 2);
+    const verDisp = document.getElementById("version-display");
+    if (verDisp && data.version) {
+      verDisp.textContent = `v${data.version}` + (data.commit_hash ? ` (${data.commit_hash})` : "");
+    }
     setNotice("健康状态已刷新", "ok");
   } catch (error) {
     healthOutput.textContent = String(error.message || error);

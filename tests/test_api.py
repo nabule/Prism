@@ -27,6 +27,7 @@ def test_health_reports_model_without_exposing_key(tmp_path, monkeypatch):
     assert data["models_default_provider"] == "openrouter"
     assert data["models_default_model"] == "google/gemma-3-27b-it"
     assert data["models_api_key_present"] is True
+    assert "commit_hash" in data
     assert "secret-key" not in response.text
 
 

@@ -9,7 +9,7 @@
 > 🌈 **Prism (棱镜)：光的折射与思维的绚烂**
 >
 > 无论是闪现的灵感、会议的摘要，还是随手拍下的网页，您丢进 Memos 的原始笔记，就像一束朴素、零散的 **白光**。
-> 当这束光穿过 **Prism** 时，会被 AI 优雅地折射，化作清晰的层级大纲、精准的分级业务标签、高品质的待办事项与触手可及 of 系统化知识。
+> 当这束光穿过 **Prism** 时，会被 AI 优雅地折射，化作清晰的层级大纲、精准的分级业务标签、高品质的待办事项与触手可及的 系统化知识。
 > **零碎的想法进去了，出来的是一抹绚丽的知识彩虹。**
 
 **Prism (棱镜)** 是一款专为 [Memos](https://github.com/usememos/memos) 深度定制开发的 **个人离线 AI 知识库 Sidecar 伴生系统**。
@@ -20,7 +20,7 @@
 
 ## 💡 为什么需要 Prism？解决哪些核心痛点？
 
-在日常使用零碎备忘（如 Memos、Flomo）记录知识时，个人用户通常会遇到以下三个重大痛点，而 **Prism** 正是为此量身定制的解药：
+在日常使用零碎备忘（如 Memos、Flomo）记录知识时，个人用户通常会遇到以下四大痛点，而 **Prism** 正是为此量身定制的解药：
 
 ### 痛点 1：碎片化信息变成“数字坟墓”
 * **现状**：随手记录了大量一两句话的笔记、会议纪要或灵感，由于缺少时间整理和规范的标题，几天后便被淹没在信息洪流中，无法重用。
@@ -36,7 +36,7 @@
 * **现状**：在笔记中上传了 Draw.io 流程图或思维导图 JSON 作为附件。普通的文本搜索工具根本无法读取其内部的文字节点，导致这部分重度知识彻底“失联”。
 * **Prism 方案 (100% 本地离线高保真解析)**：
   - **Draw.io 解析**：本地使用 zlib 自动解密还原 base64 字节流并解析 XML 树，提取所有图形节点的文本，过滤多余 HTML，秒转干净 Markdown 列表。
-  - **Mind Elixir 脑图**：通过递归遍历 JSON 节点树，在微秒级内转化为带缩进的 Markdown 大纲大纲。
+  - **Mind Elixir 脑图**：通过递归遍历 JSON 节点树，在微秒级内转化为带缩进的 Markdown 大纲。
   - **100% 离线隐私**：这两种解析不需要向任何第三方大模型上传文件，完全在您的本地沙箱执行，零 Token 成本，彻底阻绝隐私泄露。
 
 ### 痛点 4：隐私安全与大模型开销冲突 ( RAG )
@@ -82,7 +82,7 @@ bash <(curl -s -L https://raw.githubusercontent.com/nabule/Prism/master/deploy.s
 
 ---
 
-## ⚡ 极速本地实机开发热重载配置 (P5 特性)
+## ⚡ 极速本地实机开发热重载配置
 
 如果您是开发者，想要对源码进行快速二次开发和调试，**绝不需要反复进行昂贵的 `docker compose build` 镜像编译**：
 * 映射本地源码 `./src` 到容器内 `/app/src`。
@@ -104,7 +104,7 @@ bash <(curl -s -L https://raw.githubusercontent.com/nabule/Prism/master/deploy.s
 1. **目录隔离**：为每个用户在宿主机创建独立的部署工作目录，例如 `/data/prism_userA` 和 `/data/prism_userB`，下载相同的 `deploy.sh`。
 2. **配置隔离**：在各自的 `.env` 中填写该用户专属的 `MEMOS_API_TOKEN`、`SIDECAR_ADMIN_TOKEN` 以及大模型的 API Key。
 3. **端口隔离**：通过环境变量或 `.env` 修改各自网关对外暴露的 `GATEWAY_PORT` 端口（例如用户 A 的网关暴露端口为 `8080`，用户 B 为 `8081`）。
-4. **统一反代**（可选）：使用宿主机的 Nginx 或 Caddy 将不同子域名（如 `user-a.memos.example.com` 和 `user-b.memos.example.com`）分别反向代理到对应的 `GATEWAY_PORT`，即刻享受到安全、物理层完全物理防泄露的 SaaS 级多租户个人 AI 知识库体验。
+4. **统一反代**（可选）：使用宿主机的 Nginx 或 Caddy 将不同子域名（如 `user-a.memos.example.com` 和 `user-b.memos.example.com`）分别反向代理到对应的 `GATEWAY_PORT`，即刻享受到安全、物理层完全隔离防泄露的 SaaS 级多租户个人 AI 知识库体验。
 
 ---
 

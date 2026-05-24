@@ -1,4 +1,4 @@
-# Prism (棱镜) - 个人专属 AI 知识折射库 Sidecar
+# Prism (棱镜) - 个人专属 AI 知识折射库
 
 <p align="center">
   <img src="./Prism.png" alt="Prism Logo" width="240" />

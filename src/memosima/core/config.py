@@ -94,8 +94,8 @@ class AppConfig:
 
     @classmethod
     def load(cls, path: str | Path = "config/app.yaml") -> "AppConfig":
-        load_env_file()
         config_path = Path(path)
+        load_env_file(config_path.parent / ".env.local", override=True)
         raw = _read_yaml(config_path)
         app = raw.get("app", {})
         database = raw.get("database", {})

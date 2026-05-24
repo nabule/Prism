@@ -563,6 +563,15 @@ def create_app(
         app.state.store.ensure_workspace(config.workspace_id)
         return result
 
+    @app.post(
+        "/admin/database/reset",
+        dependencies=[Depends(require_admin)],
+    )
+    async def reset_database() -> dict[str, str]:
+        store.reset()
+        store.ensure_workspace(config.workspace_id)
+        return {"status": "ok", "message": "Database has been reset"}
+
     @app.get(
         "/admin/tag-candidates",
         response_model=TagCandidatesResponse,

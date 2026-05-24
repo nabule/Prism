@@ -43,11 +43,13 @@ class Worker:
         store: Store,
         models_config: ModelsConfig | None = None,
         models_path: str = "config/models.yaml",
+        config_path: str = "config/app.yaml",
     ):
         self.config = config
         self.store = store
         self.models_config = models_config
         self.models_path = models_path
+        self.config_path = config_path
 
     async def run_once(self) -> bool:
         if await self._send_due_reminders_once():
@@ -73,6 +75,10 @@ class Worker:
 
     async def run_forever(self) -> None:
         while True:
+            self.config = AppConfig.load(self.config_path)
+            if self.models_config is not None:
+                self.models_config = ModelsConfig.load(self.models_path)
+                
             processed = await self.run_once()
             if not processed:
                 await asyncio.sleep(self.config.worker_poll_interval_seconds)
@@ -923,7 +929,7 @@ async def _run(args: argparse.Namespace) -> None:
     store = Store(config.database_path)
     store.migrate()
     store.ensure_workspace(config.workspace_id)
-    worker = Worker(config, store, models, models_path=args.models)
+    worker = Worker(config, store, models, models_path=args.models, config_path=args.config)
     if args.once:
         await worker.run_once()
     else:

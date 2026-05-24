@@ -61,6 +61,46 @@
 
 ---
 
+
+## 🔌 依赖的外部服务
+
+Prism 需要以下外部服务才能正常运行核心 AI 功能。所有 API Key 通过环境变量注入，不写入配置文件或 Git 仓库。
+
+### 🧠 推理大模型（必需）
+
+AI 整理、标签总结、提醒抽取等核心功能依赖 OpenAI-compatible 推理大模型，默认使用 **DeepSeek**。支持以下 provider，可在 `config/models.yaml` 中切换或在管理页面实时修改：
+
+| Provider | 默认模型 | 环境变量 | Base URL |
+| :--- | :--- | :--- | :--- |
+| **DeepSeek**（默认） | `deepseek-v4-flash` | `DEEPSEEK_API_KEY` | `https://api.deepseek.com` |
+| OpenRouter | `google/gemma-3-27b-it` | `OPENROUTER_API_KEY` | `https://openrouter.ai/api/v1` |
+|  | `` | `` | `` |
+| OpenAI | `gpt-4o-mini` | `OPENAI_API_KEY` | `https://api.openai.com/v1` |
+
+> **至少配置一个 provider 的 API Key**，否则 AI 整理功能无法工作。推荐优先使用 DeepSeek（性价比高）或 OpenAI（准确性高）。
+
+### 📐 嵌入大模型（可选）
+
+向量语义检索功能依赖嵌入模型，当前默认关闭（`vector_search.enabled: false`）。如需启用：
+
+| Provider | 模型 | 环境变量 | Base URL |
+| :--- | :--- | :--- | :--- |
+| SiliconFlow | `BAAI/bge-m3` | `SILICONFLOW_API_KEY` | `https://api.siliconflow.cn/v1` |
+
+在 `config/app.yaml` 中将 `vector_search.enabled` 设为 `true` 并配置 `SILICONFLOW_API_KEY` 即可开启向量检索与 RAG 增强问答。
+
+### 📄 MinerU 文档解析（Office/PDF 附件）
+
+`.doc`、`.docx`、`.xls`、`.xlsx`、`.ppt`、`.pptx`、`.pdf` 附件通过 MinerU 服务转为 Markdown 参与 AI 整理：
+
+| 配置项 | 值 |
+| :--- | :--- |
+| 环境变量 | `MINERU_API_TOKEN` |
+| Base URL | `https://mineru.net` |
+| 模型版本 | `vlm`（可在 `config/app.yaml` 中修改 `document_parser.mineru_model_version`） |
+
+> 不配置 `MINERU_API_TOKEN` 时，Office/PDF 附件将无法解析，但不影响纯文本、Draw.io、Mind Elixir 附件的处理。
+
 ## 📦 Docker 容器化一键部署与升级
 
 为了保障在多租户 SaaS 部署、本地家庭网关等生产环境下的极简运维，Prism 现已支持 GitHub Actions 自动编译构建，并配备了完全自包含的一键部署脚本：
@@ -128,16 +168,101 @@ npx nx run sidecar:probe-memos
 
 ---
 
+
+## ⚙️ 配置项完整说明
+
+所有配置通过三类文件管理，优先级：**环境变量 > `config/.env.local` > `config/*.yaml`**。
+
+### 环境变量（`.env`）
+
+部署前复制 `.env.example` 为 `.env` 并填写真实值。切勿提交包含密钥的 `.env` 到 Git。
+
+| 变量 | 必需 | 说明 |
+| :--- | :--- | :--- |
+| `SIDECAR_ADMIN_TOKEN` | ✅ | Sidecar 管理接口 Bearer 令牌，建议 16 字节随机字符串 |
+| `MEMOS_BASE_URL` | ✅ | Memos 服务地址（如 `http://localhost:5230` 或 Docker 内 `http://memos:5230`） |
+| `MEMOS_API_TOKEN` | ✅ | Memos Personal Access Token，推荐用探针生成长期 PAT |
+| `MEMOS_WEBHOOK_URL` | ❌ | Memos 回调 Sidecar 的公网 URL（poll 模式下无需配置） |
+| `DEEPSEEK_API_KEY` | ✅① | DeepSeek API Key（默认推理 provider） |
+| `OPENROUTER_API_KEY` | ❌ | OpenRouter API Key（备选推理 provider） |
+| `` | ❌ |  API Key（备选推理 provider） |
+| `OPENAI_API_KEY` | ❌ | OpenAI API Key（备选推理 provider） |
+| `MINERU_API_TOKEN` | ❌ | MinerU 文档解析 API Token（不配则 Office/PDF 附件跳过解析） |
+| `SILICONFLOW_API_KEY` | ❌ | SiliconFlow API Key（向量检索，默认关闭） |
+| `REMINDER_WEBHOOK_URL` | ❌ | 提醒通知出口（Bark 兼容接口，如 `https://api.day.app/your-key/`） |
+
+> ① 至少配置一个推理 provider 的 Key，推荐 `DEEPSEEK_API_KEY`。
+
+### `config/app.yaml` — 应用主配置
+
+| 配置路径 | 默认值 | 说明 |
+| :--- | :--- | :--- |
+| `app.workspace_id` | `default` | 工作区标识 |
+| `app.public_base_url` | `http://localhost:8080` | Sidecar 对外公开地址 |
+| `database.path` | `data/sidecar/sidecar.db` | SQLite 数据库路径 |
+| `memos.ingestion_mode` | `poll` | Memo 入口模式：`poll`（轮询）、`webhook`、`both` |
+| `memos.poll_page_size` | `20` | 每次轮询拉取 memo 数量 |
+| `memos.request_timeout_seconds` | `15` | Memos API 请求超时 |
+| `memos.show_candidate_tags` | `false` | 是否在 Memos Web 中显示待审核标签 |
+| `memos.admin_entry_enabled` | `true` | 是否自动维护管理入口 memo |
+| `memos.admin_entry_title` | `Memosima 管理入口` | 管理入口 memo 标题 |
+| `memos.admin_entry_visibility` | `PRIVATE` | 管理入口可见性：`PRIVATE` / `PUBLIC` |
+| `document_parser.provider` | `mineru` | 文档解析 provider |
+| `document_parser.base_url` | `https://mineru.net` | MinerU API 地址 |
+| `document_parser.mineru_model_version` | `vlm` | MinerU 模型版本 |
+| `document_parser.language` | `ch` | 解析语言 |
+| `document_parser.timeout_seconds` | `60` | 解析超时 |
+| `document_parser.enable_table` | `true` | 启用表格识别 |
+| `document_parser.enable_formula` | `true` | 启用公式识别 |
+| `document_parser.is_ocr` | `false` | 是否启用 OCR |
+| `worker.poll_interval_seconds` | `2` | Worker 轮询新任务间隔 |
+| `worker.max_attempts` | `3` | 任务最大重试次数 |
+| `worker.create_probe_comment` | `false` | 是否在 Memos 中写入探针注释 |
+| `reminders.enabled` | `true` | 是否启用提醒功能 |
+| `reminders.trigger_tag` | `#提醒` | 提醒触发标签 |
+| `reminders.confidence_threshold` | `0.75` | 提醒置信度阈值 |
+| `vector_search.enabled` | `false` | 是否启用向量检索 |
+| `vector_search.model` | `BAAI/bge-m3` | 嵌入模型名称 |
+| `limits.max_attachment_mb` | `50` | 附件大小上限 (MB) |
+| `limits.max_ai_active_tags` | `5` | AI 单次最多使用正式标签数 |
+| `limits.max_ai_candidate_tags` | `2` | AI 单次最多提议候选标签数 |
+
+### `config/models.yaml` — 大模型 Provider 配置
+
+定义可用的推理大模型 provider，结构如下（以 DeepSeek 为例）：
+
+```yaml
+default_provider: deepseek
+providers:
+  deepseek:
+    base_url: https://api.deepseek.com
+    api_key_env: DEEPSEEK_API_KEY        # 从环境变量读取 Key
+    default_model: deepseek-v4-flash
+    temperature: 0.2
+    max_tokens: null
+    response_format: json_object
+```
+
+可在管理页面 `/admin/ui#models` 实时切换 provider 和模型，保存后非机密参数写回 `config/models.yaml`，Key 写入 `config/.env.local`（不提交 Git）。
+
+### `config/prompts.yaml` — AI 提示词模板
+
+定义 `organize_memo`（整理 memo）、`tag_summary`（标签总结）、`reminder_extraction`（提醒提取）的 system/user 提示词，支持 `{active_tags}`、`{content}`、`{tag}` 等占位符。可在管理页面 `/admin/ui#prompts` 在线编辑并保存。
+
+### `config/taxonomy.yaml` — 标签分类体系
+
+定义系统标签、正式业务标签、别名映射和禁用标签。详见 [配置参数说明手册](https://nabule.github.io/memosima/配置说明.html)。
+
 ## 📄 关联项目文档
 
-* [普通用户工作流指南 🌐](docs/普通用户使用手册.html) - 指引普通用户如何将 Prism 折射库无缝融入日常记录中，说明各功能用途与工作流结合。
-* [使用手册 (部署与运维) 🌐](docs/使用手册.html) - 系统管理员多容器拓扑部署、极速开发热载、与 Nx 任务管理指南。
-* [配置参数说明手册 🌐](docs/配置说明.html) - `app.yaml` 静态配置体系及环境变量安全秘钥管理指引。
+* [普通用户工作流指南 🌐](https://nabule.github.io/memosima/普通用户使用手册.html) - 指引普通用户如何将 Prism 折射库无缝融入日常记录中，说明各功能用途与工作流结合。
+* [使用手册 (部署与运维) 🌐](https://nabule.github.io/memosima/使用手册.html) - 系统管理员多容器拓扑部署、极速开发热载、与 Nx 任务管理指南。
+* [配置参数说明手册 🌐](https://nabule.github.io/memosima/配置说明.html) - `app.yaml` 静态配置体系及环境变量安全秘钥管理指引。
 
 ### 💻 架构、设计与探针记录
-* [开发运行说明 🌐](docs/开发运行说明.html) - 面向二次开发人员的本地调试、API 路由、以及核心架构说明。
-* [API 探针记录 🌐](docs/API探针记录.html) - 针对 Memos 官方 API 接口的捕获、分析与探针运行测试结论。
-* [PRD 个人 AI 知识库系统说明书 🌐](docs/PRD-个人AI知识库系统.html) - 系统底层需求规格说明书与设计愿景。
-* [基于 Memos 详细设计与开发计划 🌐](docs/基于-Memos-的个人-AI-知识库系统详细设计与开发计划.html) - 后台同步、AI 归档的详细数据库及生命周期设计。
-* [开发计划与验收标准 🌐](docs/开发计划与验收标准-个人AI知识库系统.html) - 项目里程碑、验收要点与交付规范记录。
-* [技术架构设计 🌐](docs/技术架构设计-个人AI知识库系统.html) - Prism 全链路时序、并发、持久化底层架构。
+* [开发运行说明 🌐](https://nabule.github.io/memosima/开发运行说明.html) - 面向二次开发人员的本地调试、API 路由、以及核心架构说明。
+* [API 探针记录 🌐](https://nabule.github.io/memosima/API探针记录.html) - 针对 Memos 官方 API 接口的捕获、分析与探针运行测试结论。
+* [PRD 个人 AI 知识库系统说明书 🌐](https://nabule.github.io/memosima/PRD-个人AI知识库系统.html) - 系统底层需求规格说明书与设计愿景。
+* [基于 Memos 详细设计与开发计划 🌐](https://nabule.github.io/memosima/基于-Memos-的个人-AI-知识库系统详细设计与开发计划.html) - 后台同步、AI 归档的详细数据库及生命周期设计。
+* [开发计划与验收标准 🌐](https://nabule.github.io/memosima/开发计划与验收标准-个人AI知识库系统.html) - 项目里程碑、验收要点与交付规范记录。
+* [技术架构设计 🌐](https://nabule.github.io/memosima/技术架构设计-个人AI知识库系统.html) - Prism 全链路时序、并发、持久化底层架构。

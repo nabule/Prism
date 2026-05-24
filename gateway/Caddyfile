@@ -1,4 +1,9 @@
 :80 {
+	handle /docs/* {
+		root * /usr/share/caddy
+		file_server
+	}
+
 	handle /admin/* {
 		reverse_proxy sidecar:8080
 	}

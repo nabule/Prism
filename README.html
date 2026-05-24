@@ -111,8 +111,6 @@ curl http://localhost:8080/health</code></pre>
     <li>Sidecar 容器启动命令已加载 <code>--reload --reload-dir /app/src</code>，一旦检测到本地代码修改，容器 Web 服务将在 100 毫秒内热重载生效，<strong>无需重复构建镜像</strong>。</li>
   </ul>
 
-  <h3>🔒 4. Xget 镜像拉取加速保障 (Rule 5)</h3>
-  <p>为了保障在任何复杂网络环境下依然能实现镜像的秒级拉取，<code>Dockerfile</code>、<code>docker-compose.yml</code> 中的所有第三方公共镜像（如 Caddy、Memos、uv 运行底座等）均已默认配置了 <strong>Xget 加速分发源</strong>（如 <code>xget.your-domain.com/cr/...</code>），无需手动配置加速 Registry 即可畅享极速部署体验。</p>
 
   <h2>持续集成与 Docker 镜像自动发布</h2>
   <p>项目已集成基于 GitHub Actions 的持续集成流水线 <a href=".github/workflows/docker-publish.yml"><code>.github/workflows/docker-publish.yml</code></a>：</p>

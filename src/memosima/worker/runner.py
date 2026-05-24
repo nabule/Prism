@@ -437,7 +437,21 @@ class Worker:
             return None
         models_config = self._load_models_config()
         prompt_template = self._load_prompt_template(job)
-        provider = _provider_for_prompt(models_config, prompt_template)
+        custom_provider = job.payload.get("model_provider")
+        custom_model = job.payload.get("model_name")
+        
+        if custom_provider:
+            if custom_provider in models_config.providers:
+                provider = models_config.providers[custom_provider]
+            else:
+                raise RuntimeError(f"LLM provider is not configured: {custom_provider}")
+        else:
+            provider = _provider_for_prompt(models_config, prompt_template)
+            
+        if custom_model:
+            import dataclasses
+            provider = dataclasses.replace(provider, default_model=custom_model)
+            
         api_key = os.getenv(provider.api_key_env)
         if not api_key:
             return None
@@ -583,6 +597,8 @@ class Worker:
         return {"status": "not_triggered"}
 
     def _load_models_config(self) -> ModelsConfig:
+        if self.models_config is not None:
+            return self.models_config
         self.models_config = ModelsConfig.load(self.models_path)
         return self.models_config
 

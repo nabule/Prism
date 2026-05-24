@@ -160,6 +160,40 @@ class TagSummaryResponse(BaseModel):
     content: str
 
 
+class ReprocessPromptOverride(BaseModel):
+    system: str | None = Field(default=None, max_length=20000)
+    user: str | None = Field(default=None, max_length=20000)
+
+
+class ReprocessMemoRequest(BaseModel):
+    memo_url_or_uid: str = Field(min_length=1, max_length=2000)
+    model_provider: str | None = Field(default=None, max_length=80)
+    model_name: str | None = Field(default=None, max_length=200)
+    prompt_override: ReprocessPromptOverride | None = None
+
+
+class BatchReprocessTagRequest(BaseModel):
+    tag: str = Field(min_length=1, max_length=120)
+    model_provider: str | None = Field(default=None, max_length=80)
+    model_name: str | None = Field(default=None, max_length=200)
+    prompt_override: ReprocessPromptOverride | None = None
+
+
+class ReprocessMemoResponse(BaseModel):
+    job_id: int
+    status: str
+    memo_uid: str
+    old_summaries_deleted: list[str]
+
+
+class BatchReprocessTagResponse(BaseModel):
+    tag: str
+    matched_memo_count: int
+    jobs_created: int
+    job_ids: list[int]
+    old_summaries_deleted_count: int
+
+
 class BackupRestoreResponse(BaseModel):
     restored_database: bool
     restored_configs: bool = False
@@ -532,6 +566,159 @@ def create_app(
         if job is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
         return _job_view(job)
+
+    @app.post(
+        "/admin/jobs/reprocess-memo",
+        response_model=ReprocessMemoResponse,
+        dependencies=[Depends(require_admin)],
+    )
+    async def reprocess_memo(request: ReprocessMemoRequest) -> ReprocessMemoResponse:
+        match = re.search(r"(?:/m/|/memos/)([A-Za-z0-9_-]+)", request.memo_url_or_uid)
+        memo_uid = match.group(1) if match else request.memo_url_or_uid.strip()
+        if not memo_uid:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid Memo URL or UID")
+
+        if not config.memos_base_url or not config.memos_api_token:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Memos not configured")
+        
+        memos_client = MemosClient(
+            base_url=config.memos_base_url,
+            api_token=config.memos_api_token,
+            timeout_seconds=config.memos_timeout_seconds,
+        )
+
+        try:
+            await memos_client.get_memo(memo_uid)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Memo '{memo_uid}' not found on Memos side: {str(exc)}",
+            )
+
+        deleted_summaries: list[str] = []
+        with store.connect() as conn:
+            rows = conn.execute(
+                "SELECT memos_uid FROM memos WHERE source_memo_uid = ? AND type = 'ai_summary'",
+                (memo_uid,),
+            ).fetchall()
+            for row in rows:
+                old_uid = str(row["memos_uid"])
+                try:
+                    await memos_client.delete_memo(old_uid)
+                    deleted_summaries.append(old_uid)
+                except Exception as exc:
+                    LOGGER.warning("Failed to delete old AI summary %s on Memos: %s", old_uid, exc)
+            
+            if deleted_summaries:
+                conn.execute(
+                    f"DELETE FROM memos WHERE memos_uid IN ({','.join(['?'] * len(deleted_summaries))})",
+                    deleted_summaries,
+                )
+                conn.execute("DELETE FROM tag_candidates WHERE source_memo_uid = ?", (memo_uid,))
+                
+        import uuid
+        idempotency_key = f"manual.reprocess:{memo_uid}:{uuid.uuid4().hex[:8]}"
+        payload = {"memo_uid": memo_uid, "manual": True}
+        if request.model_provider:
+            payload["model_provider"] = request.model_provider
+        if request.model_name:
+            payload["model_name"] = request.model_name
+        if request.prompt_override:
+            payload["llm_prompt_override"] = request.prompt_override.model_dump(exclude_none=True)
+
+        job, created = store.create_job(
+            workspace_id=config.workspace_id,
+            job_type="process_memo",
+            idempotency_key=idempotency_key,
+            payload=payload,
+        )
+        
+        return ReprocessMemoResponse(
+            job_id=job.id,
+            status=job.status,
+            memo_uid=memo_uid,
+            old_summaries_deleted=deleted_summaries,
+        )
+
+    @app.post(
+        "/admin/jobs/batch-reprocess-tag",
+        response_model=BatchReprocessTagResponse,
+        dependencies=[Depends(require_admin)],
+    )
+    async def batch_reprocess_tag(request: BatchReprocessTagRequest) -> BatchReprocessTagResponse:
+        if not config.memos_base_url or not config.memos_api_token:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Memos not configured")
+        
+        memos_client = MemosClient(
+            base_url=config.memos_base_url,
+            api_token=config.memos_api_token,
+            timeout_seconds=config.memos_timeout_seconds,
+        )
+
+        memos = await _list_memos_for_tag(
+            memos_client,
+            store=store,
+            workspace_id=config.workspace_id,
+            tag=request.tag,
+            limit=200,
+        )
+
+        if not memos:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No memos found for the specified tag")
+
+        job_ids: list[int] = []
+        old_summaries_deleted_count = 0
+        import uuid
+
+        memo_uids = _memo_uids_from_memos(memos)
+
+        for memo_uid in memo_uids:
+            deleted_summaries: list[str] = []
+            with store.connect() as conn:
+                rows = conn.execute(
+                    "SELECT memos_uid FROM memos WHERE source_memo_uid = ? AND type = 'ai_summary'",
+                    (memo_uid,),
+                ).fetchall()
+                for row in rows:
+                    old_uid = str(row["memos_uid"])
+                    try:
+                        await memos_client.delete_memo(old_uid)
+                        deleted_summaries.append(old_uid)
+                    except Exception as exc:
+                        LOGGER.warning("Failed to delete old AI summary %s on Memos: %s", old_uid, exc)
+                
+                if deleted_summaries:
+                    conn.execute(
+                        f"DELETE FROM memos WHERE memos_uid IN ({','.join(['?'] * len(deleted_summaries))})",
+                        deleted_summaries,
+                    )
+                    conn.execute("DELETE FROM tag_candidates WHERE source_memo_uid = ?", (memo_uid,))
+                    old_summaries_deleted_count += len(deleted_summaries)
+
+            idempotency_key = f"manual.reprocess:{memo_uid}:{uuid.uuid4().hex[:8]}"
+            payload = {"memo_uid": memo_uid, "manual": True}
+            if request.model_provider:
+                payload["model_provider"] = request.model_provider
+            if request.model_name:
+                payload["model_name"] = request.model_name
+            if request.prompt_override:
+                payload["llm_prompt_override"] = request.prompt_override.model_dump(exclude_none=True)
+
+            job, created = store.create_job(
+                workspace_id=config.workspace_id,
+                job_type="process_memo",
+                idempotency_key=idempotency_key,
+                payload=payload,
+            )
+            job_ids.append(job.id)
+
+        return BatchReprocessTagResponse(
+            tag=request.tag,
+            matched_memo_count=len(memos),
+            jobs_created=len(job_ids),
+            job_ids=job_ids,
+            old_summaries_deleted_count=old_summaries_deleted_count,
+        )
 
     @app.get(
         "/admin/backups/download",

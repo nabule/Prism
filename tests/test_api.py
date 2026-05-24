@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import json
 import zipfile
+import pytest
 
 from fastapi.testclient import TestClient
 
@@ -726,3 +727,150 @@ def test_admin_tag_summary_returns_bad_gateway_when_llm_fails(tmp_path, monkeypa
 
     assert response.status_code == 502
     assert response.json()["detail"] == "LLM tag summary request failed"
+
+
+@pytest.mark.asyncio
+async def test_reprocess_memo_endpoint(tmp_path, monkeypatch):
+    app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
+    models_path = write_yaml(tmp_path / "models.yaml", models_config_text())
+    monkeypatch.setenv("SIDECAR_ADMIN_TOKEN", "admin-token")
+    
+    deleted_memos = []
+
+    class FakeMemosClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def get_memo(self, memo_uid):
+            return {"name": f"memos/{memo_uid}", "content": "Original content"}
+
+        async def delete_memo(self, memo_uid):
+            deleted_memos.append(memo_uid)
+
+    monkeypatch.setattr("memosima.api.app.MemosClient", FakeMemosClient)
+
+    client = TestClient(create_app(str(app_path), str(models_path)))
+    store = client.app.state.store
+    
+    # Setup database with existing memos
+    store.upsert_memo(
+        workspace_id="default",
+        memos_uid="original-1",
+        memo_type="original",
+        status="synced",
+    )
+    store.upsert_memo(
+        workspace_id="default",
+        memos_uid="summary-1",
+        memo_type="ai_summary",
+        source_memo_uid="original-1",
+        status="created",
+    )
+
+    # 1. Test UID extraction and database deletion
+    response = client.post(
+        "/admin/jobs/reprocess-memo",
+        headers={"Authorization": "Bearer admin-token"},
+        json={
+            "memo_url_or_uid": "http://localhost:8080/m/original-1",
+            "model_provider": "deepseek",
+            "model_name": "deepseek-chat",
+            "prompt_override": {
+                "system": "Custom System",
+                "user": "Custom User"
+            }
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["memo_uid"] == "original-1"
+    assert data["old_summaries_deleted"] == ["summary-1"]
+    assert deleted_memos == ["summary-1"]
+    
+    # 2. Check if new job exists
+    job = store.claim_next_job()
+    assert job is not None
+    assert job.type == "process_memo"
+    assert job.payload["memo_uid"] == "original-1"
+    assert job.payload["model_provider"] == "deepseek"
+    assert job.payload["model_name"] == "deepseek-chat"
+    assert job.payload["llm_prompt_override"] == {"system": "Custom System", "user": "Custom User"}
+    
+    # Check that SQLite is cleaned up
+    summary_record = store.list_memos(workspace_id="default", memo_type="ai_summary")
+    assert len(summary_record) == 0
+
+
+@pytest.mark.asyncio
+async def test_batch_reprocess_tag_endpoint(tmp_path, monkeypatch):
+    app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
+    models_path = write_yaml(tmp_path / "models.yaml", models_config_text())
+    monkeypatch.setenv("SIDECAR_ADMIN_TOKEN", "admin-token")
+    
+    deleted_memos = []
+
+    class FakeMemosClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def list_memos(self, *args, **kwargs):
+            return {
+                "memos": [
+                    {
+                        "name": "memos/original-tag-1",
+                        "content": "Original memo with tag #项目/数管",
+                        "tags": ["项目/数管"],
+                    }
+                ],
+                "nextPageToken": ""
+            }
+
+        async def delete_memo(self, memo_uid):
+            deleted_memos.append(memo_uid)
+
+    monkeypatch.setattr("memosima.api.app.MemosClient", FakeMemosClient)
+
+    client = TestClient(create_app(str(app_path), str(models_path)))
+    store = client.app.state.store
+    
+    # Setup old summary
+    store.upsert_memo(
+        workspace_id="default",
+        memos_uid="original-tag-1",
+        memo_type="original",
+        status="synced",
+    )
+    store.upsert_memo(
+        workspace_id="default",
+        memos_uid="old-summary-tag-1",
+        memo_type="ai_summary",
+        source_memo_uid="original-tag-1",
+        status="created",
+    )
+
+    response = client.post(
+        "/admin/jobs/batch-reprocess-tag",
+        headers={"Authorization": "Bearer admin-token"},
+        json={
+            "tag": "#项目",
+            "model_provider": "deepseek",
+            "model_name": "deepseek-chat"
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["tag"] == "#项目"
+    assert data["matched_memo_count"] == 1
+    assert data["jobs_created"] == 1
+    assert data["old_summaries_deleted_count"] == 1
+    assert deleted_memos == ["old-summary-tag-1"]
+
+    # Verify job created in DB
+    job = store.claim_next_job()
+    assert job is not None
+    assert job.payload["memo_uid"] == "original-tag-1"
+    assert job.payload["model_provider"] == "deepseek"
+    assert job.payload["model_name"] == "deepseek-chat"
+

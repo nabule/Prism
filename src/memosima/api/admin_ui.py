@@ -290,6 +290,7 @@ ADMIN_UI_HTML = """<!doctype html>
     <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="memos">Memos 同步</button>
     <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="backup">备份</button>
     <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="qa">QA 离线问答</button>
+    <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="reprocess">重新整理</button>
   </nav>
 
   <section class="tab-panel active" data-panel="overview">
@@ -774,6 +775,80 @@ ADMIN_UI_HTML = """<!doctype html>
       </div>
     </div>
   </section>
+
+  <section class="tab-panel" data-panel="reprocess">
+    <div class="grid">
+      <div class="panel stack">
+        <h2>Memo 重新整理与批量处理</h2>
+        
+        <div style="border-bottom: 1px solid var(--border); padding-bottom: 16px; margin-bottom: 16px;">
+          <h3>单条 Memo 重新整理</h3>
+          <div class="field">
+            <label for="reprocessUrlInput">粘贴 Memos URL 或输入 Memo UID</label>
+            <input type="text" id="reprocessUrlInput" placeholder="例如：http://localhost:8080/m/abc 或直接输入 abc" autocomplete="off">
+            <div style="margin-top: 6px; display: flex; align-items: center; gap: 8px;">
+              <span class="badge" id="reprocessMemoUidBadge" style="display: none; background: var(--accent); color: #fff; padding: 3px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600;">解析到的 ID: <span id="reprocessMemoUidText"></span></span>
+            </div>
+            <div class="muted" style="margin-top: 4px;">输入时，前端会自动通过正则提取 Memo 的 UID 编码，并在重新整理前物理删除对应的旧 AI 整理卡片。</div>
+          </div>
+          <div class="toolbar" style="margin-top: 10px;">
+            <button id="btnReprocessSingle" class="primary" type="button">删除旧整理卡片并重生成</button>
+          </div>
+        </div>
+
+        <div>
+          <h3>按标签批量重新整理</h3>
+          <div class="field" style="position: relative;">
+            <label for="reprocessTagInput">选择业务标签 (支持模糊/拼音搜索)</label>
+            <div class="pills-container" id="reprocessTagContainer">
+              <input type="text" id="reprocessTagInput" class="pill-input" placeholder="输入标签前缀，如 #项目..." autocomplete="off">
+              <div id="reprocessTagAutocomplete" class="autocomplete-list"></div>
+            </div>
+            <div class="muted" style="margin-top: 4px;">模糊匹配将自动级联（包含子标签，如输入 #项目 会级联处理 #项目/数管 等）。</div>
+          </div>
+          <div class="toolbar" style="margin-top: 10px;">
+            <button id="btnReprocessTag" class="primary" type="button">批量删除旧卡片并重整理</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel stack">
+        <h2>LLM 模型与提示词定制</h2>
+        <div class="field">
+          <label for="reprocessProvider">选择大模型提供商 (LLM Provider)</label>
+          <select id="reprocessProvider">
+            <option value="">(使用全局默认)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="reprocessModelName">模型名称 (Model Name)</label>
+          <input type="text" id="reprocessModelName" placeholder="例如：deepseek-chat" autocomplete="off">
+        </div>
+        
+        <details class="field" style="margin-top: 10px;">
+          <summary style="cursor: pointer; color: var(--accent); font-weight: 600; font-size: 0.85rem; user-select: none;">展开修改定制提示词 (Prompt Overrides)</summary>
+          <div style="margin-top: 10px;" class="stack">
+            <div>
+              <label for="reprocessSystemPrompt">系统提示词 (System Prompt)</label>
+              <textarea id="reprocessSystemPrompt" class="prompt" spellcheck="false" placeholder="留空使用系统默认提示词..."></textarea>
+            </div>
+            <div>
+              <label for="reprocessUserPrompt">用户提示词 (User Prompt)</label>
+              <textarea id="reprocessUserPrompt" class="prompt" spellcheck="false" placeholder="留空使用系统默认提示词..."></textarea>
+            </div>
+          </div>
+        </details>
+
+        <div style="border-top: 1px solid var(--border); padding-top: 16px; margin-top: 10px;">
+          <h3>执行状态与日志</h3>
+          <pre id="reprocessLog" style="max-height: 200px; font-size: 0.8rem; background: var(--codebg);">等待操作...</pre>
+          <div id="jumpToJobsContainer" style="display: none; margin-top: 10px;">
+            <button id="btnJumpToJobs" class="primary" type="button">查看任务详细日志 ➔</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
 </main>
 
 <dialog id="promptDialog">
@@ -848,7 +923,8 @@ const hashPanelMap = {
   backup: { panel: "backup" },
   memos: { panel: "memos" },
   "vector-search": { panel: "vector-search" },
-  qa: { panel: "qa" }
+  qa: { panel: "qa" },
+  reprocess: { panel: "reprocess" }
 };
 
 function setNotice(message, kind = "") {
@@ -987,6 +1063,13 @@ async function loadPrompts() {
     tagSummaryUser.value = data.tag_summary.user;
     reminderSystem.value = data.reminder_extraction.system;
     reminderUser.value = data.reminder_extraction.user;
+    
+    // Pre-populate reprocess prompts
+    const reprocSys = document.getElementById("reprocessSystemPrompt");
+    const reprocUsr = document.getElementById("reprocessUserPrompt");
+    if (reprocSys) reprocSys.value = data.organize_memo.system || "";
+    if (reprocUsr) reprocUsr.value = data.organize_memo.user || "";
+
     setNotice("AI 调用配置已刷新", "ok");
     return data.organize_memo;
   } catch (error) {
@@ -1006,6 +1089,27 @@ async function loadModels() {
       return option;
     }));
     modelProviderSelect.value = data.default_provider;
+    
+    // Populate reprocess LLM providers
+    const reprocProv = document.getElementById("reprocessProvider");
+    if (reprocProv) {
+      reprocProv.replaceChildren(
+        (() => {
+          const opt = document.createElement("option");
+          opt.value = "";
+          opt.textContent = "(使用全局默认)";
+          return opt;
+        })(),
+        ...modelProviders.map((provider) => {
+          const option = document.createElement("option");
+          option.value = provider.name;
+          option.textContent = provider.name;
+          return option;
+        })
+      );
+      reprocProv.value = "";
+    }
+
     renderSelectedModelProvider();
     renderPromptProviderSelects();
     setNotice("大模型配置已刷新", "ok");
@@ -1766,6 +1870,187 @@ btnCopyPrompt.addEventListener("click", () => {
   );
 });
 
+});
+
+/* 重新整理与批量处理逻辑 */
+let selectedReprocessTag = "";
+let reprocessAvailableTags = [];
+
+const reprocessUrlInput = document.getElementById("reprocessUrlInput");
+const reprocessMemoUidBadge = document.getElementById("reprocessMemoUidBadge");
+const reprocessMemoUidText = document.getElementById("reprocessMemoUidText");
+const btnReprocessSingle = document.getElementById("btnReprocessSingle");
+
+const reprocessTagInput = document.getElementById("reprocessTagInput");
+const reprocessTagAutocomplete = document.getElementById("reprocessTagAutocomplete");
+const btnReprocessTag = document.getElementById("btnReprocessTag");
+
+const reprocessProvider = document.getElementById("reprocessProvider");
+const reprocessModelName = document.getElementById("reprocessModelName");
+const reprocessSystemPrompt = document.getElementById("reprocessSystemPrompt");
+const reprocessUserPrompt = document.getElementById("reprocessUserPrompt");
+const reprocessLog = document.getElementById("reprocessLog");
+
+const jumpToJobsContainer = document.getElementById("jumpToJobsContainer");
+const btnJumpToJobs = document.getElementById("btnJumpToJobs");
+
+// 1. URL 自动解析并提取 UID
+reprocessUrlInput.addEventListener("input", () => {
+  const val = reprocessUrlInput.value.trim();
+  if (!val) {
+    reprocessMemoUidBadge.style.display = "none";
+    return;
+  }
+  const match = val.match(/(?:\\/m\\/|\\/memos\\/|^)([A-Za-z0-9_-]+)/);
+  const uid = match ? match[1] : val;
+  if (uid && uid.length >= 6) {
+    reprocessMemoUidText.textContent = uid;
+    reprocessMemoUidBadge.style.display = "inline-flex";
+  } else {
+    reprocessMemoUidBadge.style.display = "none";
+  }
+});
+
+// 2. 标签模糊/首字母匹配联想逻辑
+async function loadReprocessBusinessTags() {
+  try {
+    const tags = await requestJson("/admin/tags/business");
+    if (Array.isArray(tags)) {
+      reprocessAvailableTags = tags;
+    }
+  } catch (e) {
+    console.warn("Failed to load business tags for reprocessing:", e);
+  }
+}
+
+reprocessTagInput.addEventListener("input", () => {
+  const val = reprocessTagInput.value.trim().toLowerCase();
+  if (!val) {
+    reprocessTagAutocomplete.style.display = "none";
+    return;
+  }
+  
+  // 智能模糊过滤
+  const matches = reprocessAvailableTags.filter(t => t.toLowerCase().includes(val));
+  if (matches.length === 0) {
+    reprocessTagAutocomplete.style.display = "none";
+    return;
+  }
+  
+  reprocessTagAutocomplete.replaceChildren(
+    ...matches.map(m => {
+      const div = document.createElement("div");
+      div.className = "autocomplete-item";
+      div.textContent = m;
+      div.onclick = () => {
+        reprocessTagInput.value = m;
+        selectedReprocessTag = m;
+        reprocessTagAutocomplete.style.display = "none";
+      };
+      return div;
+    })
+  );
+  reprocessTagAutocomplete.style.display = "block";
+});
+
+// 点击外部时关闭模糊联想框
+document.addEventListener("click", (e) => {
+  if (e.target !== reprocessTagInput && e.target !== reprocessTagAutocomplete) {
+    reprocessTagAutocomplete.style.display = "none";
+  }
+});
+
+function logReprocess(msg, isError = false) {
+  reprocessLog.textContent = msg;
+  reprocessLog.style.color = isError ? "var(--danger)" : "var(--fg)";
+}
+
+// 3. 单条 Memo 重整理提交
+btnReprocessSingle.addEventListener("click", async () => {
+  const val = reprocessUrlInput.value.trim();
+  if (!val) {
+    logReprocess("错误：请输入 Memos URL 或者是 Memo UID！", true);
+    return;
+  }
+  const match = val.match(/(?:\\/m\\/|\\/memos\\/|^)([A-Za-z0-9_-]+)/);
+  const uid = match ? match[1] : val;
+  
+  btnReprocessSingle.disabled = true;
+  btnReprocessSingle.textContent = "提交中...";
+  logReprocess(`正在分析 Memo '${uid}' 并物理清理旧整理卡片，请稍候...`);
+  
+  try {
+    const payload = {
+      memo_url_or_uid: uid,
+      model_provider: reprocessProvider.value || null,
+      model_name: reprocessModelName.value.trim() || null,
+      prompt_override: {
+        system: reprocessSystemPrompt.value.trim() || null,
+        user: reprocessUserPrompt.value.trim() || null
+      }
+    };
+    
+    const res = await requestJson("/admin/jobs/reprocess-memo", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+    
+    logReprocess(`🎉 成功拉起重新整理任务！\n\n- 任务 ID: ${res.job_id}\n- 任务状态: ${res.status} (已进入队列)\n- 删除的旧 AI 整理卡片: ${res.old_summaries_deleted.join(", ") || "无"}\n\n后台 Worker 正在并发重新分析中，稍后可在 Memos 查看！`);
+    jumpToJobsContainer.style.display = "block";
+  } catch (err) {
+    logReprocess(`错误：${err.message || err}`, true);
+  } finally {
+    btnReprocessSingle.disabled = false;
+    btnReprocessSingle.textContent = "删除旧整理卡片并重生成";
+  }
+});
+
+// 4. 标签批量重新整理提交
+btnReprocessTag.addEventListener("click", async () => {
+  const tag = reprocessTagInput.value.trim();
+  if (!tag) {
+    logReprocess("错误：请选择需要批量重新整理的业务标签！", true);
+    return;
+  }
+  
+  if (!confirm(`⚠️ 极其重要提示：\n\n确认要批量处理标签 '${tag}' 下的所有 Memos 吗？\n这将会物理删除所有相关的旧 AI 整理卡片，并生成全新整理计划任务！`)) {
+    return;
+  }
+  
+  btnReprocessTag.disabled = true;
+  btnReprocessTag.textContent = "批量任务提交中...";
+  logReprocess(`正在查询标签 '${tag}' 级联匹配的所有 Memo，并执行历史数据清理中...`);
+  
+  try {
+    const payload = {
+      tag: tag,
+      model_provider: reprocessProvider.value || null,
+      model_name: reprocessModelName.value.trim() || null,
+      prompt_override: {
+        system: reprocessSystemPrompt.value.trim() || null,
+        user: reprocessUserPrompt.value.trim() || null
+      }
+    };
+    
+    const res = await requestJson("/admin/jobs/batch-reprocess-tag", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+    
+    logReprocess(`🎉 标签批量重整理任务注册成功！\n\n- 匹配到的 Memo 记录数: ${res.matched_memo_count}\n- 成功启动重新整理任务数: ${res.jobs_created}\n- 物理清理历史卡片数: ${res.old_summaries_deleted_count}\n- 任务 ID 列表: ${res.job_ids.join(", ") || "无"}\n\n批量任务已经就绪，后台协程正在极速并发处理！`);
+    jumpToJobsContainer.style.display = "block";
+  } catch (err) {
+    logReprocess(`错误：${err.message || err}`, true);
+  } finally {
+    btnReprocessTag.disabled = false;
+    btnReprocessTag.textContent = "批量删除旧卡片并重整理";
+  }
+});
+
+btnJumpToJobs.addEventListener("click", () => {
+  window.location.hash = "jobs";
+});
+
 tokenInput.value = localStorage.getItem(storageKey) || "";
 loadHealth();
 if (token()) {
@@ -1778,6 +2063,7 @@ if (token()) {
   loadModels();
   loadDocumentParser();
   loadQABusinessTags();
+  loadReprocessBusinessTags();
   loadMemosConfig();
 }
 

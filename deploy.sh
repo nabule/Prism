@@ -9,6 +9,16 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
+# Docker Compose 引擎智能检测
+if docker compose version >/dev/null 2>&1; then
+    DOCKER_COMPOSE="docker compose"
+elif docker-compose --version >/dev/null 2>&1; then
+    DOCKER_COMPOSE="docker-compose"
+else
+    echo -e "${RED}错误: 未检测到 docker compose 或 docker-compose！请先安装 Docker Compose。${NC}"
+    exit 1
+fi
+
 echo -e "${BLUE}===============================================${NC}"
 echo -e "${BLUE}       Prism (棱镜) AI 知识库一键部署工具       ${NC}"
 echo -e "${BLUE}===============================================${NC}"
@@ -200,10 +210,10 @@ fi
 
 # 5. 一键拉取与热启动
 echo -e "${GREEN}[5/5] 正在拉取最新的生产容器镜像...${NC}"
-docker compose -f docker-compose.release.yml pull
+$DOCKER_COMPOSE -f docker-compose.release.yml pull
 
 echo -e "${GREEN}>>> 正在拉起全栈 Docker 容器服务...${NC}"
-docker compose -f docker-compose.release.yml up -d
+$DOCKER_COMPOSE -f docker-compose.release.yml up -d
 
 echo -e "${BLUE}===============================================${NC}"
 echo -e "${GREEN}        🎉 Prism (棱镜) 部署成功！             ${NC}"

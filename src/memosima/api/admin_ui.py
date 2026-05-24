@@ -261,7 +261,7 @@ ADMIN_UI_HTML = """<!doctype html>
           <polygon points="50,15 20,75 80,75" fill="url(#glass)" stroke="#94a3b8" stroke-width="2.5" />
           <path d="M 45 42 L 55 45" stroke="#93c5fd" stroke-width="2.5" opacity="0.85" />
         </svg>
-        <h1 style="margin: 0;">Prism (棱镜) Admin</h1>
+        <h1 style="margin: 0;">Prism (棱镜) Memosima Admin</h1>
       </div>
       <div class="muted">Sidecar 管理配置</div>
     </div>
@@ -536,9 +536,37 @@ ADMIN_UI_HTML = """<!doctype html>
           </table>
         </div>
       </div>
-      <aside class="panel">
-        <h2>详情</h2>
-        <pre id="reminderDetailMirror">详情会显示在任务页的共享详情区域</pre>
+      <aside style="display: flex; flex-direction: column; gap: 16px;">
+        <div class="panel">
+          <h2>详情</h2>
+          <pre id="reminderDetailMirror">详情会显示在任务页的共享详情区域</pre>
+        </div>
+        <div class="panel stack">
+          <h2>提醒配置</h2>
+          <div class="field" style="margin-top: 10px;">
+            <label><input id="remindersEnabled" type="checkbox"> 启用时间提醒模块</label>
+          </div>
+          <div class="field" style="margin-top: 10px;">
+            <label for="remindersTriggerTag" style="display: block; font-weight: bold; margin-bottom: 4px;">触发提醒标签</label>
+            <input id="remindersTriggerTag" type="text" placeholder="例如 #提醒" style="width: 100%; box-sizing: border-box;">
+          </div>
+          <div class="field" style="margin-top: 10px;">
+            <label for="remindersConfidence" style="display: block; font-weight: bold; margin-bottom: 4px;">置信度阈值 (0.0 - 1.0)</label>
+            <input id="remindersConfidence" type="number" min="0" max="1" step="0.05" style="width: 100%; box-sizing: border-box;">
+          </div>
+          <div class="field" style="margin-top: 10px;">
+            <label for="remindersTimeout" style="display: block; font-weight: bold; margin-bottom: 4px;">模型超时时间 (秒)</label>
+            <input id="remindersTimeout" type="number" min="1" max="60" style="width: 100%; box-sizing: border-box;">
+          </div>
+          <div class="field" style="margin-top: 10px;">
+            <label for="remindersWebhookUrl" style="display: block; font-weight: bold; margin-bottom: 4px;">提醒通知推送 Webhook URL</label>
+            <input id="remindersWebhookUrl" type="password" placeholder="留空保持不变，或输入新 URL/Bark Key" style="width: 100%; box-sizing: border-box;">
+            <div class="muted" style="margin-top: 4px; font-size: 11px;">例如：<code>https://api.day.app/your-bark-key/</code>。写入 <span class="mono">config/.env.local</span>。</div>
+          </div>
+          <div class="toolbar" style="margin-top: 15px;">
+            <button id="btnSaveRemindersConfig" class="primary" type="button" style="width: 100%;">保存提醒配置</button>
+          </div>
+        </div>
       </aside>
     </div>
   </section>
@@ -712,6 +740,12 @@ const healthOutput = document.getElementById("healthOutput");
 const jobsBody = document.getElementById("jobsBody");
 const candidatesBody = document.getElementById("candidatesBody");
 const remindersBody = document.getElementById("remindersBody");
+const remindersEnabled = document.getElementById("remindersEnabled");
+const remindersTriggerTag = document.getElementById("remindersTriggerTag");
+const remindersConfidence = document.getElementById("remindersConfidence");
+const remindersTimeout = document.getElementById("remindersTimeout");
+const remindersWebhookUrl = document.getElementById("remindersWebhookUrl");
+const btnSaveRemindersConfig = document.getElementById("btnSaveRemindersConfig");
 const promptProvider = document.getElementById("promptProvider");
 const promptSystem = document.getElementById("promptSystem");
 const promptUser = document.getElementById("promptUser");
@@ -1255,6 +1289,44 @@ async function updateReminder(id, action) {
   }
 }
 
+async function loadRemindersConfig() {
+  try {
+    const data = await requestJson("/admin/reminders/config");
+    remindersEnabled.checked = data.enabled;
+    remindersTriggerTag.value = data.trigger_tag;
+    remindersConfidence.value = data.confidence_threshold;
+    remindersTimeout.value = data.request_timeout_seconds;
+    remindersWebhookUrl.value = "";
+    if (data.webhook_url_present) {
+      remindersWebhookUrl.placeholder = "已配置 Webhook URL（留空保持不变）";
+    } else {
+      remindersWebhookUrl.placeholder = "留空保持不变，或输入新 URL/Bark Key";
+    }
+  } catch (error) {
+    setNotice(String(error.message || error), "error");
+  }
+}
+
+async function saveRemindersConfig() {
+  try {
+    const payload = {
+      enabled: remindersEnabled.checked,
+      trigger_tag: remindersTriggerTag.value.trim(),
+      confidence_threshold: parseFloat(remindersConfidence.value),
+      request_timeout_seconds: parseFloat(remindersTimeout.value),
+      webhook_url: remindersWebhookUrl.value.trim() || null
+    };
+    const data = await requestJson("/admin/reminders/config", {
+      method: "PUT",
+      body: JSON.stringify(payload)
+    });
+    setNotice("提醒配置保存成功", "ok");
+    await loadRemindersConfig();
+  } catch (error) {
+    setNotice(String(error.message || error), "error");
+  }
+}
+
 document.getElementById("saveTokenButton").addEventListener("click", () => {
   localStorage.setItem(storageKey, token());
   setNotice("Token 已保存到本机浏览器", "ok");
@@ -1279,6 +1351,7 @@ document.getElementById("downloadBackupButtonMirror").addEventListener("click", 
 document.getElementById("restoreBackupButton").addEventListener("click", restoreBackup);
 document.getElementById("refreshDocParserButton").addEventListener("click", loadDocumentParser);
 document.getElementById("saveDocParserButton").addEventListener("click", saveDocumentParser);
+document.getElementById("btnSaveRemindersConfig").addEventListener("click", saveRemindersConfig);
 for (const tab of panelTriggers) {
   tab.addEventListener("click", () => {
     const panelName = tab.dataset.tabTarget;
@@ -1542,6 +1615,7 @@ if (token()) {
   loadJobs();
   loadCandidates();
   loadReminders();
+  loadRemindersConfig();
   loadPrompts();
   loadModels();
   loadDocumentParser();

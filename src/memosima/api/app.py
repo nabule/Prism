@@ -234,6 +234,22 @@ class DocumentParserUpdateRequest(BaseModel):
     api_key: str | None = Field(default=None, max_length=12000)
 
 
+class RemindersConfigView(BaseModel):
+    enabled: bool
+    trigger_tag: str
+    confidence_threshold: float
+    request_timeout_seconds: float
+    webhook_url_present: bool
+
+
+class RemindersConfigUpdateRequest(BaseModel):
+    enabled: bool
+    trigger_tag: str = Field(default="#提醒", max_length=80)
+    confidence_threshold: float = Field(default=0.75, ge=0.0, le=1.0)
+    request_timeout_seconds: float = Field(default=10.0, ge=1.0, le=60.0)
+    webhook_url: str | None = Field(default=None, max_length=12000)
+
+
 def create_app(
     config_path: str = "config/app.yaml",
     models_path: str = "config/models.yaml",
@@ -536,6 +552,43 @@ def create_app(
                 )
             ]
         )
+
+    @app.get(
+        "/admin/reminders/config",
+        response_model=RemindersConfigView,
+        dependencies=[Depends(require_admin)],
+    )
+    async def get_reminders_config() -> RemindersConfigView:
+        cfg: AppConfig = app.state.config
+        return RemindersConfigView(
+            enabled=cfg.reminders_enabled,
+            trigger_tag=cfg.reminders_trigger_tag,
+            confidence_threshold=cfg.reminders_confidence_threshold,
+            request_timeout_seconds=cfg.reminders_request_timeout_seconds,
+            webhook_url_present=bool(cfg.reminders_webhook_url),
+        )
+
+    @app.put(
+        "/admin/reminders/config",
+        response_model=RemindersConfigView,
+        dependencies=[Depends(require_admin)],
+    )
+    async def update_reminders_config(request: RemindersConfigUpdateRequest) -> RemindersConfigView:
+        if request.webhook_url and ("\n" in request.webhook_url or "\r" in request.webhook_url):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Webhook URL must be a single line")
+        _update_app_yaml_reminders(
+            config_path=Path(config_path),
+            enabled=request.enabled,
+            trigger_tag=request.trigger_tag.strip(),
+            confidence_threshold=request.confidence_threshold,
+            request_timeout_seconds=request.request_timeout_seconds,
+        )
+        if request.webhook_url is not None and request.webhook_url.strip():
+            env_path = Path(config_path).parent / ".env.local"
+            _upsert_env_value(env_path, "REMINDER_WEBHOOK_URL", request.webhook_url.strip())
+            os.environ["REMINDER_WEBHOOK_URL"] = request.webhook_url.strip()
+        app.state.config = AppConfig.load(config_path)
+        return await get_reminders_config()
 
     @app.get(
         "/admin/reminders",
@@ -1103,6 +1156,27 @@ def _update_app_yaml_document_parser(
         "enable_table": enable_table,
         "enable_formula": enable_formula,
         "is_ocr": is_ocr,
+    }
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    with config_path.open("w", encoding="utf-8") as file:
+        yaml.safe_dump(raw, file, allow_unicode=True, sort_keys=False)
+
+
+def _update_app_yaml_reminders(
+    *,
+    config_path: Path,
+    enabled: bool,
+    trigger_tag: str,
+    confidence_threshold: float,
+    request_timeout_seconds: float,
+) -> None:
+    raw = _read_yaml(config_path) if config_path.exists() else {}
+    raw["reminders"] = {
+        "enabled": enabled,
+        "trigger_tag": trigger_tag,
+        "webhook_url_env": "REMINDER_WEBHOOK_URL",
+        "confidence_threshold": confidence_threshold,
+        "request_timeout_seconds": request_timeout_seconds,
     }
     config_path.parent.mkdir(parents=True, exist_ok=True)
     with config_path.open("w", encoding="utf-8") as file:

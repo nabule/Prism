@@ -340,6 +340,71 @@ def test_admin_reminders_requires_token_lists_retries_and_cancels(tmp_path, monk
     assert cancelled.json()["status"] == "cancelled"
 
 
+def test_admin_reminders_config(tmp_path, monkeypatch):
+    import os
+    app_yaml_content = app_config_text(tmp_path / "sidecar.db") + "\n" + """
+reminders:
+  enabled: true
+  trigger_tag: "#提醒"
+  webhook_url_env: REMINDER_WEBHOOK_URL
+  confidence_threshold: 0.75
+  request_timeout_seconds: 10
+"""
+    app_path = write_yaml(tmp_path / "app.yaml", app_yaml_content)
+    models_path = write_yaml(tmp_path / "models.yaml", models_config_text())
+    monkeypatch.setenv("SIDECAR_ADMIN_TOKEN", "admin-token")
+    monkeypatch.setenv("REMINDER_WEBHOOK_URL", "https://original-webhook.example.com")
+    
+    app = create_app(config_path=str(app_path), models_path=str(models_path))
+    client = TestClient(app)
+
+    # 1. GET config without token
+    unauthorized = client.get("/admin/reminders/config")
+    assert unauthorized.status_code == 401
+
+    # 2. GET config with token
+    response = client.get("/admin/reminders/config", headers={"Authorization": "Bearer admin-token"})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["enabled"] is True
+    assert data["trigger_tag"] == "#提醒"
+    assert data["confidence_threshold"] == 0.75
+    assert data["request_timeout_seconds"] == 10.0
+    assert data["webhook_url_present"] is True
+
+    # 3. PUT config update
+    update_payload = {
+        "enabled": False,
+        "trigger_tag": "#ALARM",
+        "confidence_threshold": 0.85,
+        "request_timeout_seconds": 15.0,
+        "webhook_url": "https://new-webhook.example.com"
+    }
+    put_response = client.put(
+        "/admin/reminders/config",
+        json=update_payload,
+        headers={"Authorization": "Bearer admin-token"}
+    )
+    assert put_response.status_code == 200
+    updated_data = put_response.json()
+    assert updated_data["enabled"] is False
+    assert updated_data["trigger_tag"] == "#ALARM"
+    assert updated_data["confidence_threshold"] == 0.85
+    assert updated_data["request_timeout_seconds"] == 15.0
+    assert updated_data["webhook_url_present"] is True
+
+    # Verify app.yaml content got updated
+    from memosima.core.config import _read_yaml
+    yaml_content = _read_yaml(app_path)
+    assert yaml_content["reminders"]["enabled"] is False
+    assert yaml_content["reminders"]["trigger_tag"] == "#ALARM"
+    assert yaml_content["reminders"]["confidence_threshold"] == 0.85
+    assert yaml_content["reminders"]["request_timeout_seconds"] == 15.0
+
+    # Verify env got updated
+    assert os.getenv("REMINDER_WEBHOOK_URL") == "https://new-webhook.example.com"
+
+
 def test_admin_backup_download_contains_database_and_non_secret_configs(tmp_path, monkeypatch):
     app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
     models_path = write_yaml(tmp_path / "models.yaml", models_config_text())

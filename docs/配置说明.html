@@ -43,10 +43,7 @@
 <td><code>REMINDER_WEBHOOK_URL</code></td>
 <td>提醒通知出口。默认按 Bark 兼容接口发送 <code>POST title/body</code> 表单，例如 <code>https://api.day.app/your-bark-key/</code>。真实 token 只放在本地 <code>.env</code> 或部署密钥中。</td>
 </tr>
-<tr>
-<td><code></code></td>
-<td> API key，当前默认 LLM provider 使用该变量。</td>
-</tr>
+
 <tr>
 <td><code>OPENROUTER_API_KEY</code></td>
 <td>OpenRouter API key，作为备选 provider 使用。</td>
@@ -56,7 +53,7 @@
 <td>DeepSeek API key，用于 DeepSeek OpenAI-compatible provider。</td>
 </tr>
 </tbody></table>
-<p><code></code>、<code>OPENROUTER_API_KEY</code>、<code>DEEPSEEK_API_KEY</code> 只通过环境变量或本地 <code>config/.env.local</code> 读取，不写入仓库。不要把真实 key 提交到 git。</p>
+<p><code>OPENROUTER_API_KEY</code>、<code>DEEPSEEK_API_KEY</code> 只通过环境变量或本地 <code>config/.env.local</code> 读取，不写入仓库。不要把真实 key 提交到 git。</p>
 <p><code>MEMOS_API_TOKEN</code> 建议使用 Memos Personal Access Token，而不是登录接口返回的短期 access token。可通过 Nx 探针生成：</p>
 <pre><code class="language-bash">npx nx run sidecar:probe-memos -- \
   --bootstrap-username test \
@@ -99,7 +96,7 @@
 <p>到期扫描在 worker 空闲循环中执行，状态为 <code>pending</code> 或 <code>failed</code> 且 <code>due_at</code> 已到的提醒会发送到 <code>REMINDER_WEBHOOK_URL</code>。成功后状态变为 <code>sent</code>，失败会记录脱敏错误并保留为 <code>failed</code> 以便重试。发送内容不会把 webhook token 写入日志或 job result。</p>
 <p>如果模型 key 未配置、抽取失败或时间不明确，提醒流程会记录跳过原因；时间模糊、低置信或已过期时会在原 memo 下评论要求补充，但普通 AI 整理流程仍会继续。</p>
 <h2>models.yaml</h2>
-<p>当前默认模型配置使用 DeepSeek 的 <code>deepseek-v4-flash</code>，并保留 OpenRouter、、OpenAI 等常用 OpenAI-compatible provider 模板：</p>
+<p>当前默认模型配置使用 DeepSeek 的 <code>deepseek-v4-flash</code>，并保留 OpenRouter、OpenAI 等常用 OpenAI-compatible provider 模板：</p>
 <pre><code class="language-yaml">default_provider: deepseek
 providers:
   openrouter:
@@ -110,16 +107,6 @@ providers:
     max_tokens:
     response_format: json_object
     extra_body: {}
-  :
-    base_url: 
-    api_key_env: 
-    default_model: 
-    temperature: 0.2
-    max_tokens:
-    response_format: json_object
-    extra_body:
-      chat_template_kwargs:
-        enable_thinking: false
   openai:
     base_url: https://api.openai.com/v1
     api_key_env: OPENAI_API_KEY

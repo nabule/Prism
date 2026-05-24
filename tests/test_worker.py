@@ -259,7 +259,7 @@ tag_summary:
   system: 标签系统
   user: 标签用户 {tag} {memos_markdown}
 reminder_extraction:
-  provider: 
+  provider: openai
   system: 提醒系统 {trigger_tag}
   user: 提醒用户 {now} {timezone} {content}
 """,
@@ -267,7 +267,7 @@ reminder_extraction:
     monkeypatch.setenv("MEMOS_BASE_URL", "http://memos.local")
     monkeypatch.setenv("MEMOS_API_TOKEN", "memos-token")
     monkeypatch.setenv("DEEPSEEK_API_KEY", "deepseek-key")
-    monkeypatch.setenv("", "-key")
+    monkeypatch.setenv("OPENAI_API_KEY", "openai-key")
     config = AppConfig.load(app_path)
     models = ModelsConfig.load(models_path)
     store = Store(config.database_path)
@@ -333,8 +333,8 @@ reminder_extraction:
     processed = await Worker(config, store, models).run_once()
 
     assert processed is True
-    assert FakeLLMClient.init_calls == [("", "-key"), ("deepseek", "deepseek-key")]
-    assert FakeLLMClient.reminder_prompt_provider == ""
+    assert FakeLLMClient.init_calls == [("openai", "openai-key"), ("deepseek", "deepseek-key")]
+    assert FakeLLMClient.reminder_prompt_provider == "openai"
     assert FakeLLMClient.organize_prompt_provider == "deepseek"
 
 

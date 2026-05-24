@@ -29,7 +29,7 @@
 <li>用户原始 memo 没有业务标签时，LLM 从正文自动建议正式标签和候选标签；新标签仍需审核。</li>
 <li>AI 整理 memo 本地模板创建，并在 Sidecar 数据库记录来源关联。</li>
 <li>待澄清 memo 评论追问，并把任务置为 <code>waiting_user</code>。</li>
-<li>OpenAI-compatible LLM provider 接入，默认使用 DeepSeek <code>deepseek-chat</code>，并保留 OpenRouter、、OpenAI 等 provider 模板。</li>
+<li>OpenAI-compatible LLM provider 接入，默认使用 DeepSeek <code>deepseek-chat</code>，并保留 OpenRouter、OpenAI 等 provider 模板。</li>
 <li><code>#提醒</code> 时间识别、提醒持久化、到期 webhook 通知和管理接口。</li>
 <li><strong>P3 离线高保真解析：</strong> <code>.txt</code>、<code>.md</code> 附件下载并解析为 Markdown artifact；Word、Excel、PPT、PDF 附件通过 MinerU 在线服务转成 Markdown；特别原生支持 <strong><code>.drawio</code> (包括 .drawio.svg) 附件离线解压提取</strong>与 <strong><code>Mind Elixir</code> 脑图 JSON 大纲递归生成</strong>，100% 离线。</li>
 <li><strong>P3 离线 QA & Prompt 编译器：</strong> 控制台新增 QA 问答页面，支持多标签药丸胶囊选择、拼音中文模糊联想提示，后端执行标签精准与文本 contains 双路召回，一键编译与复制超级 Prompt。</li>

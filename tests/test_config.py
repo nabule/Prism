@@ -47,7 +47,7 @@ def test_repository_models_config_defaults_to_deepseek_v4_flash(monkeypatch):
     assert provider.base_url == "https://api.deepseek.com"
     assert provider.api_key_env == "DEEPSEEK_API_KEY"
     assert provider.default_model == "deepseek-v4-flash"
-    assert provider.extra_body == {"thinking": {"type": "disabled"}}
+    assert provider.extra_body == {"thinking": {"type": "enabled"}}
     assert provider.api_key_present is True
 
 

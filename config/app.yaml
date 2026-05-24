@@ -39,6 +39,11 @@ reminders:
   webhook_url_env: REMINDER_WEBHOOK_URL
   confidence_threshold: 0.75
   request_timeout_seconds: 10
+vector_search:
+  enabled: false
+  api_key_env: SILICONFLOW_API_KEY
+  base_url: https://api.siliconflow.cn/v1
+  model: BAAI/bge-m3
 worker:
   poll_interval_seconds: 2
   max_attempts: 3

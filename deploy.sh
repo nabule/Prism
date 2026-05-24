@@ -124,6 +124,156 @@ else
     echo -e "${YELLOW}[-] 检测到 config/app.yaml 已存在，跳过生成。${NC}"
 fi
 
+# 3.2 释放内建 models.yaml 模型初始配置文件
+if [ ! -f config/models.yaml ]; then
+    echo -e "${GREEN}[3.1/5] 正在生成初始系统模型配置文件 config/models.yaml...${NC}"
+    cat << 'EOF' > config/models.yaml
+default_provider: deepseek
+providers:
+  openrouter:
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    default_model: google/gemma-3-27b-it
+    temperature: 0.2
+    max_tokens: null
+    response_format: json_object
+    extra_body: {}
+  :
+    base_url: 
+    api_key_env: 
+    default_model: 
+    temperature: 0.2
+    max_tokens: null
+    response_format: json_object
+    extra_body:
+      chat_template_kwargs:
+        enable_thinking: false
+  openai:
+    base_url: https://api.openai.com/v1
+    api_key_env: OPENAI_API_KEY
+    default_model: gpt-4o-mini
+    temperature: 0.2
+    max_tokens: null
+    response_format: json_object
+    extra_body: {}
+  deepseek:
+    base_url: https://api.deepseek.com
+    api_key_env: DEEPSEEK_API_KEY
+    default_model: deepseek-v4-flash
+    temperature: 0.2
+    max_tokens: null
+    response_format: json_object
+    extra_body:
+      thinking:
+        type: enabled
+EOF
+else
+    echo -e "${YELLOW}[-] 检测到 config/models.yaml 已存在，跳过生成。${NC}"
+fi
+
+# 3.3 释放内建 prompts.yaml 系统初始提示词文件
+if [ ! -f config/prompts.yaml ]; then
+    echo -e "${GREEN}[3.2/5] 正在生成初始系统提示词文件 config/prompts.yaml...${NC}"
+    cat << 'EOF' > config/prompts.yaml
+organize_memo:
+  system: "你是个人知识库整理助手。请只输出 JSON 对象，不要输出 Markdown 代码块。\n必须优先从已有正式标签中选择 active_tags。\n\
+    只选择与正文核心主题直接相关的少量标签，active_tags 通常不超过 5 个。\n只有正文确实需要且没有合适正式标签时，才在 candidate_tags\
+    \ 中提出新标签；不要把新标签放入 active_tags，candidate_tags 通常不超过 2 个。\n不同层级的业务标签必须保证最后一级名称唯一，例如已有\
+    \ #项目/数管 时，不要再提出 #数管 或 #其他/数管。\n如果内容指代不明或缺少关键信息，将 needs_clarification 设为 true，并给出\
+    \ clarification_question。\nJSON 字段：title, summary, key_points, todos, active_tags,\
+    \ candidate_tags, needs_clarification, clarification_question。\ncandidate_tags\
+    \ 每项字段：path, reason, confidence。标签 path 必须以 # 开头，不含空格。\n已有正式标签：\n{active_tags}\n\
+    \n除非 memo 内容为空、无法识别任何主题，或缺少完成整理所必需的信息，否则 needs_clarification 必须为 false。\n  如果原文是问题、排障记录、测试步骤、URL、待验证事项，不要因为它包含疑问句就要求澄清；应直接整理为\
+    \ summary、key_points、\n  todos。\n  clarification_question 仅在 needs_clarification=true\
+    \ 时填写，否则必须为 null。"
+  user: '请整理以下 memo，并遵守本地标签治理草案，对于URL连接需要获取真实内容并分析，所有内容主要语言为中文，你需要完整全面的整理原始memo内容。
+
+
+    本地标签治理草案：
+
+    {local_plan_json}
+
+
+    原始 memo：
+
+    {content}'
+tag_summary:
+  system: "你是个人知识库专题整理助手。请输出 Markdown，不要输出 JSON。\n目标是把同一标签下零散 memo 整理成适合人阅读的整体展示。\n\
+    请保留事实边界，不要编造未出现的信息。\n建议结构：总览、关键主题、时间线或进展、已完成、问题与风险、待办、相关 memo。\n要详实、有条理有框架，完整体系化的总结。\n\
+    除非 memo 内容为空、无法识别任何主题，或缺少完成整理所必需的信息，否则 needs_clarification 必须为 false。\n  如果原文是问题、排障记录、测试步骤、URL、待验证事项，不要因为它包含疑问句就要求澄清；应直接整理为\
+    \ summary、key_points、\n  todos。\n  clarification_question 仅在 needs_clarification=true\
+    \ 时填写，否则必须为 null。"
+  user: '请为标签 {tag} 生成整体总结，对于URL连接需要获取真实内容并分析。
+
+
+    memo 数量：{memo_count}
+
+
+    memo 列表：
+
+    {memos_markdown}'
+reminder_extraction:
+  system: 你是提醒时间抽取器，只返回 JSON 对象，不要输出 Markdown。只处理用户明确使用触发标签的提醒请求。把相对时间换算成带时区的 ISO
+    8601 时间；无法确定具体时间时要求澄清。
+  user: '触发标签：{trigger_tag}
+
+    当前时间：{now}
+
+    默认时区：{timezone}
+
+
+    请返回 JSON：
+
+    {"has_reminder": boolean, "items": [{"title": string, "body": string, "due_at":
+    string, "timezone": string, "confidence": number, "raw_text": string}], "needs_clarification":
+    boolean, "clarification_question": string|null}
+
+
+    规则：
+
+    - 只有正文包含触发标签时才提取提醒。
+
+    - due_at 必须是可解析 of ISO 8601 时间，优先包含时区偏移。
+
+    - 如果只有日期没有具体时刻、时间已无法确定或语义模糊，needs_clarification=true。
+
+    - title 简短概括提醒事项，body 保留必要上下文。
+
+
+    memo 内容：
+
+    {content}'
+EOF
+else
+    echo -e "${YELLOW}[-] 检测到 config/prompts.yaml 已存在，跳过生成。${NC}"
+fi
+
+# 3.4 释放内建 taxonomy.yaml 系统初始标签体系配置文件
+if [ ! -f config/taxonomy.yaml ]; then
+    echo -e "${GREEN}[3.3/5] 正在生成初始标签治理配置文件 config/taxonomy.yaml...${NC}"
+    cat << 'EOF' > config/taxonomy.yaml
+system_tags:
+  original: "#系统/原始记录"
+  ai_summary: "#系统/AI整理"
+  ai_document: "#系统/AI文档"
+  pending_clarification: "#系统/待澄清"
+  tag_candidate: "#系统/标签待审核"
+  qa: "#系统/问答"
+  failed: "#系统/处理失败"
+business_tags:
+  - path: "#项目/个人AI知识库"
+    status: active
+aliases:
+  - alias: "#AI知识库"
+    target: "#项目/个人AI知识库"
+disabled:
+  - "#杂项"
+EOF
+else
+    echo -e "${YELLOW}[-] 检测到 config/taxonomy.yaml 已存在，跳过生成。${NC}"
+fi
+
+
 # 4. 生成安全密钥与环境变量文件
 if [ ! -f .env ]; then
     echo -e "${GREEN}[4/5] 正在生成安全密钥文件 .env...${NC}"

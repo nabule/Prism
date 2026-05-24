@@ -87,6 +87,10 @@ class AppConfig:
     reminders_webhook_url: str | None
     reminders_confidence_threshold: float
     reminders_request_timeout_seconds: float
+    vector_search_enabled: bool
+    vector_search_api_key_env: str
+    vector_search_base_url: str
+    vector_search_model: str
 
     @classmethod
     def load(cls, path: str | Path = "config/app.yaml") -> "AppConfig":
@@ -103,6 +107,7 @@ class AppConfig:
         limits = raw.get("limits", {})
         document_parser = raw.get("document_parser", {})
         reminders = raw.get("reminders", {})
+        vector_search = raw.get("vector_search", {})
 
         admin_token_env = str(security.get("admin_token_env", "SIDECAR_ADMIN_TOKEN"))
         memos_base_url_env = memos.get("base_url_env", "MEMOS_BASE_URL")
@@ -172,6 +177,10 @@ class AppConfig:
             reminders_webhook_url=_env_value(reminders_webhook_url_env),
             reminders_confidence_threshold=float(reminders.get("confidence_threshold", 0.75)),
             reminders_request_timeout_seconds=float(reminders.get("request_timeout_seconds", 10)),
+            vector_search_enabled=bool(vector_search.get("enabled", False)),
+            vector_search_api_key_env=str(vector_search.get("api_key_env", "SILICONFLOW_API_KEY")),
+            vector_search_base_url=str(vector_search.get("base_url", "https://api.siliconflow.cn/v1")),
+            vector_search_model=str(vector_search.get("model", "BAAI/bge-m3")),
         )
 
 

@@ -98,6 +98,16 @@ class ReminderRecord:
     updated_at: str
 
 
+@dataclass(frozen=True)
+class VectorUnitRecord:
+    id: int
+    workspace_id: str
+    memo_uid: str
+    chunk_text: str
+    embedding: list[float]
+    created_at: str
+
+
 class Store:
     def __init__(self, database_path: str | Path):
         self.database_path = Path(database_path)
@@ -233,6 +243,19 @@ class Store:
 
                 CREATE INDEX IF NOT EXISTS idx_reminders_status_due
                   ON reminders(status, due_at);
+
+                CREATE TABLE IF NOT EXISTS vector_units (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  workspace_id TEXT NOT NULL,
+                  memo_uid TEXT NOT NULL,
+                  chunk_text TEXT NOT NULL,
+                  embedding_json TEXT NOT NULL,
+                  created_at TEXT NOT NULL,
+                  FOREIGN KEY (workspace_id) REFERENCES workspaces(id)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_vector_units_memo_uid
+                  ON vector_units(workspace_id, memo_uid);
                 """
             )
 
@@ -921,6 +944,72 @@ class Store:
             row = connection.execute("SELECT * FROM reminders WHERE id = ?", (reminder_id,)).fetchone()
         return _reminder_from_row(row) if row else None
 
+    def replace_vector_units(
+        self,
+        *,
+        workspace_id: str,
+        memo_uid: str,
+        chunks: list[tuple[str, list[float]]],
+    ) -> None:
+        now = utc_now()
+        with self.connect() as connection:
+            connection.execute(
+                "DELETE FROM vector_units WHERE workspace_id = ? AND memo_uid = ?",
+                (workspace_id, memo_uid),
+            )
+            if not chunks:
+                return
+            connection.executemany(
+                """
+                INSERT INTO vector_units (
+                  workspace_id, memo_uid, chunk_text, embedding_json, created_at
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                [
+                    (workspace_id, memo_uid, text, json.dumps(embedding), now)
+                    for text, embedding in chunks
+                ],
+            )
+
+    def list_all_vector_units(self, workspace_id: str) -> list[VectorUnitRecord]:
+        with self.connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM vector_units WHERE workspace_id = ?",
+                (workspace_id,),
+            ).fetchall()
+        return [_vector_unit_from_row(row) for row in rows]
+
+    def search_similar_chunks(
+        self,
+        *,
+        workspace_id: str,
+        query_embedding: list[float],
+        limit: int = 15,
+    ) -> list[tuple[VectorUnitRecord, float]]:
+        import math
+        
+        all_units = self.list_all_vector_units(workspace_id)
+        if not all_units:
+            return []
+            
+        def cos_sim(v1: list[float], v2: list[float]) -> float:
+            if len(v1) != len(v2):
+                return 0.0
+            dot = sum(a * b for a, b in zip(v1, v2))
+            norm1 = math.sqrt(sum(a * a for a in v1))
+            norm2 = math.sqrt(sum(b * b for b in v2))
+            if norm1 == 0 or norm2 == 0:
+                return 0.0
+            return dot / (norm1 * norm2)
+            
+        scored_units = []
+        for unit in all_units:
+            score = cos_sim(query_embedding, unit.embedding)
+            scored_units.append((unit, score))
+            
+        scored_units.sort(key=lambda x: x[1], reverse=True)
+        return scored_units[:limit]
+
 
 def _job_from_row(row: sqlite3.Row) -> Job:
     return Job(
@@ -1025,6 +1114,17 @@ def _reminder_from_row(row: sqlite3.Row) -> ReminderRecord:
         error=row["error"],
         created_at=str(row["created_at"]),
         updated_at=str(row["updated_at"]),
+    )
+
+
+def _vector_unit_from_row(row: sqlite3.Row) -> VectorUnitRecord:
+    return VectorUnitRecord(
+        id=int(row["id"]),
+        workspace_id=str(row["workspace_id"]),
+        memo_uid=str(row["memo_uid"]),
+        chunk_text=str(row["chunk_text"]),
+        embedding=json.loads(row["embedding_json"]),
+        created_at=str(row["created_at"]),
     )
 
 

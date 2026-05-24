@@ -57,7 +57,41 @@
   </ul>
   <p class="note">还没有完成：向量索引、自动文档、Memos 主库备份恢复。</p>
 
-  <h2>1. 准备配置与各 Key 详细说明</h2>
+  <h2>0. 依赖的外部服务概览</h2>
+  <p>Prism 依赖以下外部服务，按必需程度排列：</p>
+  <table>
+    <thead>
+      <tr><th>服务</th><th>用途</th><th>必需</th><th>环境变量</th><th>获取方式</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>🟢 推理大模型</td>
+        <td>AI 整理、标签总结、提醒提取</td>
+        <td>✅ 至少一个</td>
+        <td><code>DEEPSEEK_API_KEY</code>（默认）<br><code>OPENROUTER_API_KEY</code><br><code></code><br><code>OPENAI_API_KEY</code></td>
+        <td><a href="https://platform.deepseek.com/api_keys" target="_blank">DeepSeek</a>（推荐）<br><a href="https://openrouter.ai/keys" target="_blank">OpenRouter</a><br><a href="https://.10086.cn" target="_blank"></a><br><a href="https://platform.openai.com/api-keys" target="_blank">OpenAI</a></td>
+      </tr>
+      <tr>
+        <td>📄 MinerU 文档解析</td>
+        <td>Office/PDF 附件转 Markdown</td>
+        <td>❌ 可选</td>
+        <td><code>MINERU_API_TOKEN</code></td>
+        <td><a href="https://mineru.net" target="_blank">MinerU 开发者平台</a></td>
+      </tr>
+      <tr>
+
+      <tr>
+        <td>📐 嵌入大模型</td>
+        <td>向量语义检索（默认关闭）</td>
+        <td>❌ 可选</td>
+        <td><code>SILICONFLOW_API_KEY</code></td>
+        <td><a href="https://siliconflow.cn" target="_blank">SiliconFlow</a></td>
+      </tr>
+    </tbody>
+  </table>
+  <p class="note">🧠 推荐先配置 <code>DEEPSEEK_API_KEY</code> 即可跑通核心 AI 功能；Office/PDF 附件需要额外配置 <code>MINERU_API_TOKEN</code>；向量检索默认关闭，按需开启。</p>
+
+<h2>1. 准备配置与各 Key 详细说明</h2>
   <p>复制环境变量示例并填写真实值。切勿把包含真实密钥的 <code>.env</code> 文件提交到 Git 仓库，确保数据隐私安全。</p>
   <pre><code>cp .env.example .env</code></pre>
 
@@ -97,6 +131,12 @@
         <td>文档解析</td>
         <td>MinerU 文档高保真解析服务的 API Key。系统检测到上传了 PDF、Word、Excel 或 PPT 等富媒体附件后，会调用该服务进行在线精准转写排版，提取出格式工整的 Markdown 内容作为上下文供 AI 理解。您可以注册 MinerU 开发者平台并获取 API Key 填写至此。该 Key 会在运行期安全加载，不会保存进 app 配置文件或随备份包导出。</td>
       </tr>
+      <tr>
+        <td><code>SILICONFLOW_API_KEY</code></td>
+        <td>向量检索（可选）</td>
+        <td>SiliconFlow 嵌入模型 API Key。当前向量检索默认关闭（<code>vector_search.enabled: false</code>），如需启用基于 <code>BAAI/bge-m3</code> 的语义检索与 RAG 增强问答，请在 <code>config/app.yaml</code> 中开启并配置此 Key。获取地址：<a href="https://siliconflow.cn" target="_blank">SiliconFlow</a>。</td>
+      </tr>
+
       <tr>
         <td><code>DEEPSEEK_API_KEY</code></td>
         <td>AI 智能整理</td>

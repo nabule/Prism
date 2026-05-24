@@ -1870,8 +1870,6 @@ btnCopyPrompt.addEventListener("click", () => {
   );
 });
 
-});
-
 /* 重新整理与批量处理逻辑 */
 let selectedReprocessTag = "";
 let reprocessAvailableTags = [];

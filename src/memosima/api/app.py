@@ -202,9 +202,31 @@ class BackupRestoreResponse(BaseModel):
     message: str
 
 
+def get_git_commit_hash() -> str | None:
+    import subprocess
+    env_hash = os.environ.get("COMMIT_HASH") or os.environ.get("GIT_COMMIT")
+    if env_hash:
+        return env_hash
+    try:
+        cwd = os.path.dirname(os.path.abspath(__file__))
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=cwd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=True,
+            timeout=2
+        )
+        return result.stdout.strip()
+    except Exception:
+        return None
+
+
 class HealthResponse(BaseModel):
     service: str = "memosima"
     version: str
+    commit_hash: str | None = None
     database: str
     workspace_id: str
     admin_token_configured: bool
@@ -341,6 +363,7 @@ def create_app(
         provider = current_models.providers[current_models.default_provider]
         return HealthResponse(
             version=__version__,
+            commit_hash=get_git_commit_hash(),
             database=str(config.database_path),
             workspace_id=config.workspace_id,
             admin_token_configured=bool(config.admin_token),

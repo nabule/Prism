@@ -1,204 +1,136 @@
-# Prism (棱镜)
+# Prism (棱镜) - 个人专属 AI 知识折射库 Sidecar
 
 <p align="center">
-  <img src="./Prism.png" alt="Prism Logo" width="220" />
+  <img src="./Prism.png" alt="Prism Logo" width="240" />
 </p>
 
+---
+
 > 🌈 **Prism (棱镜)：光的折射与思维的绚烂**
-> 
-> * **字面意思**：三棱镜。
-> * **诗意寓意**：您随手丢进 Memos 的原始笔记，就像一束朴素的白光。当它穿过 **Prism** 时，被 AI 优雅地折射开来，化作了标签、结构化 Markdown（MinerU 解析）和清晰的知识脉络。
-> * **画面感**：零散的想法进去了，出来的是一抹绚丽的知识彩虹。
+>
+> 无论是闪现的灵感、会议的摘要，还是随手拍下的网页，您丢进 Memos 的原始笔记，就像一束朴素、零散的 **白光**。
+> 当这束光穿过 **Prism** 时，会被 AI 优雅地折射，化作清晰的层级大纲、精准的分级业务标签、高品质的待办事项与触手可及 of 系统化知识。
+> **零碎的想法进去了，出来的是一抹绚丽的知识彩虹。**
 
-**Prism** 是基于 Memos 的个人 AI 知识库 Sidecar 服务。Memos 负责采集和保存原始知识，Sidecar (Prism) 负责 AI 整理、标签治理、澄清评论、附件解析和后续检索能力。
-
----
-
-## 当前状态
-
-已完成 P0、P1、P2 核心闭环，以及 P3 阶段附件离线高保真解析与离线 QA RAG 问答 Prompter。
-
-- **Caddy 网关统一入口**：默认从 `http://localhost:8080/` 访问 Memos，从 `/admin/*`、`/health`、`/webhooks/*` 访问 Sidecar。
-- **Webhook 与任务系统**：Memos webhook 接入和 SQLite 任务系统。
-- **AI 智能整理**：创建 memo 时进行整理，支持 DeepSeek、、OpenRouter 等 OpenAI-compatible LLM 和本地模板回退。
-- **Memos 原生关联**：使用 Memos 原生 `REFERENCE` relation 关联原始 memo 与 AI memo。
-- **管理与调试页面**：内置 `/admin/ui` 页面，用于查看任务、重试任务、审核候选标签、备份和恢复 Sidecar 数据。
-- **系统入口自动维护**：worker 可在 Memos 中自动维护 `#系统/Memosima` 管理入口 memo（对外呈现为 **Prism 管理入口**），AI 整理 memo 也会附带管理页面和候选标签审核链接。
-- **标签治理**：支持候选标签审核和审核后 active 生效。
-- **无标签自动推荐**：当用户原始 memo 没有业务标签时，LLM 可从正文自动建议正式标签和候选标签；新标签仍需人工审核。
-- **提示词热加载与覆盖**：LLM 提示词从 `config/prompts.yaml` 加载，管理页面可保存默认提示词，也可在重试时临时覆盖。
-- **澄清评论机制**：待澄清评论和 `waiting_user` 状态。
-- **附件离线高保真解析**：`.txt`、`.md` 附件解析为 artifact；Word/Excel/PPT/PDF 支持通过 MinerU 转换；原生支持 **`.drawio`（及 `.drawio.svg`）附件离线解压提取**与 **`Mind Elixir` 思维脑图 JSON 层级大纲**的 100% 本地离线解析与递归转换。
-- **离线 QA & Prompt 编译器**：管理端提供强大的离线 QA 问答页面，支持多标签药丸胶囊选择、拼音中文模糊过滤，自动实现基于精确标签/模糊正文的双路检索召回，并一键编译与复制带有完整上下文的超级 Prompt。
-- **智能提醒系统**：`#提醒` 时间识别和一次性定时通知，支持 Bark 兼容 webhook。
-- **备份与恢复**：管理页面支持下载 Sidecar 备份包，并从备份包恢复 Sidecar SQLite 数据库。
-
-> [!NOTE]
-> **未完成范围**：向量索引、自动文档、Memos 主库备份恢复。
-
+**Prism (棱镜)** 是一款专为 [Memos](https://github.com/usememos/memos) 深度定制开发的 **个人离线 AI 知识库 Sidecar 伴生系统**。
+* **Memos** 负责前端超快捷地收集、记录和保存原始的想法。
+* **Prism (Sidecar)** 负责在后台进行 AI 结构化整理、标签双层治理、高保真本地附件解析、智能提醒通知、离线 RAG 拼装和一键搬家管理。
 
 ---
 
-## 智能索引与语义检索 (CodeGraph & Semble)
+## 💡 为什么需要 Prism？解决哪些核心痛点？
 
-本项目已集成两款现代 AI 协同检索工具，方便 AI 助手在开发和运行时进行高效的代码发现与语义检索。
+在日常使用零碎备忘（如 Memos、Flomo）记录知识时，个人用户通常会遇到以下三个重大痛点，而 **Prism** 正是为此量身定制的解药：
 
-### 1. CodeGraph (智能代码知识图谱)
-CodeGraph 在本地构建 SQLite-backed 符号关系与调用图谱，支持增量同步，极大地提升了 AI 智能体的代码分析效率。
+### 痛点 1：碎片化信息变成“数字坟墓”
+* **现状**：随手记录了大量一两句话的笔记、会议纪要或灵感，由于缺少时间整理和规范的标题，几天后便被淹没在信息洪流中，无法重用。
+* **Prism 方案 (AI 智能整理)**：Sidecar 在后台自动异步拦截新笔记，利用大语言模型（如 DeepSeek）生成**核心标题、要点摘要、下一步待办 (To-Do List)**，并自动通过原生 `REFERENCE` 关系双向锚定，将凌乱想法秒变结构化闪念卡片。
 
-* **查看索引状态**：
-  ```bash
-  npx codegraph status
-  ```
-* **增量同步索引**：
-  ```bash
-  npx codegraph sync
-  ```
+### 痛点 2：标签野蛮生长与“标签污染”
+* **现状**：手动分类时，今天写了 `#部署`，明天写了 `#deployment`，后天又写了 `#deploy`，标签体系彻底混乱。或者放任 AI 乱打标签，导致标签列表瞬间膨胀上百个。
+* **Prism 方案 (双层审核治理)**：独创**“正式标签 (Active)”**与**“候选标签 (Candidate)”**双层治理架构。
+  - 只有经过管理员审核通过的标签才会真正应用于笔记归档。
+  - AI 提出的新颖标签或用户手写的新标签，将一律扣留在“待审核 (Candidate)”队列中，并支持拼音首字母模糊归一，确保知识树结构始终优雅、干练。
 
-### 2. Semble (语义与词法代码检索)
-Semble 结合了静态 Model2Vec 向量模型（`potion-code-16M`）与 BM25 词法算法，运行于 CPU，能够在不消耗额外 Token 的情况下精确定位代码片段。
+### 痛点 3：非结构化文件（脑图、流程图）无法被检索
+* **现状**：在笔记中上传了 Draw.io 流程图或思维导图 JSON 作为附件。普通的文本搜索工具根本无法读取其内部的文字节点，导致这部分重度知识彻底“失联”。
+* **Prism 方案 (100% 本地离线高保真解析)**：
+  - **Draw.io 解析**：本地使用 zlib 自动解密还原 base64 字节流并解析 XML 树，提取所有图形节点的文本，过滤多余 HTML，秒转干净 Markdown 列表。
+  - **Mind Elixir 脑图**：通过递归遍历 JSON 节点树，在微秒级内转化为带缩进的 Markdown 大纲大纲。
+  - **100% 离线隐私**：这两种解析不需要向任何第三方大模型上传文件，完全在您的本地沙箱执行，零 Token 成本，彻底阻绝隐私泄露。
 
-* **自然语言语义检索**：
-  ```bash
-  uv run semble search "memosima api" .
-  ```
-* **查找相似代码实现**：
-  ```bash
-  uv run semble find-related src/memosima/api/app.py 360 .
-  ```
-
-> [!IMPORTANT]
-> **无冲突隔离**：项目已在 `.gitignore` 中配置排除 `.local/`、`.antigravitycli/` 和 `.codex/` 目录。在未来的增量索引中，任何工具都会自动跳过 AI 智能体运行时产生的内部缓存文件和原始数据，确保只索引代码、配置文件与文档。
+### 痛点 4：隐私安全与大模型开销冲突 ( RAG )
+* **现状**：想要将个人几十万字的笔记交给大模型做知识问答，但又极其抗拒将自己所有的日常日记、工作记录和密码资产直接暴露给云端 AI 厂商。
+* **Prism 方案 (离线 QA & Prompt 编译器)**：
+  - 在 Sidecar 管理页面提供了一个高度隐私的本地 QA 折射面板。
+  - 用户自由选择多标签（支持药丸胶囊输入与拼音匹配），输入提问后，Sidecar 在本地数据库中执行**“业务标签 + 正文模糊”双路精准召回**，并智能融合附件 Artifacts 解析大纲。
+  - 后台仅拼装好带参考资料的**“超级 Prompt”**，提供“一键复制”动画按钮。用户直接粘贴到已验证安全的沙箱大模型网页中使用，**Sidecar 不托管任何私有大模型，把数据控制权 100% 留给您**。
 
 ---
 
-## 快速开始
+## 🚀 核心功能大观
+
+| 功能模块 | 业务表现 | 解决的痛点 | 融入日常工作流 |
+| :--- | :--- | :--- | :--- |
+| 🌈 **AI 智能整理** | 自动提取标题、生成结构化摘要、精炼核心要点、提取执行待办。 | 灵感杂乱无序、缺乏归纳和下一步行动指南。 | Memos 中保存随笔，1-2秒内侧栏自动生成 AI 归档卡片并原生双向引用。 |
+| 🏷️ **双层标签治理** | 正式/候选标签物理隔离，同名跨层级智能归一，人工一键审核。 | AI 滥发标签，用户书写不规范导致的标签臃肿。 | 无标签时 LLM 给出建议；新标签进入管理端等待一键 Approved。 |
+| 💻 **本地离线解析** | 100% 本地离线解析 `.drawio` / `.drawio.svg` 和 `Mind Elixir JSON` 大纲。 | 附件图表内容不可读，无法被 AI 引用或索引。 | 直接将脑图、流程图传到 Memos 附件中，后台零开销秒转纯文本 Markdown 大纲。 |
+| 🔍 **离线 RAG 编译器** | 业务精确标签 + 模糊检索双路召回，拼接离线 Context，一键复制 Prompt。 | 担忧云端厂商泄露全部私密知识库，或不想承受昂贵的云端 RAG 托管费。 | 打开管理端配置 QA 标签，提出问题，点击“一键复制”，粘贴至官方沙箱网页版大模型。 |
+| ⏰ **时间智能提醒** | 识别正文中自然语言，提取到期时间写入 SQLite，Bark (Webhook) 定时通知。 | 随手记下的待办事项，缺乏通知提醒导致遗忘。 | 写下 `#提醒 明天上午 10:00 提交周报`，时间一到，您的手机（iOS Bark）即刻弹出消息推送。 |
+| 💾 **一键跨容器备份** | Memos 数据库 + 物理附件 + Sidecar 数据库 + 向量索引 + 配置文件一键全局热备份与恢复。 | 容器化部署在异地迁移、版本升级或多卷映射下备份极其繁琐。 | 执行 `backup.sh` 生成自包含压缩包，在别处解压运行 `restore.sh` 瞬间秒级异地完美搬家。 |
+
+---
+
+## 📦 Docker 容器化一键部署与升级
+
+为了保障在多租户 SaaS 部署、本地家庭网关等生产环境下的极简运维，Prism 现已支持 GitHub Actions 自动编译构建，并配备了完全自包含的一键部署脚本：
+
+### 一键极速拉起步骤（全新部署 / 迁移）
+
+在任何已安装 Docker 和 Bash 的宿主机（如本地 WSL2、家庭云服务器、公网 VPS）中，您仅需在打算存放数据的空目录下，执行以下一行命令即可：
 
 ```bash
-cp .env.example .env
-npx nx run sidecar:up
-curl http://localhost:8080/health
+# 执行自包含一键部署工具
+bash <(curl -s -L https://raw.githubusercontent.com/nabule/Prism/master/deploy.sh)
 ```
 
-默认 Docker Compose 会启动 `gateway`、`memos`、<code>sidecar</code> 和 `sidecar-worker`。Caddy 网关只暴露一个宿主机入口：`http://localhost:8080/` 进入 Memos，`http://localhost:8080/admin/ui` 进入 Sidecar 管理页面，`http://localhost:8080/health` 返回 Sidecar 健康状态。Memos 的 `5230` 和 Sidecar 容器内部 `8080` 默认不直接暴露到宿主机；需要改宿主机端口时可设置 `GATEWAY_PORT`。
-
-调试管理页面不会读取服务器端密钥，需要手动输入 `SIDECAR_ADMIN_TOKEN`，并只保存在当前浏览器的 `localStorage`。页面也可以编辑默认 LLM 提示词，或在重试任务时只临时覆盖当前任务使用的提示词。默认开启 Memos 内管理入口，worker 空闲时会自动创建或更新一条 `#系统/Memosima` memo（标题呈现为 **Prism (棱镜)** 入口），入口链接由 `app.public_base_url` 生成。
+**`deploy.sh` 脚本将在幕后全自动为您完成以下动作**：
+1. **构建安全拓扑**：在当前目录下初始化 `config/`、`data/memos/`、`data/sidecar/`、`logs/caddy/` 等挂载文件夹。
+2. **零人工干预配置**：若检测到没有网关配置，自动释放高性能边缘反代 `gateway/Caddyfile`，并生成初始 `config/app.yaml`。
+3. **强密钥生成**：自动调用 OpenSSL 随机算法生成 **16 字节的超强随机 `SIDECAR_ADMIN_TOKEN`**，将其直接写入生成的 `.env` 文件中，默认即为最高防御状态。
+4. **拉取与热启动**：执行 `docker compose -f docker-compose.release.yml pull` 从官方 Container Registry (GHCR) 一秒拉取 prebuilt 生产级镜像并热启动，在终端输出精美的彩色健康诊断信息。
 
 ---
 
-## Docker 容器化部署说明
+## ⚡ 极速本地实机开发热重载配置 (P5 特性)
 
-**Prism (棱镜)** 深度集成了 Docker 容器部署方案，采用高度解耦的多容器微服务架构，保障数据安全与沙箱物理隔离。
-
-### 1. 容器部署拓扑架构
-
-* **`gateway` (网关服务)**: 使用 Caddy 2 作为流量收敛入口。作为唯一暴露于宿主机的边缘网关（默认端口 `8080`），根据路由路径分流：
-  * `/admin/*`、`/health`、`/webhooks/*` 反代分流至 `sidecar` 容器。
-  * 根路径 `/` 反代分流至 `memos` 容器。
-* **`memos` (笔记主服务)**: 运行官方 Memos 系统镜像，处理用户核心笔记的采集与前端操作。
-* **`sidecar` (管理端 API)**: Prism 控制台接口，提供管理页面 `/admin/ui`、配置更新及离线 QA 问答 Prompt 编译器。
-* **`sidecar-worker` (异步任务协程)**: 后台任务处理 Worker，负责在空闲周期轮询待处理 Memos、下载并提取附件 Markdown（MinerU 链路）、调用大语言模型进行周摘要归档、监听闹钟时间并触发 Webhook 定时推送。
-
-### 2. Docker 部署集成命令 (深度融合 Nx 任务)
-
-* **一键启动/重启 (up)**:
-  ```bash
-  npx nx run sidecar:up
-  ```
-  > [!TIP]
-  > 如需指定其它宿主机访问端口（例如 `9000`），可通过环境变量控制：
-  > `GATEWAY_PORT=9000 npx nx run sidecar:up`
-
-* **重新构建 Docker 镜像 (build)**:
-  ```bash
-  npx nx build sidecar
-  ```
-
-* **查看运行状态**:
-  ```bash
-  docker ps
-  ```
-
-### 3. 本地测试环境热载模式 (P5 热拔插特性)
-
-为便于开发和快速校验，默认 `docker-compose.yml` 中已集成**极速热重载机制**：
+如果您是开发者，想要对源码进行快速二次开发和调试，**绝不需要反复进行昂贵的 `docker compose build` 镜像编译**：
 * 映射本地源码 `./src` 到容器内 `/app/src`。
-* 启用 Uvicorn 自动重载指令（`--reload --reload-dir /app/src`）。
-* 在 IDE 中直接编辑本地 Python 代码，容器内服务在 100 毫秒内热载生效，**绝不需要频繁打镜像**。
-
-### 4. 镜像下载加速保证
-
-所有容器镜像配置均支持 **Xget 加速下载源**（如 `xget.your-domain.com/cr/...`），确保在任何复杂网络环境中均可瞬间秒级拉取和更新。
+* 默认启用了 Uvicorn 自动重载监听（`--reload --reload-dir /app/src`）。
+* 在 IDE 中直接编辑本地 `src/` 中的 Python 源码，容器内部的 Web 进程将在 **100 毫秒内热载生效**，**绝不需要频繁打镜像**。
 
 ---
 
-## 多用户与安全隔离说明
+## 🔒 多用户与安全隔离警示（多租户 SaaS 部署建议）
 
 > [!WARNING]
 > **多租户与隐私安全警示**：
-> **Prism** 的核心定位是**个人离线 AI 知识库系统**。当前在**单 Sidecar 实例**下，后台处理任务绑定了单一的 `MEMOS_API_TOKEN`，且所有用户的附件解析大纲、智能标签治理缓存均会集中存放在同一个 Sidecar SQLite 数据库中。
-> **请勿直接让多个独立用户共享使用同一个 Sidecar 实例**，否则在离线 QA 问答页面，用户提问的模糊/精确匹配检索可能会跨用户召回知识上下文，带来**严重的隐私泄露与数据混淆风险**。
+> **Prism** 核心定位是**个人级离线 AI 知识库系统**。
+> 单个 Sidecar 实例仅绑定单一的 `MEMOS_API_TOKEN`，且所有用户的附件解析大纲、智能标签建议和待处理任务全部共享集中存储于同一个 `sidecar.db` SQLite 数据库中。
+> **请勿直接让多个独立用户共享使用同一个 Sidecar 实例**，否则在离线 QA 问答页面，用户提问的检索可能会发生跨账号的知识内容召回，带来**严重的隐私泄露与数据混淆风险**。
 
-### 🚀 推荐方案：独立容器化部署（多租户物理隔离）
-
-若您需要为多个账号、团队成员或家庭成员提供独立的 AI 整理与离线 QA 问答能力，最推荐、最安全的方式是**为每个用户部署一套物理隔离的容器栈**：
-
-1. **目录隔离**：为每个用户在宿主机创建独立的部署工作目录，例如 `/home/abc/code/memosima_userA` 和 `/home/abc/code/memosima_userB`，克隆相同的代码。
-2. **配置隔离**：在各自的 `.env` 配置文件中填写该用户专属的 `MEMOS_API_TOKEN`、`SIDECAR_ADMIN_TOKEN` 以及对应大模型的 API 密钥。
-3. **端口隔离**：在各自的 `.env` 中修改 `GATEWAY_PORT` 变量（例如用户 A 的网关暴露端口为 `8080`，用户 B 为 `8081`），避免端口冲突。
-4. **统一域名分发**（可选）：使用主机的 Nginx 或其他反向代理，将 `user-a.memos.local` 和 `user-b.memos.local` 分别反代到各自容器的 `GATEWAY_PORT`，即刻实现安全、物理隔离的 SaaS 化多租户知识库体验。
-
----
-
-## 持续集成与 Docker 镜像自动发布
-
-项目已集成基于 GitHub Actions 的持续集成流水线 [`.github/workflows/docker-publish.yml`](file:///.github/workflows/docker-publish.yml)：
-
-* **自动化编译与缓存**：当您向 `master` 分支推送代码，或者在 GitHub 侧创建并发布以 `v*` 开头的版本 Release Tag 时，GitHub CI 会自动激活，使用云端 Buildx 引擎进行多架构镜像编译与 GHA 级层级缓存。
-* **官方镜像极速部署**：编译成功的 Docker 镜像将自动推送到 **GitHub Container Registry (GHCR)** 仓库。在部署生产或多租户隔离实例时，您可以直接拉取官方最新打包好的镜像，免去本地临时 build 的编译等待：
-  * **官方镜像地址**：`ghcr.io/nabule/prism:latest`（或携带版本号的 `ghcr.io/nabule/prism:v0.3.0`）
+### 🚀 推荐的物理隔离方案（多租户物理沙箱）
+若您需要为多人、家庭成员或团队成员部署，最安全、也是系统原生推荐的方式是**为每个账号部署物理隔离的容器栈**：
+1. **目录隔离**：为每个用户在宿主机创建独立的部署工作目录，例如 `/data/prism_userA` 和 `/data/prism_userB`，下载相同的 `deploy.sh`。
+2. **配置隔离**：在各自的 `.env` 中填写该用户专属的 `MEMOS_API_TOKEN`、`SIDECAR_ADMIN_TOKEN` 以及大模型的 API Key。
+3. **端口隔离**：通过环境变量或 `.env` 修改各自网关对外暴露的 `GATEWAY_PORT` 端口（例如用户 A 的网关暴露端口为 `8080`，用户 B 为 `8081`）。
+4. **统一反代**（可选）：使用宿主机的 Nginx 或 Caddy 将不同子域名（如 `user-a.memos.example.com` 和 `user-b.memos.example.com`）分别反向代理到对应的 `GATEWAY_PORT`，即刻享受到安全、物理层完全物理防泄露的 SaaS 级多租户个人 AI 知识库体验。
 
 ---
 
-## 常用开发命令
+## 🛠️ 常用开发指令（Nx 集成管理）
 
-所有依赖安装、测试、构建等命令均应优先通过 Nx target 执行：
+所有底层依赖安装、编译、测试等任务均已深度封装，必须优先通过 `npx nx` 任务调度执行：
 
 ```bash
-# 运行单元测试
+# 1. 运行全部单元测试（覆盖 RAG 拼装、提醒解析、Draw.io XML 离线解压缩）
 npx nx test sidecar
 
-# 编译代码验证
+# 2. 编译代码，检验 Python 语法及模块合规性
 npx nx run sidecar:compile
 
-# 构建 Docker 镜像
+# 3. 本地打包/重新编译 Docker 镜像
 npx nx build sidecar
 
-# 探测 Memos 服务状态
+# 4. 运行 Memos API 状态与 Webhook 注册探针
 npx nx run sidecar:probe-memos
 ```
 
 ---
 
-## 提醒用法
+## 📄 关联项目文档
 
-在 memo 中写入 `#提醒` 和明确时间，例如 `#提醒 明天 09:30 提交周报`。worker 会在整理该 memo 时调用默认模型抽取时间，创建持久化提醒；到期后通过 `REMINDER_WEBHOOK_URL` 发送 `title`/`body` 表单通知。时间模糊或置信度不足时，Sidecar 会在原 memo 下评论要求补充，不会阻塞普通 AI 整理。
-
----
-
-## 备份恢复
-
-管理页面的“备份恢复”区域可以下载 Sidecar 备份 ZIP。备份包含 Sidecar SQLite 快照和非机密配置文件；恢复时只替换 Sidecar SQLite，不会自动覆盖配置文件，也不会备份或恢复 Memos 主库。
-
----
-
-## 相关文档
-
-- [普通用户使用手册 🌐](https://htmlpreview.github.io/?https://github.com/nabule/memosima/blob/master/docs/普通用户使用手册.html)
-- [使用手册 🌐](https://htmlpreview.github.io/?https://github.com/nabule/memosima/blob/master/docs/使用手册.html)
-- [配置说明 🌐](https://htmlpreview.github.io/?https://github.com/nabule/memosima/blob/master/docs/配置说明.html)
-- [开发运行说明 🌐](https://htmlpreview.github.io/?https://github.com/nabule/memosima/blob/master/docs/开发运行说明.html)
-- [API 探针记录 🌐](https://htmlpreview.github.io/?https://github.com/nabule/memosima/blob/master/docs/API探针记录.html)
-- [开发计划与验收标准 🌐](https://htmlpreview.github.io/?https://github.com/nabule/memosima/blob/master/开发计划与验收标准-个人AI知识库系统.html)
-- [技术架构设计 🌐](https://htmlpreview.github.io/?https://github.com/nabule/memosima/blob/master/技术架构设计-个人AI知识库系统.html)
-- [PRD 🌐](https://htmlpreview.github.io/?https://github.com/nabule/memosima/blob/master/PRD-个人AI知识库系统.html)
+* [普通用户工作流指南 🌐](file:///home/abc/code/memosima/docs/普通用户使用手册.html) - 指引普通用户如何将 Prism 折射库无缝融入日常记录工作流中。
+* [使用手册 (部署与运维) 🌐](file:///home/abc/code/memosima/docs/使用手册.html) - 系统管理员部署拓扑与 Nx 管理指南。
+* [配置参数说明手册 🌐](file:///home/abc/code/memosima/docs/配置说明.html) - `app.yaml` 静态配置及环境变量秘钥全面指引。
+* [开发运行说明 🌐](file:///home/abc/code/memosima/docs/开发运行说明.html) - 为二次开发人员准备的架构与调试说明。

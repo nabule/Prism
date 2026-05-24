@@ -3,181 +3,294 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Prism (棱镜) 普通用户使用手册</title>
+  <title>Prism (棱镜) 普通用户工作流指南</title>
   <style>
-    :root { color-scheme: light dark; --bg:#f7f8fa; --fg:#1f2937; --muted:#667085; --panel:#fff; --border:#d0d5dd; --accent:#2563eb; --code:#101828; --codebg:#eef2f6; --ok:#047857; --warn:#b45309; }
+    :root {
+      color-scheme: light dark;
+      --bg: #f8fafc;
+      --fg: #0f172a;
+      --muted: #64748b;
+      --panel: #ffffff;
+      --border: #e2e8f0;
+      --accent: #2563eb;
+      --accent-light: #eff6ff;
+      --code: #0f172a;
+      --codebg: #f1f5f9;
+      --ok: #059669;
+      --ok-bg: #ecfdf5;
+      --warn: #d97706;
+      --warn-bg: #fffbeb;
+      --shadow: rgba(0, 0, 0, 0.05);
+    }
     * { box-sizing: border-box; }
-    body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.65 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-    main { max-width: 1040px; margin: 0 auto; padding: 40px 24px 72px; }
-    article { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 32px; box-shadow: 0 1px 2px rgba(16,24,40,.05); }
-    h1, h2, h3 { line-height: 1.25; margin: 1.4em 0 .6em; }
-    h1 { margin-top: 0; font-size: 2rem; }
-    h2 { border-top: 1px solid var(--border); padding-top: 1.1em; }
-    a { color: var(--accent); }
-    table { border-collapse: collapse; width: 100%; margin: 1rem 0; display: block; overflow-x: auto; }
-    th, td { border: 1px solid var(--border); padding: .55rem .7rem; text-align: left; vertical-align: top; }
-    th { background: #f2f4f7; }
-    pre { background: var(--codebg); color: var(--code); padding: 1rem; border-radius: 8px; overflow-x: auto; }
-    code { background: var(--codebg); color: var(--code); padding: .12rem .28rem; border-radius: 4px; }
-    pre code { background: transparent; padding: 0; }
-    .note { background: #f9fafb; border: 1px solid var(--border); border-radius: 8px; padding: 1rem; color: var(--muted); }
-    .ok { color: var(--ok); font-weight: 600; }
-    .warn { color: var(--warn); font-weight: 600; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font: 16px/1.7 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 40px 20px 80px;
+    }
+    article {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 40px;
+      box-shadow: 0 4px 6px -1px var(--shadow), 0 2px 4px -2px var(--shadow);
+    }
+    h1, h2, h3 { line-height: 1.3; margin: 1.6em 0 .6em; font-weight: 700; }
+    h1 { margin-top: 0; font-size: 2.2rem; text-align: center; }
+    h2 { border-top: 1px solid var(--border); padding-top: 1.2em; font-size: 1.6rem; color: var(--accent); }
+    h3 { font-size: 1.25rem; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    ul, ol { padding-left: 1.5rem; }
+    li { margin-bottom: 0.5rem; }
+    table { border-collapse: collapse; width: 100%; margin: 1.5rem 0; }
+    th, td { border: 1px solid var(--border); padding: .75rem 1rem; text-align: left; vertical-align: top; }
+    th { background: var(--codebg); font-weight: 600; }
+    pre {
+      background: var(--codebg);
+      color: var(--code);
+      padding: 1.2rem;
+      border-radius: 8px;
+      overflow-x: auto;
+      font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 0.95rem;
+      border: 1px solid var(--border);
+    }
+    code {
+      background: var(--codebg);
+      color: var(--accent);
+      padding: .15rem .3rem;
+      border-radius: 4px;
+      font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 0.9em;
+    }
+    pre code { background: transparent; padding: 0; color: inherit; font-size: inherit; }
+    
+    /* 说明框样式 */
+    .workflow-box {
+      background: var(--accent-light);
+      border-left: 4px solid var(--accent);
+      padding: 16px 20px;
+      border-radius: 4px 8px 8px 4px;
+      margin: 1.5rem 0;
+    }
+    .problem-solved {
+      background: var(--ok-bg);
+      border-left: 4px solid var(--ok);
+      padding: 16px 20px;
+      border-radius: 4px 8px 8px 4px;
+      margin: 1.5rem 0;
+    }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      font-size: 0.85em;
+      font-weight: 600;
+      border-radius: 9999px;
+      margin-right: 6px;
+    }
+    .badge.ok { background: var(--ok-bg); color: var(--ok); }
+    .badge.warn { background: var(--warn-bg); color: var(--warn); }
+    
     @media (prefers-color-scheme: dark) {
-      :root { --bg:#0b1220; --fg:#e5e7eb; --muted:#9ca3af; --panel:#111827; --border:#374151; --accent:#60a5fa; --code:#e5e7eb; --codebg:#1f2937; --ok:#34d399; --warn:#fbbf24; }
-      th, .note { background: #1f2937; }
+      :root {
+        --bg: #090d16;
+        --fg: #f1f5f9;
+        --muted: #94a3b8;
+        --panel: #0f172a;
+        --border: #1e293b;
+        --accent: #3b82f6;
+        --accent-light: rgba(59, 130, 246, 0.08);
+        --code: #f1f5f9;
+        --codebg: #1e293b;
+        --ok: #34d399;
+        --ok-bg: rgba(52, 211, 153, 0.08);
+        --warn: #fbbf24;
+        --warn-bg: rgba(251, 191, 36, 0.08);
+        --shadow: rgba(0, 0, 0, 0.3);
+      }
     }
   </style>
 </head>
 <body>
 <main>
 <article>
-  <div style="text-align: center; margin-bottom: 2rem;">
-    <img src="../Prism.png" alt="Prism Logo" style="width: 200px; height: auto;" />
-    <h1 style="margin-top: 1rem;">Prism (棱镜) 普通用户使用手册</h1>
-    <p style="font-style: italic; color: var(--muted); max-width: 600px; margin: 0 auto; text-align: left; padding: 12px; border-left: 4px solid var(--accent); background: var(--codebg);">
-      🌈 <strong>Prism (棱镜)：光的折射与思维的绚烂</strong><br>
-      随手丢进 Memos 的原始笔记，就像一束朴素的白光。当它穿过 <strong>Prism</strong> 时，被 AI 优雅地折射开来，化作了标签、结构化 Markdown（MinerU 解析）和清晰的知识脉络。零散的想法进去了，出来的是一抹绚丽的知识彩虹。
+  <div style="text-align: center; margin-bottom: 2.5rem;">
+    <img src="../Prism.png" alt="Prism Logo" style="width: 180px; height: auto;" />
+    <h1 style="margin-top: 1rem;">Prism (棱镜) 普通用户工作流指南</h1>
+    <p style="color: var(--muted); max-width: 650px; margin: 0 auto; text-align: left; padding: 16px; border-left: 4px solid var(--accent); background: var(--accent-light); border-radius: 0 8px 8px 0;">
+      🌈 <strong>Prism 的设计理念</strong>：<br>
+      您随手丢进 Memos 的碎片笔记、手绘草图和脑图附件，就像一束朴素无序的 <strong>白光</strong>。当它穿过 <strong>Prism 棱镜</strong> 时，被 AI 离线优雅折射，化为层级大纲、精准标签、ToDo 待办以及可供一键编译的超级 Prompt。<strong>零星想法进来，绚丽彩虹出去。</strong>
     </p>
   </div>
-  <p>普通用户日常只需要使用 Memos 客户端或 Memos Web 页面记录内容。<strong>Prism</strong> 会在后台自动读取新 memo，生成 AI 整理 memo、识别已有标签，并把新标签放入候选列表等待确认。</p>
 
-  <h2>1. 日常使用入口</h2>
+  <p>作为日常记录者，您<strong>不需要接触任何复杂的代码、Docker 容器或命令行</strong>。您只需要在您喜爱的 Memos 客户端中像平时一样自然地记录、粘贴即可。Prism 会在后台自动完成所有的精炼与整理。</p>
+
+  <h2>🎯 核心功能一览表</h2>
   <table>
     <thead>
-      <tr><th>入口</th><th>用途</th></tr>
+      <tr>
+        <th style="width: 25%;">核心功能</th>
+        <th style="width: 25%;">它的用途</th>
+        <th style="width: 50%;">解决您的痛点</th>
+      </tr>
     </thead>
     <tbody>
-      <tr><td>Memos Web 或客户端</td><td>日常记录、查看原始 memo、查看 AI 生成的整理 memo。本地默认入口是 <code>http://localhost:8080/</code>。</td></tr>
-      <tr><td>Prism (棱镜) 管理页面 <code>/admin/ui</code></td><td>调试、查看后台任务、重试失败任务、审核 AI 提出的候选标签、按标签生成整体总结、备份和恢复 Sidecar 数据。普通记录不需要打开它。</td></tr>
+      <tr>
+        <td><strong>🌈 AI 智能整理</strong></td>
+        <td>为凌乱备忘提炼核心标题、整理摘要、生成执行 To-Do。</td>
+        <td>“写时一时爽，过后火葬场”。海量两句话的闪念卡片由于缺乏整理，几天后就变成了查找不到的数字垃圾。</td>
+      </tr>
+      <tr>
+        <td><strong>🏷️ 标签双层治理</strong></td>
+        <td>自动区分已有正式标签与临时新标签，人工一键审核才入库。</td>
+        <td>AI 自动分类胡乱发明标签（导致标签泛滥），或用户自己手写标签不统一（如 <code>#部署</code> 与 <code>#deploy</code> 并存）。</td>
+      </tr>
+      <tr>
+        <td><strong>💻 图表离线高保真解析</strong></td>
+        <td>100% 本地离线解密 Draw.io 流程图和思维导图大纲，转换为 Markdown 文本。</td>
+        <td>上传的脑图、流程图对传统搜索工具来说完全是“乱码和黑盒”，根本无法检索其内部的文本和逻辑。</td>
+      </tr>
+      <tr>
+        <td><strong>🔍 离线 QA & Prompt 编译器</strong></td>
+        <td>基于精确标签与正文双路匹配，一键拼装超级 Prompt。</td>
+        <td>抗拒将全部个人日记和商业密码暴露给云端 AI 厂商，但又极度需要专属知识库问答。</td>
+      </tr>
+      <tr>
+        <td><strong>⏰ 时间智能提醒</strong></td>
+        <td>抽取正文自然语言时间，到期自动向手机发送 Bark 表单消息。</td>
+        <td>备忘里随手写了待办却容易忘记，需要一个极简的系统推送闹钟。</td>
+      </tr>
     </tbody>
   </table>
-  <p class="note">管理员需要先部署好 <strong>Prism</strong>、配置 Memos 访问 token 和模型 key。普通用户不需要接触 API key、Docker 或命令行。本地部署默认由 Caddy 网关提供统一入口，并由 Sidecar 主动轮询 Memos，不需要公网 webhook。</p>
 
-  <h2>2. 添加一条内容</h2>
-  <p>在 Memos 中新建 memo，直接写正文即可。内容越清楚，AI 整理和标签识别越稳定。</p>
-  <pre><code>今天调研了本地 AI 知识库方案。
-Memos 负责快速记录，Sidecar 负责后台整理、生成摘要和标签建议。
-下一步要验证附件解析和语义检索。</code></pre>
-  <p>保存后，Sidecar 会在后台自动发现并处理这条 memo。处理完成后，Memos 中会出现一条新的 AI 整理 memo，并通过 Memos 原生 relation 关联到原始 memo。</p>
+  ---
 
-  <h2>3. 写内容的建议</h2>
+  <h2>1. 🌈 AI 智能整理功能</h2>
+  
+  <h3>📌 功能用途</h3>
+  <p>当您在 Memos 中保存了一条随笔或资料摘录后，Prism 会在后台自动调用大语言模型，对内容进行深度结构化分析，提炼出<strong>“标题”</strong>、<strong>“摘要”</strong>、<strong>“核心要点”</strong>以及**“待办事项”**，并自动生成一条新的 <code>AI整理</code> 笔记，通过 Memos 的引用链条与您的原笔记进行双向绑定。</p>
+
+  <div class="problem-solved">
+    <strong>💡 解决的痛点</strong>：解决了碎片化笔记“易记录、难整理、无法重用”的问题，将无序的想法自动变成了可以直接指导下一步行动的高清闪念卡片。
+  </div>
+
+  <div class="workflow-box">
+    <strong>🔄 日常工作流嵌入</strong>：
+    <ol>
+      <li><strong>正常记录</strong>：如平时一样在手机或电脑端 Memos 记下简短的想法，然后点击保存。</li>
+      <li><strong>秒级生效</strong>：1至2秒内，该笔记的下方会自动生成一个“引用连接”，点开即可浏览 AI 帮您梳理的规范结构体。</li>
+      <li><strong>执行待办</strong>：可以直接在 AI 整理的 Task Checklist 中勾选待办，追踪事项进度。</li>
+    </ol>
+  </div>
+  
+  <p><strong>💡 优质记录范例</strong>：</p>
+  <pre><code>今天验证了 Prism 的 Mind Elixir 附件解析。
+把 JSON 文件递归遍历并秒级转换为了带缩进的 Markdown，比大模型在线 OCR 快得多。
+下一步要写完 test_p3_qa_drawio 单元测试并跟进 master 分支的推送。</code></pre>
+
+  ---
+
+  <h2>2. 🏷️ 标签双层治理与自动建议</h2>
+
+  <h3>📌 功能用途</h3>
+  <p>Prism 将标签分为三类：<strong>正式标签 (Active)</strong>、<strong>候选标签 (Candidate)</strong>、<strong>禁用标签 (Disabled)</strong>。</p>
   <ul>
-    <li>一条 memo 尽量只记录一个主题，例如一次会议、一段想法、一个资料摘录或一个任务进展。</li>
-    <li>正文里写清楚背景、结论、下一步，AI 会更容易生成摘要、要点和待办。</li>
-    <li>可以手动写已有标签，例如 <code>#项目/个人AI知识库</code>。已有正式标签会被直接使用。</li>
-    <li>不确定用什么标签时可以不写，AI 会从正文中提出候选标签。</li>
-    <li>短句或只有问题的 memo 可能会被标记为待澄清，需要补充信息后再重试。</li>
+    <li>如果您在写笔记时手写了已有正式标签，Prism 会直接归档。</li>
+    <li>如果您完全不写标签，AI 会根据语义为您推荐已有的正式标签；若 AI 认为需要创立新标签，该新标签将进入“候选标签”列表，必须由您在控制台点击 <code>Approved</code>，才会升级为正式标签。</li>
   </ul>
 
-  <h2>4. AI 会生成什么</h2>
-  <p>后台处理成功后，AI 整理 memo 通常包含这些内容：</p>
-  <ul>
-    <li>标题：根据正文生成的简短标题。</li>
-    <li>摘要：对原文的结构化总结。</li>
-    <li>要点：原文中的关键信息。</li>
-    <li>待办：可以继续执行的事项。</li>
-    <li>标签状态：已使用的正式标签、待审核的新标签、被禁用或无法使用的标签。</li>
-    <li>原文摘录：便于回看来源。</li>
-  </ul>
-  <p>如果模型 key 没有配置，系统仍会做本地模板整理和显式 <code>#tag</code> 识别，但不会调用大模型生成更完整的摘要和标签建议。</p>
+  <div class="problem-solved">
+    <strong>💡 解决的痛点</strong>：杜绝了 AI 自动生成导致的标签污染，并提供了标签同名跨层级归一能力（如自动将同名的 <code>#数管</code> 自动合并至已有层级 <code>#项目/数管</code>），确保您的知识库标签树永远干净清爽。
+  </div>
 
-  <h2>4.1 从 Memos 打开管理界面</h2>
-  <p>管理员启用默认配置后，Memos 中会出现一条 <code>#系统/Memosima</code> 管理入口 memo（标题自动呈现为 <strong>Prism (棱镜)</strong> 管理入口），里面有打开管理界面、查看任务、审核候选标签、生成标签总结和下载备份的链接。AI 整理 memo 底部也会附带“打开管理界面”链接；如果本次整理产生候选标签，会额外显示“审核候选标签”链接。</p>
-  <p>这些链接会打开 <code>/admin/ui</code>，页面仍需要输入 <code>SIDECAR_ADMIN_TOKEN</code>。token 只保存在当前浏览器，不会写入 Memos memo。</p>
+  <div class="workflow-box">
+    <strong>🔄 日常工作流嵌入</strong>：
+    <ol>
+      <li><strong>大胆记录</strong>：写笔记时不必纠结打什么标签。如果已有确定标签可以直接手写（例如 <code>#项目/ Prism</code>），如果没有，直接留空发布即可。</li>
+      <li><strong>标签审核</strong>：每周或定期进入 Prism 控制台：`http://localhost:8080/admin/ui#tag-candidates`，查看 AI 从您这周备忘中提炼的“候选标签”，点击“通过”入库，或者“拒绝”丢弃。</li>
+    </ol>
+  </div>
 
-  <h2>5. 标签如何自动生成</h2>
-  <p><strong>Prism</strong> 使用两层标签机制：</p>
-  <table>
-    <thead>
-      <tr><th>标签类型</th><th>来源</th><th>是否自动生效</th></tr>
-    </thead>
-    <tbody>
-      <tr><td>正式标签</td><td>管理员在配置中预置，或候选标签审核通过后形成。</td><td><span class="ok">会直接使用</span></td></tr>
-      <tr><td>候选标签</td><td>用户写了未审核的新 <code>#tag</code>，或 AI 从正文中提出新标签。</td><td><span class="warn">不会直接生效，需要审核</span></td></tr>
-      <tr><td>禁用标签</td><td>管理员明确禁用的标签。</td><td><span class="warn">不会使用</span></td></tr>
-    </tbody>
-  </table>
-  <p>只有原始用户 memo 没有任何业务标签时，AI 才会自动建议标签。AI 返回的 <code>active_tags</code> 只有命中正式标签集合时才会直接使用；AI 提出的新标签会进入 <code>candidate_tags</code>，不会自动变成正式标签。用户已经手写业务标签时，系统只使用用户标签，不再接收 AI 额外补充的标签。</p>
-  <p>AI 整理 memo 本身不会再写入业务 <code>#tag</code>，避免 AI 生成内容污染 Memos 标签筛选；它只保留 <code>#系统/AI整理</code>、<code>#系统/标签待审核</code> 等系统标签。业务标签会在“标签”区域以普通文本显示，管理员可以在 <strong>Prism</strong> 管理页面审核候选标签。</p>
-  <p>同名业务标签不能同时出现在不同层级。比如系统已有 <code>#项目/数管</code> 时，用户只写 <code>#数管</code>，后台会归一到已有正式标签；AI 也不能再新增 <code>#其他/数管</code> 这类同名候选。</p>
+  ---
 
-  <h2>6. 手动写标签</h2>
-  <p>可以在 Memos 正文中直接写标签：</p>
-  <pre><code>完成 Prism 管理页面调试。
-#项目/个人AI知识库 #阶段/P2</code></pre>
-  <p>如果 <code>#项目/个人AI知识库</code> 是正式标签，它会直接进入整理结果。如果 <code>#阶段/P2</code> 不是正式标签，它会进入候选标签列表，等待审核。</p>
+  <h2>3. 💻 流程图与思维脑图本地离线解析</h2>
 
-  <h2>7. 不写标签时的自动识别</h2>
-  <p>不写任何标签也可以。AI 会根据正文内容判断适合的正式标签，并在需要时提出新标签建议。</p>
-  <pre><code>今天把 的 qwen 模型接入到知识库整理流程。
-模型参数改成配置文件控制，并验证了真实接口调用。</code></pre>
-  <p>如果系统已有 <code>#项目/个人AI知识库</code>，AI 可以直接使用它。如果 AI 认为需要 <code>#模型/</code>，但这个标签还不是正式标签，它会进入候选列表。默认每条无标签 memo 最多接收少量 AI 补充标签；用户手动写了业务标签时，AI 标签建议会被忽略。</p>
+  <h3>📌 功能用途</h3>
+  <p>如果您在笔记中上传了 `.drawio` (或带有 XML 数据的 `.drawio.svg`) 流程图文件，或者是 `Mind Elixir` 思维导图脑图的 JSON 导出文件，Prism 后台会自动在<strong>本地 100% 离线</strong>对其解压与还原，提取出其中所有的纯文本节点、节点坐标关系，并重塑为排版精致、带 Markdown 缩进大纲的大纲大纲。</p>
 
-  <h2>8. 审核 AI 提出的新标签</h2>
-  <p>有权限的用户可以从 <code>#系统/Memosima</code> 管理入口 memo（标题自动呈现为 <strong>Prism (棱镜)</strong> 管理入口）或 AI 整理 memo 底部链接打开管理页面，也可以直接访问：</p>
-  <pre><code>http://localhost:8080/admin/ui#tag-candidates</code></pre>
-  <p>在页面中输入 <code>SIDECAR_ADMIN_TOKEN</code>，进入“候选标签”区域。</p>
-  <ul>
-    <li>点击“通过”：候选标签会变成正式标签，后续同类 memo 可直接使用。</li>
-    <li>点击“拒绝”：这次候选不会进入正式标签集合。</li>
-    <li>审核备注可用于记录通过或拒绝的原因。</li>
-  </ul>
-  <p class="note">当前审核通过会写入 Sidecar 数据库，后续 worker 会使用；不会自动改写 <code>config/taxonomy.yaml</code>。</p>
+  <div class="problem-solved">
+    <strong>💡 解决的痛点</strong>：打破了“非结构化附件不可读”的瓶颈。无需消耗任何昂贵的在线 OCR 费用或 LLM API Token，图表附件在本地安全变成纯文本，可供 AI 直接理解和全局搜索。
+  </div>
 
-  <h2>9. 待澄清内容怎么处理</h2>
-  <p>如果 memo 太短、缺少上下文，或像是在问一个需要更多信息的问题，系统可能不会直接创建 AI 整理 memo，而是在原 memo 下创建澄清评论。</p>
-  <p>处理方式：</p>
-  <ol>
-    <li>回到 Memos，编辑原始 memo，补充背景和目标。</li>
-    <li>打开管理页面 <code>/admin/ui</code>。</li>
-    <li>找到对应 <code>waiting_user</code> 任务，点击“重试”。</li>
-  </ol>
+  <div class="workflow-box">
+    <strong>🔄 日常工作流嵌入</strong>：
+    <ol>
+      <li><strong>直接上传</strong>：在 Memos 撰写笔记时，直接拖入或上传您的脑图 `.json` 或 Draw.io 流程图。</li>
+      <li><strong>自动丰富</strong>：如果您只传了附件而未写正文，Prism 整理完后会自动在 Memos 原笔记中回写一个清晰的卡片标题（如 <code># Prism 架构设计</code>），极大提升阅读辨识度。</li>
+    </ol>
+  </div>
 
-  <h2>10. 附件内容</h2>
-  <p>普通用户可以上传 <code>.txt</code>、<code>.md</code>、Word、Excel、PPT、PDF、<strong><code>.drawio</code>（及 .drawio.svg）流程图以及 Mind Elixir 脑图（.json）</strong>附件。后台会下载附件并转成 Markdown artifact，其中 Office/PDF 使用 MinerU 在线服务解析，而 <strong>Draw.io 与思维脑图则使用 100% 本地高保真离线解析</strong>（自动解压流程图组件文字与脑图递归大纲），安全快捷，零 Token 开销。</p>
-  <p>解析后的 Markdown 会和 memo 正文一起进入 AI 整理流程，因此附件里的内容也会参与摘要、标签识别和 AI 整理 memo 生成。</p>
-  <p>如果你只上传附件、不写正文，AI 分析成功后会自动给原始 memo 补一个标题，例如 <code># 项目方案</code>。这个标题用于在 Memos 列表里快速识别附件内容；详细摘要、要点和标签仍在新生成的 <code>AI整理</code> memo 中查看。</p>
+  ---
 
-  <h2>11. 使用提醒</h2>
-  <p>如果管理员配置了提醒通知出口，可以在 memo 中写 <code>#提醒</code> 和明确时间：</p>
-  <pre><code>#提醒 明天 09:30 提交周报
-周报需要发给项目群，并同步本周风险。</code></pre>
-  <p>Sidecar 会在后台按管理员配置的提醒抽取模型和提示词识别时间，并创建一次性提醒。到点后，系统会通过管理员配置的 webhook 发送通知，通知正文包含提醒内容、到期时间和来源 memo UID。</p>
-  <p>建议写清楚日期和时间，例如 <code>#提醒 2026-05-22 14:00 跟进合同</code>。如果只写“有空提醒我”或时间已经过去，系统会在原 memo 下评论要求补充具体时间，但普通 AI 整理仍会继续。</p>
+  <h2>4. 🔍 离线 RAG 与超级 Prompt 编译器</h2>
 
-  <h2>12. 常见问题</h2>
-  <h3>系统支持多租户/多用户多账号混合使用吗？</h3>
-  <p class="warn">目前不支持直接在单一服务实例下直接共享或混用多账号。</p>
-  <p><strong>Prism</strong> 的定位是<strong>个人离线 AI 知识库系统</strong>，其后台同步任务和 Sidecar 数据库是以单一账户和 Token 方式运行的。如果多个独立用户在同一个 Memos 实例下直接共享同一个 Sidecar 服务，他们的附件解析内容和大纲数据库在后台未做物理隔离，在进行 QA 离线问答和 Prompt 编译时，可能会把其他用户的私密知识片段也检索出来，这会带来<strong>严重的隐私泄露与数据混淆风险</strong>。</p>
-  <p><strong>推荐的解决方案</strong>：如果有多人或多账号使用需求，管理员应采用<strong>独立容器化部署模式（SaaS / 多租户物理隔离）</strong>。即为每个用户在宿主机创建独立的部署工作目录，配置各自专属的 <code>.env</code> 文件与 Memos PAT，并在 `docker-compose.yml` 中修改网关对外暴露的 <code>GATEWAY_PORT</code> 端口启动，从而在物理层面彻底锁死并保障用户各自的数据主权与隐私防泄露。</p>
+  <h3>📌 功能用途</h3>
+  <p>在 Prism 管理页面的 <strong>“QA 离线问答”</strong> 面板中，您可以通过拼音实时下拉筛选特定的业务标签，输入您想向大模型提问的内容。Prism 会联合检索出这批标签下的所有原始笔记、AI 整理摘要和已解析附件 Markdown，并将其作为 Context 离线组装为一条带有完整层级的超级 Prompt，供您一键复制。</p>
 
-  <h3>为什么没有生成 AI 整理 memo？</h3>
-  <p>常见原因是 webhook 没有送达、worker 没有运行、模型 key 没配置、任务失败，或 memo 被判定为待澄清。可以在 <code>/admin/ui</code> 查看任务状态。</p>
+  <div class="problem-solved">
+    <strong>💡 解决的痛点</strong>：完美的<strong>本地沙箱隔离方案</strong>。您无需把几十万字的个人笔记和敏感工作密码交出去托管，仅仅在本地自动拼好 Prompt，带入已经验证安全的网页端沙箱大模型（如官网 DeepSeek / ChatGPT）中使用，把数据主权牢牢抓在自己手里。
+  </div>
 
-  <h3>为什么新标签没有直接出现在正式标签里？</h3>
-  <p>新标签必须审核。这样可以避免 AI 或用户临时写法污染正式标签体系。</p>
+  <div class="workflow-box">
+    <strong>🔄 日常工作流嵌入</strong>：
+    <ol>
+      <li><strong>提出问题</strong>：打开管理端页面 <code>http://localhost:8080/admin/ui#qa</code>。</li>
+      <li><strong>组合标签</strong>：在胶囊选择器中打字，快速回车添加几个知识主题标签（例如 <code>部署</code>、<code>Caddy</code>）。</li>
+      <li><strong>一键编译复制</strong>：输入您的查询问题（例如：“如何在家庭服务器上一键迁移？”），点击编译，随后点击 **“一键复制”**。</li>
+      <li><strong>粘贴获知</strong>：在新标签页打开外部大模型，Ctrl+V 直接粘贴即可获得深度融合您私人知识库的精准回答。</li>
+    </ol>
+  </div>
 
-  <h3>我应该经常手动写标签吗？</h3>
-  <p>已有明确标签时可以手动写；不确定时不用强行写，让 AI 先生成候选标签，再由管理员审核。</p>
+  ---
 
-  <h3>普通用户使用客户端还是 Web？</h3>
-  <p>日常记录使用 Memos 客户端或 Memos Web 都可以。<strong>Prism</strong> 的 Web 管理页面主要用于调试、任务重试 and 标签审核，不是日常记录入口。</p>
+  <h2>5. ⏰ 时间智能提醒系统</h2>
 
-  <h2>13. 如何查看某个标签的整体总结</h2>
-  <p>管理员可以在 <code>/admin/ui</code> 的“标签总结”区域输入一个标签，例如 <code>#项目/个人AI知识库</code> 或高层级标签 <code>#项目</code>，点击“生成总结”。系统会把该标签下最近的普通来源 memos 整理成一条新的 Memos memo；输入高层级标签时，也会包含其子标签下的 memo，例如 <code>#项目/个人AI知识库</code>。如果原始 memo 没有手动标签，但 AI 整理结果命中了该标签，也会纳入总结。总结 memo 会通过 Memos 原生引用关联到参与整理的 memo，普通用户可以在 Memos Web 或客户端里点击相关 memo 回看来源；已有 AI 整理和历史标签总结不会被再次作为来源。</p>
+  <h3>📌 功能用途</h3>
+  <p>只要您在 Memos 的正文里写下了 <code>#提醒</code> 标签加一段普通的时间描述，Prism 后台会自动为您建立定时闹钟，到点后会向您的配置终端（如手机 Bark 推送 App）精确推送一条带标题和正文的表单通知。</p>
 
-  <h2>14. 备份和恢复 Sidecar 数据</h2>
-  <p>管理员可以在 <code>/admin/ui</code> 的“备份恢复”区域下载备份 ZIP。备份包含 Sidecar SQLite 数据和非机密配置文件，用于保留任务、候选标签、提醒、artifact 和 memo 映射等 Sidecar 状态。</p>
-  <p>恢复时选择备份 ZIP 并确认上传，系统只替换 Sidecar SQLite 数据库，不会自动覆盖配置文件，也不会备份或恢复 Memos 主库中的原始 memo。恢复前建议先下载一份当前备份。</p>
+  <div class="problem-solved">
+    <strong>💡 解决的痛点</strong>：不需要去专用的 To-Do 软件中繁琐地建卡片和调时间。随手写备忘的同时，闹钟和推送自动生成，绝不遗忘。
+  </div>
 
-  <h2>15. 更多文档</h2>
-  <ul>
-    <li><a href="../README.html">项目入口</a></li>
-    <li><a href="使用手册.html">部署与管理使用手册</a></li>
-    <li><a href="配置说明.html">配置说明</a></li>
-    <li><a href="开发运行说明.html">开发运行说明</a></li>
-  </ul>
+  <div class="workflow-box">
+    <strong>🔄 日常工作流嵌入</strong>：
+    <ol>
+      <li><strong>极速建闹钟</strong>：在 Memos 随手写下一行字：
+        <pre><code>#提醒 明天 14:30 跟进客户合同签订</code></pre>
+      </li>
+      <li><strong>自动诊断</strong>：如果时间模糊（例如只写了“有空提醒我”）或时间已过期，Prism 会在您原笔记下方自动发一条评论，温和提醒您需要补齐具体时间。</li>
+      <li><strong>接收推送</strong>：明天下午 14:30 分，您的手机会准时收到 Bark 推送消息，点击即可在手机上直达原始 Memos 页面。</li>
+    </ol>
+  </div>
+
+  ---
+
+  <h2>6. 🔒 隐私与 SaaS 多租户隔离提示</h2>
+  <p class="warn">警示：本系统在单实例下绑定单一 API 密钥，且全量知识解析存于同一个 SQLite 数据库中。请勿与他人共享使用同一个 Sidecar 实例，否则会发生跨用户的知识数据检索与泄露。</p>
+  <p><strong>最佳 SaaS 部署方案</strong>：如果家庭成员或团队中有多人记录需求，管理员应在宿主机上使用独立文件夹为每位成员运行一套物理隔离的容器栈，并在各自的 <code>.env</code> 中指定不同的 <code>GATEWAY_PORT</code> 端口启动，以物理级别的沙箱隔离方式保障大家的数据主权。</p>
+
+  ---
+
+  <h2>7. 💾 一键搬家与备份</h2>
+  <p>当您更换了新服务器、升级系统或者需要物理归档时，管理员可以在 Prism 控制台的 <strong>“备份恢复”</strong> 标签页中一键下载整站的 Sidecar 快照 ZIP 备份。</p>
+  <p>配合生产端提供的 [deploy.sh](file:///home/abc/code/memosima/deploy.sh) 脚本，您可以在新的机器上解压后一键热启动，秒级完成无缝异地完美搬家！</p>
 </article>
 </main>
 </body>

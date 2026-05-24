@@ -197,8 +197,6 @@
     <li><strong>Uvicorn 实时监听</strong>：Sidecar 容器启动命令已加载 <code>--reload --reload-dir /app/src</code>，一旦检测到本地代码修改，容器 Web服务将在 100 毫秒内轻量热重启并使代码生效，极大提高了实机部署的校验和研发效率。</li>
   </ul>
 
-  <h3>🔒 4. Xget 镜像拉取加速保障 (Rule 5)</h3>
-  <p>为了保障在国内或受限网络下依然能够实现容器镜像的秒级拉取，<code>Dockerfile</code>、<code>docker-compose.yml</code> 中的所有第三方公共镜像（如 Caddy、Memos、uv 运行底座等）均已默认配置了 <strong>Xget 加速分发源</strong>（如 <code>xget.your-domain.com/cr/...</code>），无需进行额外的 Docker Registry 配置即可畅享极速部署。</p>
 
   <h2>3. 打开调试管理页面</h2>
   <p>浏览器打开：</p>

@@ -94,10 +94,15 @@ document_parser:
   is_ocr: false
 reminders:
   enabled: true
-  trigger_tag: "#提醒"
+  trigger_tag: '#提醒'
   webhook_url_env: REMINDER_WEBHOOK_URL
   confidence_threshold: 0.75
   request_timeout_seconds: 10
+vector_search:
+  enabled: false
+  api_key_env: SILICONFLOW_API_KEY
+  base_url: https://api.siliconflow.cn/v1
+  model: BAAI/bge-m3
 worker:
   poll_interval_seconds: 2
   max_attempts: 3
@@ -107,18 +112,18 @@ limits:
   max_ai_active_tags: 5
   max_ai_candidate_tags: 2
   allowed_parse_extensions:
-    - .txt
-    - .md
-    - .doc
-    - .docx
-    - .xls
-    - .xlsx
-    - .ppt
-    - .pptx
-    - .pdf
-    - .drawio
-    - .drawio.svg
-    - .json
+  - .txt
+  - .md
+  - .doc
+  - .docx
+  - .xls
+  - .xlsx
+  - .ppt
+  - .pptx
+  - .pdf
+  - .drawio
+  - .drawio.svg
+  - .json
 EOF
 else
     echo -e "${YELLOW}[-] 检测到 config/app.yaml 已存在，跳过生成。${NC}"
@@ -176,7 +181,7 @@ organize_memo:
     \n除非 memo 内容为空、无法识别任何主题，或缺少完成整理所必需的信息，否则 needs_clarification 必须为 false。\n  如果原文是问题、排障记录、测试步骤、URL、待验证事项，不要因为它包含疑问句就要求澄清；应直接整理为\
     \ summary、key_points、\n  todos。\n  clarification_question 仅在 needs_clarification=true\
     \ 时填写，否则必须为 null。"
-  user: '请整理以下 memo，并遵守本地标签治理草案，对于URL连接需要获取真实内容并分析，所有内容主要语言为中文，你需要完整全面的整理原始memo内容。
+  user: '请整理以下 memo，并遵守本地标签治理草案，对于URL连接需要获取真实内容并分析，所有内容主要语言为中文，你需要完整全面的整理原始memo内容，树形风格，有条理。
 
 
     本地标签治理草案：
@@ -189,7 +194,7 @@ organize_memo:
     {content}'
 tag_summary:
   system: "你是个人知识库专题整理助手。请输出 Markdown，不要输出 JSON。\n目标是把同一标签下零散 memo 整理成适合人阅读的整体展示。\n\
-    请保留事实边界，不要编造未出现的信息。\n建议结构：总览、关键主题、时间线或进展、已完成、问题与风险、待办、相关 memo。\n要详实、有条理有框架，完整体系化的总结。\n\
+    请保留事实边界，不要编造未出现的信息。\n建议结构：总览、关键主题、时间线或进展、已完成、问题与风险、待办、相关 memo。\n要详实、有条理有框架，完整体系化的总结，树形风格。\n\
     除非 memo 内容为空、无法识别任何主题，或缺少完成整理所必需的信息，否则 needs_clarification 必须为 false。\n  如果原文是问题、排障记录、测试步骤、URL、待验证事项，不要因为它包含疑问句就要求澄清；应直接整理为\
     \ summary、key_points、\n  todos。\n  clarification_question 仅在 needs_clarification=true\
     \ 时填写，否则必须为 null。"
@@ -223,7 +228,7 @@ reminder_extraction:
 
     - 只有正文包含触发标签时才提取提醒。
 
-    - due_at 必须是可解析 of ISO 8601 时间，优先包含时区偏移。
+    - due_at 必须是可解析的 ISO 8601 时间，优先包含时区偏移。
 
     - 如果只有日期没有具体时刻、时间已无法确定或语义模糊，needs_clarification=true。
 

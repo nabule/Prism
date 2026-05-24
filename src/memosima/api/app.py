@@ -193,6 +193,9 @@ class GeneratePromptRequest(BaseModel):
     system_prompt: str
     query: str
     top_k: int = 15
+    include_original: bool = True
+    include_attachments: bool = True
+    include_ai_summary: bool = True
 
 
 class GeneratePromptResponse(BaseModel):
@@ -695,8 +698,19 @@ def create_app(
             clean_uid = uid.split("/")[-1] if "/" in uid else uid
             content = memo.get("content", "")
             
-            # Find any artifacts associated with this memo
-            artifacts = store.list_artifacts(workspace_id=config.workspace_id, memo_uid=clean_uid)
+            # Determine if this memo is an AI-generated summary or system summary
+            is_ai_summary = "#系统/AI整理" in content or "#系统/标签总结" in content or "#系统/AI文档" in content
+            
+            # Apply RAG filters
+            if is_ai_summary and not request_data.include_ai_summary:
+                continue
+            if not is_ai_summary and not request_data.include_original:
+                continue
+                
+            # Retrieve associated high-fidelity parsed attachments if enabled
+            artifacts = []
+            if request_data.include_attachments:
+                artifacts = store.list_artifacts(workspace_id=config.workspace_id, memo_uid=clean_uid)
             
             memo_tags = []
             for part in content.split():

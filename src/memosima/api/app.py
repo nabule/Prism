@@ -1287,6 +1287,70 @@ def create_app(
         return await get_memos_config()
 
     @app.post(
+        "/admin/memos/delete-all",
+        dependencies=[Depends(require_admin)],
+    )
+    async def delete_all_memos() -> dict[str, Any]:
+        cfg: AppConfig = app.state.config
+        if not cfg.memos_base_url or not cfg.memos_api_token:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Memos base URL or API token is not configured",
+            )
+        
+        memos_client = MemosClient(
+            base_url=cfg.memos_base_url,
+            api_token=cfg.memos_api_token,
+            timeout_seconds=cfg.memos_timeout_seconds,
+        )
+        
+        # 1. Collect all memo UIDs first in memory
+        page_token = None
+        all_uids = []
+        while True:
+            try:
+                response = await memos_client.list_memos(page_size=100, page_token=page_token)
+                raw_memos = response.get("memos", [])
+                if not isinstance(raw_memos, list) or not raw_memos:
+                    break
+                for m in raw_memos:
+                    uid = m.get("uid") or _memo_uid_from_name(m.get("name"))
+                    if uid:
+                        all_uids.append(uid)
+                
+                next_page_token = response.get("nextPageToken")
+                if not isinstance(next_page_token, str) or not next_page_token:
+                    break
+                page_token = next_page_token
+            except Exception as exc:
+                LOGGER.error("Failed to list memos during delete-all: %s", exc)
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail=f"Failed to list memos from server: {exc}",
+                )
+
+        # 2. Physically delete each memo on Memos server
+        deleted_count = 0
+        for uid in all_uids:
+            try:
+                await memos_client.delete_memo(uid)
+                deleted_count += 1
+            except Exception as exc:
+                LOGGER.warning("Failed to delete memo %s during delete-all: %s", uid, exc)
+
+        # 3. Clear synced data from local database
+        workspace_id = cfg.workspace_id
+        with store.connect() as conn:
+            conn.execute("DELETE FROM memos WHERE workspace_id = ?", (workspace_id,))
+            conn.execute("DELETE FROM tag_candidates WHERE workspace_id = ?", (workspace_id,))
+            conn.execute("DELETE FROM reminders WHERE workspace_id = ?", (workspace_id,))
+            conn.execute("DELETE FROM vector_units WHERE workspace_id = ?", (workspace_id,))
+            conn.execute("DELETE FROM artifacts WHERE workspace_id = ?", (workspace_id,))
+
+        return {"status": "ok", "message": f"Successfully deleted {deleted_count} memos and cleared local sync data."}
+
+
+    @app.post(
         "/admin/qa/generate-prompt",
         response_model=GeneratePromptResponse,
         dependencies=[Depends(require_admin)],

@@ -1014,3 +1014,85 @@ async def test_admin_tag_summary_multi_tags_and_relation(tmp_path, monkeypatch):
     assert data["summary_memo_uid"] == "tag-summary-123"
     assert "#系统/标签总结 #项目 #AI" in data["content"]
 
+
+def test_delete_all_memos(tmp_path, monkeypatch):
+    app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
+    models_path = write_yaml(tmp_path / "models.yaml", models_config_text())
+    monkeypatch.setenv("SIDECAR_ADMIN_TOKEN", "admin-token")
+    monkeypatch.setenv("MEMOS_BASE_URL", "http://localhost:5230")
+    monkeypatch.setenv("MEMOS_API_TOKEN", "some-memos-token")
+
+    list_called = []
+    delete_called = []
+
+    class MockMemosClient:
+        def __init__(self, base_url, api_token, timeout_seconds=15):
+            assert base_url == "http://localhost:5230"
+            assert api_token == "some-memos-token"
+
+        async def list_memos(self, page_size=20, page_token=None, filter_text=None):
+            list_called.append((page_size, page_token))
+            if page_token is None:
+                return {
+                    "memos": [
+                        {"uid": "memo1", "name": "memos/memo1"},
+                        {"uid": "memo2", "name": "memos/memo2"},
+                    ],
+                    "nextPageToken": "page-2",
+                }
+            elif page_token == "page-2":
+                return {
+                    "memos": [
+                        {"uid": "memo3", "name": "memos/memo3"},
+                    ],
+                    "nextPageToken": None,
+                }
+            return {"memos": []}
+
+        async def delete_memo(self, memo_uid):
+            delete_called.append(memo_uid)
+
+    import memosima.api.app as app_module
+    monkeypatch.setattr(app_module, "MemosClient", MockMemosClient)
+
+    client = TestClient(create_app(str(app_path), str(models_path)))
+    store = client.app.state.store
+    workspace_id = client.app.state.config.workspace_id
+
+    # Seed local database
+    store.upsert_memo(
+        workspace_id=workspace_id,
+        memos_uid="memo1",
+        memo_type="original",
+        status="synced",
+    )
+    store.upsert_memo(
+        workspace_id=workspace_id,
+        memos_uid="memo2",
+        memo_type="original",
+        status="synced",
+    )
+
+    # 1. Unauthorized POST should fail
+    unauth = client.post("/admin/memos/delete-all")
+    assert unauth.status_code == 401
+
+    # 2. Authorized POST should succeed
+    response = client.post(
+        "/admin/memos/delete-all",
+        headers={"Authorization": "Bearer admin-token"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "ok"
+    assert "deleted 3 memos" in data["message"]
+
+    assert list_called == [(100, None), (100, "page-2")]
+    assert sorted(delete_called) == ["memo1", "memo2", "memo3"]
+
+    # Verify that database was cleared for workspace
+    with store.connect() as conn:
+        count = conn.execute("SELECT COUNT(*) FROM memos WHERE workspace_id = ?", (workspace_id,)).fetchone()[0]
+        assert count == 0
+
+

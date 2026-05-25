@@ -936,3 +936,79 @@ async def test_batch_reprocess_tags_multi_and_relation(tmp_path, monkeypatch):
     assert data["matched_memo_count"] == 1  # 只有一个匹配 AND
     assert data["jobs_created"] == 1
 
+
+@pytest.mark.asyncio
+async def test_admin_tag_summary_multi_tags_and_relation(tmp_path, monkeypatch):
+    app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
+    models_path = write_yaml(tmp_path / "models.yaml", models_config_text())
+    monkeypatch.setenv("SIDECAR_ADMIN_TOKEN", "admin-token")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "deepseek-key")
+
+    class FakeMemosClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def list_memos(self, page_size, page_token=None):
+            return {
+                "memos": [
+                    {
+                        "name": "memos/source1",
+                        "content": "含有标签 #项目 和 #AI 的笔记",
+                        "tags": ["项目", "AI"],
+                    },
+                    {
+                        "name": "memos/source2",
+                        "content": "仅含有 #项目",
+                        "tags": ["项目"],
+                    }
+                ]
+            }
+
+        async def create_memo(self, content):
+            return {"name": "memos/tag-summary-123"}
+
+        async def upsert_memo_reference_relation(self, source_memo_uid, related_memo_uid):
+            pass
+
+    class FakeLLMClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def summarize_tag(self, tag, memos_markdown, memo_count, prompt_template):
+            assert "#项目" in tag
+            assert "#AI" in tag
+            assert "AND" in tag
+            return "大模型输出的总结内容"
+
+    import memosima.api.app as app_module
+    monkeypatch.setattr(app_module, "MemosClient", FakeMemosClient)
+    monkeypatch.setattr(app_module, "OpenAICompatibleClient", FakeLLMClient)
+
+    client = TestClient(create_app(str(app_path), str(models_path)))
+    store = client.app.state.store
+
+    store.upsert_memo(
+        workspace_id="default",
+        memos_uid="source1",
+        memo_type="original",
+        status="synced",
+    )
+
+    response = client.post(
+        "/admin/tag-summaries",
+        headers={"Authorization": "Bearer admin-token"},
+        json={
+            "tags": ["#项目", "#AI"],
+            "relation": "AND",
+            "limit": 10,
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["tags"] == ["#项目", "#AI"]
+    assert data["relation"] == "AND"
+    assert data["memo_count"] == 1
+    assert data["summary_memo_uid"] == "tag-summary-123"
+    assert "#系统/标签总结 #项目 #AI" in data["content"]
+

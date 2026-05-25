@@ -149,12 +149,16 @@ class RetryJobRequest(BaseModel):
 
 
 class TagSummaryRequest(BaseModel):
-    tag: str = Field(min_length=2, max_length=120)
+    tag: str | None = Field(default=None, max_length=120)
+    tags: list[str] | None = Field(default=None)
+    relation: str = Field(default="OR", max_length=10)
     limit: int = Field(default=50, ge=1, le=200)
 
 
 class TagSummaryResponse(BaseModel):
-    tag: str
+    tag: str | None = None
+    tags: list[str] | None = None
+    relation: str | None = None
     memo_count: int
     summary_memo_uid: str
     content: str
@@ -535,16 +539,30 @@ def create_app(
             api_token=config.memos_api_token,
             timeout_seconds=config.memos_timeout_seconds,
         )
+
+        tags = request.tags
+        if not tags:
+            if request.tag:
+                tags = [request.tag]
+            else:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Must specify tag or tags")
+
+        relation = request.relation or "OR"
+
         memos = await _list_memos_for_tags(
             memos_client,
             store=store,
             workspace_id=config.workspace_id,
-            tags=[request.tag],
-            relation="OR",
+            tags=tags,
+            relation=relation,
             limit=request.limit,
         )
         if not memos:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No memos found for tag")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No memos found for specified tags")
+
+        tag_desc = " ".join(tags)
+        if len(tags) > 1:
+            tag_desc += f" (关系: {relation})"
 
         memos_markdown = _memos_markdown(memos)
         llm_client = OpenAICompatibleClient(
@@ -554,7 +572,7 @@ def create_app(
         )
         try:
             summary = await llm_client.summarize_tag(
-                tag=request.tag,
+                tag=tag_desc,
                 memos_markdown=memos_markdown,
                 memo_count=len(memos),
                 prompt_template=prompts.tag_summary,
@@ -564,7 +582,7 @@ def create_app(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail="LLM tag summary request failed",
             ) from exc
-        content = _tag_summary_memo_content(tag=request.tag, summary=summary, memos=memos)
+        content = _tag_summary_memo_content(tag=tag_desc, summary=summary, memos=memos)
         created = await memos_client.create_memo(content)
         summary_uid = _memo_uid_from_name(created.get("name"))
         if not summary_uid:
@@ -576,6 +594,8 @@ def create_app(
             )
         return TagSummaryResponse(
             tag=request.tag,
+            tags=tags,
+            relation=relation,
             memo_count=len(memos),
             summary_memo_uid=summary_uid,
             content=content,

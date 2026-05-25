@@ -380,16 +380,32 @@ ADMIN_UI_HTML = """<!doctype html>
       <div class="stack">
         <div id="tag-summary" class="panel">
           <h2>标签总结</h2>
-          <div class="toolbar">
-            <div class="field">
-              <label for="tagSummaryTag">标签</label>
-              <input id="tagSummaryTag" value="#项目/个人AI知识库">
+          <div class="toolbar-wrapper" style="margin-bottom: 12px;">
+            <div class="grid" style="grid-template-columns: 1fr 120px auto; gap: 12px; align-items: end;">
+              <div class="field" style="position: relative; margin-bottom: 0;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+                  <label for="tagSummaryTagInput" style="margin-bottom: 0;">选择业务标签 (支持模糊/拼音搜索)</label>
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <span style="font-size: 0.8rem; color: var(--muted);">逻辑关系：</span>
+                    <select id="tagSummaryTagRelation" style="width: auto; padding: 2px 6px; font-size: 0.8rem; border-radius: 4px;">
+                      <option value="OR">或 (OR)</option>
+                      <option value="AND">与 (AND)</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="pills-container" id="tagSummaryTagContainer">
+                  <input type="text" id="tagSummaryTagInput" class="pill-input" placeholder="输入标签前缀，如 #项目..." autocomplete="off">
+                  <div id="tagSummaryTagAutocomplete" class="autocomplete-list"></div>
+                </div>
+              </div>
+              <div class="field" style="margin-bottom: 0;">
+                <label for="tagSummaryLimit">最大 Memo 数量</label>
+                <input id="tagSummaryLimit" type="number" min="1" max="200" value="50" style="width: 100%;">
+              </div>
+              <div style="margin-bottom: 0;">
+                <button id="createTagSummaryButton" class="primary" type="button" style="height: 38px;">生成总结</button>
+              </div>
             </div>
-            <div class="field">
-              <label for="tagSummaryLimit">数量</label>
-              <input id="tagSummaryLimit" type="number" min="1" max="200" value="50">
-            </div>
-            <button id="createTagSummaryButton" class="primary" type="button">生成总结</button>
           </div>
           <pre id="tagSummaryOutput">未生成</pre>
         </div>
@@ -1244,17 +1260,128 @@ async function savePrompts() {
   }
 }
 
+let tagSummarySelectedTags = [];
+let tagSummaryAvailableTags = [];
+
+const tagSummaryTagContainer = document.getElementById("tagSummaryTagContainer");
+const tagSummaryTagRelation = document.getElementById("tagSummaryTagRelation");
+const tagSummaryTagInput = document.getElementById("tagSummaryTagInput");
+const tagSummaryTagAutocomplete = document.getElementById("tagSummaryTagAutocomplete");
+const tagSummaryOutput = document.getElementById("tagSummaryOutput");
+
+function renderTagSummaryPills() {
+  const pills = tagSummaryTagContainer.querySelectorAll(".pill");
+  pills.forEach((p) => p.remove());
+
+  for (const tag of tagSummarySelectedTags) {
+    const pill = document.createElement("span");
+    pill.className = "pill";
+    pill.textContent = tag;
+    const remove = document.createElement("span");
+    remove.className = "remove";
+    remove.textContent = "×";
+    remove.onclick = (e) => {
+      e.stopPropagation();
+      tagSummarySelectedTags = tagSummarySelectedTags.filter((t) => t !== tag);
+      renderTagSummaryPills();
+    };
+    pill.append(remove);
+    tagSummaryTagContainer.insertBefore(pill, tagSummaryTagInput);
+  }
+}
+
+function addTagSummaryPill(tag) {
+  const val = tag.trim();
+  if (!val) return;
+  if (!tagSummarySelectedTags.includes(val)) {
+    tagSummarySelectedTags.push(val);
+    renderTagSummaryPills();
+  }
+  tagSummaryTagInput.value = "";
+  tagSummaryTagAutocomplete.style.display = "none";
+}
+
+async function loadTagSummaryBusinessTags() {
+  try {
+    const tags = await requestJson("/admin/tags/business");
+    if (Array.isArray(tags)) {
+      tagSummaryAvailableTags = tags;
+    }
+  } catch (e) {
+    console.warn("Failed to load business tags for summary:", e);
+  }
+}
+
+tagSummaryTagInput.addEventListener("input", () => {
+  const val = tagSummaryTagInput.value.trim().toLowerCase();
+  if (!val) {
+    tagSummaryTagAutocomplete.style.display = "none";
+    return;
+  }
+  const matches = tagSummaryAvailableTags.filter(t => t.toLowerCase().includes(val) && !tagSummarySelectedTags.includes(t));
+  if (matches.length === 0) {
+    tagSummaryTagAutocomplete.style.display = "none";
+    return;
+  }
+  tagSummaryTagAutocomplete.replaceChildren(
+    ...matches.map(m => {
+      const div = document.createElement("div");
+      div.className = "autocomplete-item";
+      div.textContent = m;
+      div.onclick = () => {
+        addTagSummaryPill(m);
+      };
+      return div;
+    })
+  );
+  tagSummaryTagAutocomplete.style.display = "block";
+});
+
+tagSummaryTagInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    addTagSummaryPill(tagSummaryTagInput.value);
+  } else if (e.key === "Backspace" && !tagSummaryTagInput.value && tagSummarySelectedTags.length > 0) {
+    tagSummarySelectedTags.pop();
+    renderTagSummaryPills();
+  }
+});
+
+document.addEventListener("click", (e) => {
+  if (e.target !== tagSummaryTagInput && e.target !== tagSummaryTagAutocomplete) {
+    tagSummaryTagAutocomplete.style.display = "none";
+  }
+});
+
 async function createTagSummary() {
   try {
-    const tag = document.getElementById("tagSummaryTag").value.trim();
+    const text = tagSummaryTagInput.value.trim();
+    if (text) {
+      addTagSummaryPill(text);
+    }
+
+    if (tagSummarySelectedTags.length === 0) {
+      setNotice("错误：请选择或输入至少一个用于标签总结的业务标签！", "error");
+      return;
+    }
+
     const limit = Number(document.getElementById("tagSummaryLimit").value || "50");
+    const relation = tagSummaryTagRelation.value;
+
     const data = await requestJson("/admin/tag-summaries", {
       method: "POST",
-      body: JSON.stringify({ tag, limit })
+      body: JSON.stringify({
+        tags: tagSummarySelectedTags,
+        relation: relation,
+        limit: limit
+      })
     });
     tagSummaryOutput.textContent = JSON.stringify(data, null, 2);
     showDetail(data);
     setNotice(`标签总结已生成：memos/${data.summary_memo_uid}`, "ok");
+    
+    tagSummarySelectedTags = [];
+    renderTagSummaryPills();
   } catch (error) {
     tagSummaryOutput.textContent = String(error.message || error);
     setNotice(String(error.message || error), "error");
@@ -2134,6 +2261,8 @@ if (token()) {
   loadDocumentParser();
   loadQABusinessTags();
   loadReprocessBusinessTags();
+  loadTagSummaryBusinessTags();
+  renderTagSummaryPills();
   loadMemosConfig();
 }
 

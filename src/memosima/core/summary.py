@@ -19,6 +19,7 @@ def build_summary_memo_content(
         [
             ai_summary_tag,
             *organization_plan.system_tags,
+            *organization_plan.active_tags,
         ]
     )
     hidden_business_paths = [

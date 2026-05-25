@@ -915,6 +915,44 @@ def create_app(
         if reminder is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reminder not found")
         return _reminder_view(reminder)
+    async def _trigger_reprocess_for_memo(memo_uid: str) -> None:
+        if not config.memos_base_url or not config.memos_api_token:
+            return
+        try:
+            memos_client = MemosClient(
+                base_url=config.memos_base_url,
+                api_token=config.memos_api_token,
+                timeout_seconds=config.memos_timeout_seconds,
+            )
+            deleted_summaries = []
+            with store.connect() as conn:
+                rows = conn.execute(
+                    "SELECT memos_uid FROM memos WHERE source_memo_uid = ? AND type = 'ai_summary'",
+                    (memo_uid,),
+                ).fetchall()
+                for row in rows:
+                    old_uid = str(row["memos_uid"])
+                    try:
+                        await memos_client.delete_memo(old_uid)
+                        deleted_summaries.append(old_uid)
+                    except Exception as exc:
+                        LOGGER.warning("Failed to delete old AI summary %s on Memos: %s", old_uid, exc)
+                if deleted_summaries:
+                    conn.execute(
+                        f"DELETE FROM memos WHERE memos_uid IN ({','.join(['?'] * len(deleted_summaries))})",
+                        deleted_summaries,
+                    )
+            
+            import uuid
+            idempotency_key = f"manual.reprocess:{memo_uid}:{uuid.uuid4().hex[:8]}"
+            store.create_job(
+                workspace_id=config.workspace_id,
+                job_type="process_memo",
+                idempotency_key=idempotency_key,
+                payload={"memo_uid": memo_uid, "manual": True},
+            )
+        except Exception as exc:
+            LOGGER.error("Failed to trigger automatic reprocess for %s: %s", memo_uid, exc)
 
     @app.post(
         "/admin/tag-candidates/{candidate_id}/approve",
@@ -935,6 +973,11 @@ def create_app(
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
         if candidate is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tag candidate not found")
+        
+        # Trigger automatic reprocessing of the source memo to update the AI summary card
+        if candidate.source_memo_uid:
+            await _trigger_reprocess_for_memo(candidate.source_memo_uid)
+            
         return _tag_candidate_view(candidate)
 
     @app.post(
@@ -953,6 +996,11 @@ def create_app(
         )
         if candidate is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tag candidate not found")
+            
+        # Trigger automatic reprocessing of the source memo to update the AI summary card
+        if candidate.source_memo_uid:
+            await _trigger_reprocess_for_memo(candidate.source_memo_uid)
+            
         return _tag_candidate_view(candidate)
 
     @app.get(

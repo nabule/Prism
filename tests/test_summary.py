@@ -20,7 +20,7 @@ def test_build_summary_memo_content_keeps_business_tags_as_plain_text(tmp_path):
     )
 
     assert content.startswith("#系统/AI整理")
-    assert "#系统/原始记录" in content
+    assert "#系统/原始记录" not in content
     assert "#系统/标签待审核" in content
     first_line = content.splitlines()[0]
     assert "#项目/个人AI知识库" in first_line

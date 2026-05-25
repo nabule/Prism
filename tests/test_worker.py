@@ -80,7 +80,7 @@ async def test_worker_processes_memo_with_mock_client(tmp_path, monkeypatch):
     assert jobs[0].result["ai_plan"]["candidate_tags"][0]["path"] == "#项目/新方向"
     assert len(FakeClient.created_memos) == 1
     assert "#系统/AI整理" in FakeClient.created_memos[0]
-    assert "#项目/个人AI知识库" not in FakeClient.created_memos[0]
+    assert "#项目/个人AI知识库" in FakeClient.created_memos[0]
     assert "#项目/新方向" not in FakeClient.created_memos[0]
     assert "项目/个人AI知识库" in FakeClient.created_memos[0]
     assert "项目/新方向" in FakeClient.created_memos[0]
@@ -239,7 +239,7 @@ async def test_worker_uses_llm_draft_when_model_key_is_configured(tmp_path, monk
     assert "LLM 结构化摘要" in FakeMemosClient.created_memos[0]
     assert "- 关键点一" in FakeMemosClient.created_memos[0]
     assert "- 后续任务一" in FakeMemosClient.created_memos[0]
-    assert "#项目/个人AI知识库" not in FakeMemosClient.created_memos[0]
+    assert "#项目/个人AI知识库" in FakeMemosClient.created_memos[0]
     assert "项目/个人AI知识库" in FakeMemosClient.created_memos[0]
 
 
@@ -747,7 +747,7 @@ async def test_worker_merges_ai_generated_tags_from_body(tmp_path, monkeypatch):
     assert [candidate.path for candidate in candidates] == ["#项目/调试后台", "#项目/未知正式标签"]
     assert candidates[0].reason == "正文提到新增调试后台"
     assert candidates[0].confidence == 0.9
-    assert "#项目/个人AI知识库" not in FakeMemosClient.created_memos[0]
+    assert "#项目/个人AI知识库" in FakeMemosClient.created_memos[0]
     assert "#项目/调试后台" not in FakeMemosClient.created_memos[0]
     assert "#项目/未知正式标签" not in FakeMemosClient.created_memos[0]
     assert "#杂项" not in FakeMemosClient.created_memos[0]
@@ -1103,7 +1103,7 @@ async def test_worker_uses_approved_business_tags_from_store(tmp_path, monkeypat
     assert job.result["ai_plan"]["active_tags"] == ["#项目/新方向"]
     assert job.result["ai_plan"]["candidate_tags"] == []
     assert store.list_tag_candidates(workspace_id="default", status="candidate") == []
-    assert "#项目/新方向" not in FakeClient.created_memos[0]
+    assert "#项目/新方向" in FakeClient.created_memos[0]
     assert "项目/新方向" in FakeClient.created_memos[0]
     assert FakeClient.relations == [("summary-approved-tag", "approved-tag")]
 

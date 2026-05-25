@@ -802,12 +802,21 @@ ADMIN_UI_HTML = """<!doctype html>
         <div>
           <h3>按标签批量重新整理</h3>
           <div class="field" style="position: relative;">
-            <label for="reprocessTagInput">选择业务标签 (支持模糊/拼音搜索)</label>
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+              <label for="reprocessTagInput" style="margin-bottom: 0;">选择业务标签 (支持模糊/拼音搜索)</label>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span style="font-size: 0.8rem; color: var(--muted);">逻辑关系：</span>
+                <select id="reprocessTagRelation" style="width: auto; padding: 2px 6px; font-size: 0.8rem; border-radius: 4px;">
+                  <option value="OR">或 (OR)</option>
+                  <option value="AND">与 (AND)</option>
+                </select>
+              </div>
+            </div>
             <div class="pills-container" id="reprocessTagContainer">
               <input type="text" id="reprocessTagInput" class="pill-input" placeholder="输入标签前缀，如 #项目..." autocomplete="off">
               <div id="reprocessTagAutocomplete" class="autocomplete-list"></div>
             </div>
-            <div class="muted" style="margin-top: 4px;">模糊匹配将自动级联（包含子标签，如输入 #项目 会级联处理 #项目/数管 等）。</div>
+            <div class="muted" style="margin-top: 4px;">多标签匹配将自动级联（包含子标签）。在“与 (AND)”关系下，Memo 必须包含所选的所有标签；在“或 (OR)”关系下，满足任一标签即可被重整理。</div>
           </div>
           <div class="toolbar" style="margin-top: 10px;">
             <button id="btnReprocessTag" class="primary" type="button">批量删除旧卡片并重整理</button>
@@ -1878,7 +1887,7 @@ btnCopyPrompt.addEventListener("click", () => {
 });
 
 /* 重新整理与批量处理逻辑 */
-let selectedReprocessTag = "";
+let reprocessSelectedTags = [];
 let reprocessAvailableTags = [];
 
 const reprocessUrlInput = document.getElementById("reprocessUrlInput");
@@ -1886,6 +1895,8 @@ const reprocessMemoUidBadge = document.getElementById("reprocessMemoUidBadge");
 const reprocessMemoUidText = document.getElementById("reprocessMemoUidText");
 const btnReprocessSingle = document.getElementById("btnReprocessSingle");
 
+const reprocessTagContainer = document.getElementById("reprocessTagContainer");
+const reprocessTagRelation = document.getElementById("reprocessTagRelation");
 const reprocessTagInput = document.getElementById("reprocessTagInput");
 const reprocessTagAutocomplete = document.getElementById("reprocessTagAutocomplete");
 const btnReprocessTag = document.getElementById("btnReprocessTag");
@@ -1928,6 +1939,38 @@ async function loadReprocessBusinessTags() {
   }
 }
 
+function renderReprocessPills() {
+  const pills = reprocessTagContainer.querySelectorAll(".pill");
+  pills.forEach((p) => p.remove());
+
+  for (const tag of reprocessSelectedTags) {
+    const pill = document.createElement("span");
+    pill.className = "pill";
+    pill.textContent = tag;
+    const remove = document.createElement("span");
+    remove.className = "remove";
+    remove.textContent = "×";
+    remove.onclick = (e) => {
+      e.stopPropagation();
+      reprocessSelectedTags = reprocessSelectedTags.filter((t) => t !== tag);
+      renderReprocessPills();
+    };
+    pill.append(remove);
+    reprocessTagContainer.insertBefore(pill, reprocessTagInput);
+  }
+}
+
+function addReprocessPill(tag) {
+  const val = tag.trim();
+  if (!val) return;
+  if (!reprocessSelectedTags.includes(val)) {
+    reprocessSelectedTags.push(val);
+    renderReprocessPills();
+  }
+  reprocessTagInput.value = "";
+  reprocessTagAutocomplete.style.display = "none";
+}
+
 reprocessTagInput.addEventListener("input", () => {
   const val = reprocessTagInput.value.trim().toLowerCase();
   if (!val) {
@@ -1935,8 +1978,8 @@ reprocessTagInput.addEventListener("input", () => {
     return;
   }
   
-  // 智能模糊过滤
-  const matches = reprocessAvailableTags.filter(t => t.toLowerCase().includes(val));
+  // 智能模糊过滤并排除已选
+  const matches = reprocessAvailableTags.filter(t => t.toLowerCase().includes(val) && !reprocessSelectedTags.includes(t));
   if (matches.length === 0) {
     reprocessTagAutocomplete.style.display = "none";
     return;
@@ -1948,14 +1991,22 @@ reprocessTagInput.addEventListener("input", () => {
       div.className = "autocomplete-item";
       div.textContent = m;
       div.onclick = () => {
-        reprocessTagInput.value = m;
-        selectedReprocessTag = m;
-        reprocessTagAutocomplete.style.display = "none";
+        addReprocessPill(m);
       };
       return div;
     })
   );
   reprocessTagAutocomplete.style.display = "block";
+});
+
+reprocessTagInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    addReprocessPill(reprocessTagInput.value);
+  } else if (e.key === "Backspace" && !reprocessTagInput.value && reprocessSelectedTags.length > 0) {
+    reprocessSelectedTags.pop();
+    renderReprocessPills();
+  }
 });
 
 // 点击外部时关闭模糊联想框
@@ -2012,23 +2063,32 @@ btnReprocessSingle.addEventListener("click", async () => {
 
 // 4. 标签批量重新整理提交
 btnReprocessTag.addEventListener("click", async () => {
-  const tag = reprocessTagInput.value.trim();
-  if (!tag) {
-    logReprocess("错误：请选择需要批量重新整理的业务标签！", true);
+  // 如果输入框有字，先补进 Pills 里
+  const text = reprocessTagInput.value.trim();
+  if (text) {
+    addReprocessPill(text);
+  }
+
+  if (reprocessSelectedTags.length === 0) {
+    logReprocess("错误：请选择或输入至少一个需要批量重新整理的业务标签！", true);
     return;
   }
+
+  const tagsStr = reprocessSelectedTags.join(", ");
+  const relStr = reprocessTagRelation.value === "AND" ? "与 (AND)" : "或 (OR)";
   
-  if (!confirm(`⚠️ 极其重要提示：\n\n确认要批量处理标签 '${tag}' 下的所有 Memos 吗？\n这将会物理删除所有相关的旧 AI 整理卡片，并生成全新整理计划任务！`)) {
+  if (!confirm(`⚠️ 极其重要提示：\n\n确认要批量处理包含标签 ${tagsStr} [关系为 ${relStr}] 的所有 Memos 吗？\n这将会物理删除所有相关的旧 AI 整理卡片，并生成全新整理计划任务！`)) {
     return;
   }
   
   btnReprocessTag.disabled = true;
   btnReprocessTag.textContent = "批量任务提交中...";
-  logReprocess(`正在查询标签 '${tag}' 级联匹配的所有 Memo，并执行历史数据清理中...`);
+  logReprocess(`正在查询匹配标签 [${tagsStr}] [${relStr}] 的所有 Memo，并执行历史数据清理中...`);
   
   try {
     const payload = {
-      tag: tag,
+      tags: reprocessSelectedTags,
+      relation: reprocessTagRelation.value,
       model_provider: reprocessProvider.value || null,
       model_name: reprocessModelName.value.trim() || null,
       prompt_override: {
@@ -2043,6 +2103,11 @@ btnReprocessTag.addEventListener("click", async () => {
     });
     
     logReprocess(`🎉 标签批量重整理任务注册成功！\n\n- 匹配到的 Memo 记录数: ${res.matched_memo_count}\n- 成功启动重新整理任务数: ${res.jobs_created}\n- 物理清理历史卡片数: ${res.old_summaries_deleted_count}\n- 任务 ID 列表: ${res.job_ids.join(", ") || "无"}\n\n批量任务已经就绪，后台协程正在极速并发处理！`);
+    
+    // 清空选中的标签
+    reprocessSelectedTags = [];
+    renderReprocessPills();
+    
     jumpToJobsContainer.style.display = "block";
   } catch (err) {
     logReprocess(`错误：${err.message || err}`, true);

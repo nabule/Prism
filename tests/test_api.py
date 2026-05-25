@@ -875,3 +875,64 @@ async def test_batch_reprocess_tag_endpoint(tmp_path, monkeypatch):
     assert job.payload["model_provider"] == "deepseek"
     assert job.payload["model_name"] == "deepseek-chat"
 
+
+@pytest.mark.asyncio
+async def test_batch_reprocess_tags_multi_and_relation(tmp_path, monkeypatch):
+    app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
+    models_path = write_yaml(tmp_path / "models.yaml", models_config_text())
+    monkeypatch.setenv("SIDECAR_ADMIN_TOKEN", "admin-token")
+
+    deleted_memos = []
+
+    class MockMemosClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def list_memos(self, page_size, page_token=None):
+            return {
+                "memos": [
+                    {
+                        "name": "memos/original-tag-1",
+                        "content": "含有标签 #项目 和 #AI 的笔记",
+                        "tags": ["项目", "AI"],
+                    },
+                    {
+                        "name": "memos/original-tag-2",
+                        "content": "仅含有 #项目",
+                        "tags": ["项目"],
+                    }
+                ]
+            }
+
+        async def delete_memo(self, uid):
+            deleted_memos.append(uid)
+
+    import memosima.api.app as app_module
+    monkeypatch.setattr(app_module, "MemosClient", MockMemosClient)
+
+    client = TestClient(create_app(str(app_path), str(models_path)))
+    store = client.app.state.store
+
+    store.upsert_memo(
+        workspace_id="default",
+        memos_uid="original-tag-1",
+        memo_type="original",
+        status="synced",
+    )
+
+    response = client.post(
+        "/admin/jobs/batch-reprocess-tag",
+        headers={"Authorization": "Bearer admin-token"},
+        json={
+            "tags": ["#项目", "#AI"],
+            "relation": "AND",
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["tags"] == ["#项目", "#AI"]
+    assert data["relation"] == "AND"
+    assert data["matched_memo_count"] == 1  # 只有一个匹配 AND
+    assert data["jobs_created"] == 1
+

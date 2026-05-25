@@ -173,7 +173,9 @@ class ReprocessMemoRequest(BaseModel):
 
 
 class BatchReprocessTagRequest(BaseModel):
-    tag: str = Field(min_length=1, max_length=120)
+    tag: str | None = Field(default=None, max_length=120)
+    tags: list[str] | None = Field(default=None)
+    relation: str = Field(default="OR", max_length=10)
     model_provider: str | None = Field(default=None, max_length=80)
     model_name: str | None = Field(default=None, max_length=200)
     prompt_override: ReprocessPromptOverride | None = None
@@ -187,7 +189,9 @@ class ReprocessMemoResponse(BaseModel):
 
 
 class BatchReprocessTagResponse(BaseModel):
-    tag: str
+    tag: str | None = None
+    tags: list[str] | None = None
+    relation: str | None = None
     matched_memo_count: int
     jobs_created: int
     job_ids: list[int]
@@ -531,11 +535,12 @@ def create_app(
             api_token=config.memos_api_token,
             timeout_seconds=config.memos_timeout_seconds,
         )
-        memos = await _list_memos_for_tag(
+        memos = await _list_memos_for_tags(
             memos_client,
             store=store,
             workspace_id=config.workspace_id,
-            tag=request.tag,
+            tags=[request.tag],
+            relation="OR",
             limit=request.limit,
         )
         if not memos:
@@ -678,16 +683,26 @@ def create_app(
             timeout_seconds=config.memos_timeout_seconds,
         )
 
-        memos = await _list_memos_for_tag(
+        tags = request.tags
+        if not tags:
+            if request.tag:
+                tags = [request.tag]
+            else:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Must specify tag or tags")
+
+        relation = request.relation or "OR"
+
+        memos = await _list_memos_for_tags(
             memos_client,
             store=store,
             workspace_id=config.workspace_id,
-            tag=request.tag,
+            tags=tags,
+            relation=relation,
             limit=200,
         )
 
         if not memos:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No memos found for the specified tag")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No memos found for the specified tags")
 
         job_ids: list[int] = []
         old_summaries_deleted_count = 0
@@ -737,6 +752,8 @@ def create_app(
 
         return BatchReprocessTagResponse(
             tag=request.tag,
+            tags=tags,
+            relation=relation,
             matched_memo_count=len(memos),
             jobs_created=len(job_ids),
             job_ids=job_ids,
@@ -1666,6 +1683,15 @@ def _memo_matches_tag(memo: dict[str, Any], tag: str) -> bool:
     return isinstance(content, str) and any(_tag_path_matches(item, normalized) for item in _extract_content_tags(content))
 
 
+def _memo_matches_tags(memo: dict[str, Any], tags: list[str], relation: str) -> bool:
+    if not tags:
+        return False
+    matches = [_memo_matches_tag(memo, t) for t in tags]
+    if relation.upper() == "AND":
+        return all(matches)
+    return any(matches)
+
+
 def _tag_path_matches(candidate: str, normalized_tag: str) -> bool:
     normalized_candidate = _memos_tag(candidate)
     return normalized_candidate == normalized_tag or normalized_candidate.startswith(f"{normalized_tag}/")
@@ -1675,12 +1701,13 @@ def _extract_content_tags(content: str) -> list[str]:
     return re.findall(r"#[0-9A-Za-z_\-\u4e00-\u9fff/]+", content)
 
 
-async def _list_memos_for_tag(
+async def _list_memos_for_tags(
     memos_client: MemosClient,
     *,
     store: Store,
     workspace_id: str,
-    tag: str,
+    tags: list[str],
+    relation: str,
     limit: int,
 ) -> list[dict[str, Any]]:
     matched: list[dict[str, Any]] = []
@@ -1705,14 +1732,14 @@ async def _list_memos_for_tag(
                 scanned += 1
                 memo_uid = _memo_uid_from_name(memo.get("name"))
                 if _is_sidecar_generated_memo(memo):
-                    if memo_uid and _memo_matches_tag(memo, tag):
+                    if memo_uid and _memo_matches_tags(memo, tags, relation):
                         source_uid = summary_sources.get(memo_uid)
                         if source_uid:
                             source_uids_from_summaries.append(source_uid)
                     continue
                 if memo_uid:
                     matched_by_uid[memo_uid] = memo
-                if _memo_matches_tag(memo, tag) and memo_uid and _append_unique_memo(matched, memo, limit):
+                if _memo_matches_tags(memo, tags, relation) and memo_uid and _append_unique_memo(matched, memo, limit):
                     if len(matched) >= limit:
                         break
 

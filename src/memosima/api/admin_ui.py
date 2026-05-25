@@ -294,6 +294,7 @@ ADMIN_UI_HTML = """<!doctype html>
     <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="backup">备份</button>
     <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="qa">QA 离线问答</button>
     <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="reprocess">重新整理</button>
+    <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="logs">系统日志</button>
   </nav>
 
   <section class="tab-panel active" data-panel="overview">
@@ -315,6 +316,7 @@ ADMIN_UI_HTML = """<!doctype html>
           <button type="button" data-tab-target="vector-search">向量库配置</button>
           <button type="button" data-tab-target="memos">Memos 同步</button>
           <button type="button" data-tab-target="backup">备份恢复</button>
+          <button type="button" data-tab-target="logs">系统日志</button>
         </div>
         <div class="muted">使用上方标签聚合任务、标签、AI 配置、模型、提醒和备份能力。</div>
       </div>
@@ -885,6 +887,56 @@ ADMIN_UI_HTML = """<!doctype html>
       </div>
     </div>
   </section>
+
+  <section class="tab-panel" data-panel="logs">
+    <div class="panel stack">
+      <h2>系统运行日志</h2>
+      <div class="hint">实时监控与检索 API、Worker、AI 调用、向量数据库和文档解析的后台运行状态。</div>
+      
+      <div class="toolbar" style="margin-top: 15px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+        <div class="field" style="margin: 0; flex: 1; min-width: 200px;">
+          <input id="logSearchQuery" type="text" placeholder="搜索日志内容..." style="width: 100%; height: 38px;">
+        </div>
+        <div class="field" style="margin: 0; width: 150px;">
+          <select id="logFilterComponent" style="width: 100%; height: 38px;">
+            <option value="">所有组件</option>
+            <option value="system">System (系统)</option>
+            <option value="api">API (接口)</option>
+            <option value="worker">Worker (工作流)</option>
+            <option value="ai">AI (大模型)</option>
+            <option value="vector">Vector (向量)</option>
+            <option value="mineru">MinerU (文档解析)</option>
+          </select>
+        </div>
+        <div class="field" style="margin: 0; width: 120px;">
+          <select id="logFilterLevel" style="width: 100%; height: 38px;">
+            <option value="">所有级别</option>
+            <option value="DEBUG">DEBUG</option>
+            <option value="INFO">INFO</option>
+            <option value="WARNING">WARNING</option>
+            <option value="ERROR">ERROR</option>
+          </select>
+        </div>
+        <button id="refreshLogsButton" class="primary" type="button" style="height: 38px;">刷新</button>
+        <button id="clearLogsButton" class="danger" type="button" style="height: 38px;">清空日志</button>
+        <label style="display: flex; align-items: center; gap: 5px; font-size: 14px; user-select: none; margin-left: 5px;">
+          <input id="logAutoRefresh" type="checkbox" checked> 实时监听
+        </label>
+      </div>
+      
+      <div style="margin-top: 15px; max-height: 520px; min-height: 300px; overflow-y: auto; background: #1e1e1e; color: #d4d4d4; font-family: 'Fira Code', 'Courier New', Courier, monospace; padding: 15px; border-radius: 8px; border: 1px solid #333; line-height: 1.5; font-size: 0.85rem;" id="logTerminal">
+        <div id="logContent">等待加载日志...</div>
+      </div>
+      
+      <div class="toolbar" style="margin-top: 10px; display: flex; justify-content: space-between; align-items: center;">
+        <span id="logCountLabel" style="font-size: 14px; color: var(--text-light);">共 0 条日志</span>
+        <div style="display: flex; gap: 5px;">
+          <button id="logPrevPage" type="button" disabled>上一页</button>
+          <button id="logNextPage" type="button" disabled>下一页</button>
+        </div>
+      </div>
+    </div>
+  </section>
 </main>
 
 <dialog id="promptDialog">
@@ -960,7 +1012,8 @@ const hashPanelMap = {
   memos: { panel: "memos" },
   "vector-search": { panel: "vector-search" },
   qa: { panel: "qa" },
-  reprocess: { panel: "reprocess" }
+  reprocess: { panel: "reprocess" },
+  logs: { panel: "logs" }
 };
 
 function setNotice(message, kind = "") {
@@ -987,6 +1040,16 @@ function activatePanel(panelName, options = {}) {
   const nextName = nextPanel.dataset.panel;
   for (const panel of panels) {
     panel.classList.toggle("active", panel === nextPanel);
+  }
+  
+  if (nextName === "logs") {
+    loadLogs();
+    setupLogsInterval();
+  } else {
+    if (logAutoRefreshInterval) {
+      clearInterval(logAutoRefreshInterval);
+      logAutoRefreshInterval = null;
+    }
   }
   for (const tab of tabButtons) {
     const isActive = tab.dataset.tabTarget === nextName;
@@ -1797,6 +1860,161 @@ document.getElementById("deleteAllMemosButton").addEventListener("click", delete
 
 
 
+/* 系统日志模块逻辑 */
+let logCurrentPage = 0;
+const logLimit = 150;
+let logAutoRefreshInterval = null;
+
+const logSearchQuery = document.getElementById("logSearchQuery");
+const logFilterComponent = document.getElementById("logFilterComponent");
+const logFilterLevel = document.getElementById("logFilterLevel");
+const logTerminal = document.getElementById("logTerminal");
+const logContent = document.getElementById("logContent");
+const logCountLabel = document.getElementById("logCountLabel");
+const logPrevPage = document.getElementById("logPrevPage");
+const logNextPage = document.getElementById("logNextPage");
+const logAutoRefresh = document.getElementById("logAutoRefresh");
+
+async function loadLogs(isAuto = false) {
+  try {
+    const query = new URLSearchParams({
+      limit: logLimit,
+      offset: logCurrentPage * logLimit
+    });
+    
+    const searchVal = logSearchQuery.value.trim();
+    const componentVal = logFilterComponent.value;
+    const levelVal = logFilterLevel.value;
+    
+    if (searchVal) query.set("query", searchVal);
+    if (componentVal) query.set("component", componentVal);
+    if (levelVal) query.set("level", levelVal);
+    
+    const data = await requestJson(`/admin/logs?${query.toString()}`);
+    
+    if (data.logs.length === 0) {
+      logContent.innerHTML = '<div style="color: var(--text-light); text-align: center; padding: 20px;">暂无日志记录</div>';
+    } else {
+      // Map and join each formatted log line
+      logContent.innerHTML = data.logs.map(renderLogLine).join("");
+      
+      // Auto scroll to bottom on real-time listening
+      if (logAutoRefresh.checked) {
+        setTimeout(() => {
+          logTerminal.scrollTop = logTerminal.scrollHeight;
+        }, 50);
+      }
+    }
+    
+    logCountLabel.textContent = `共 ${data.total_count} 条日志 (当前显示第 ${logCurrentPage + 1} 页)`;
+    logPrevPage.disabled = logCurrentPage === 0;
+    logNextPage.disabled = (logCurrentPage + 1) * logLimit >= data.total_count;
+    
+    if (!isAuto) {
+      setNotice(`日志已刷新：加载了 ${data.logs.length} 条记录`, "ok");
+    }
+  } catch (error) {
+    if (!isAuto) {
+      setNotice(String(error.message || error), "error");
+      logContent.textContent = String(error.message || error);
+    }
+  }
+}
+
+function renderLogLine(log) {
+  // Style log levels
+  let levelColor = "#909399";
+  if (log.level === "INFO") levelColor = "#52c41a";
+  else if (log.level === "WARNING") levelColor = "#faad14";
+  else if (log.level === "ERROR") levelColor = "#ff4d4f";
+  
+  const levelSpan = `<span style="color: ${levelColor}; font-weight: bold;">[${log.level}]</span>`;
+  
+  // Style components
+  let compColor = "#909399";
+  let compText = log.component.toUpperCase();
+  if (log.component === "api") compColor = "#1890ff";
+  else if (log.component === "worker") compColor = "#fa8c16";
+  else if (log.component === "ai") { compColor = "#722ed1"; compText = "AI"; }
+  else if (log.component === "vector") { compColor = "#13c2c2"; compText = "VECTOR"; }
+  else if (log.component === "mineru") { compColor = "#eb2f96"; compText = "MINERU"; }
+  
+  const compSpan = `<span style="background: ${compColor}; color: #fff; padding: 1px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; margin-right: 4px;">${compText}</span>`;
+  
+  // Format timestamp
+  const cleanTime = log.timestamp.replace("T", " ").substring(0, 19);
+  const timeSpan = `<span style="color: #8c8c8c;">${cleanTime}</span>`;
+  
+  // Escape message HTML
+  const escapedMessage = log.message
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+    
+  return `<div style="margin-bottom: 4px; white-space: pre-wrap; word-break: break-all;">${timeSpan} ${levelSpan} ${compSpan} ${escapedMessage}</div>`;
+}
+
+async function clearLogs() {
+  if (!window.confirm("⚠️ 确认要清空数据库中的所有运行日志吗？该操作不可恢复！")) {
+    return;
+  }
+  try {
+    setNotice("正在清空系统日志...", "warn");
+    const data = await requestJson("/admin/logs/clear", { method: "POST" });
+    setNotice(data.message, "ok");
+    logCurrentPage = 0;
+    await loadLogs();
+  } catch (error) {
+    setNotice(String(error.message || error), "error");
+  }
+}
+
+function setupLogsInterval() {
+  if (logAutoRefreshInterval) {
+    clearInterval(logAutoRefreshInterval);
+    logAutoRefreshInterval = null;
+  }
+  if (logAutoRefresh.checked) {
+    logAutoRefreshInterval = setInterval(() => {
+      const activeTab = document.querySelector(".tabs .tab.active");
+      if (activeTab && activeTab.dataset.tabTarget === "logs") {
+        loadLogs(true);
+      }
+    }, 2000);
+  }
+}
+
+document.getElementById("refreshLogsButton").addEventListener("click", () => {
+  logCurrentPage = 0;
+  loadLogs();
+});
+document.getElementById("clearLogsButton").addEventListener("click", clearLogs);
+logPrevPage.addEventListener("click", () => {
+  if (logCurrentPage > 0) {
+    logCurrentPage--;
+    loadLogs();
+  }
+});
+logNextPage.addEventListener("click", () => {
+  logCurrentPage++;
+  loadLogs();
+});
+logSearchQuery.addEventListener("input", () => {
+  logCurrentPage = 0;
+  loadLogs();
+});
+logFilterComponent.addEventListener("change", () => {
+  logCurrentPage = 0;
+  loadLogs();
+});
+logFilterLevel.addEventListener("change", () => {
+  logCurrentPage = 0;
+  loadLogs();
+});
+logAutoRefresh.addEventListener("change", setupLogsInterval);
+
+
+
 /* 文档解析（MinerU）配置逻辑 */
 const dpProvider = document.getElementById("dpProvider");
 const dpBaseUrl = document.getElementById("dpBaseUrl");
@@ -2293,6 +2511,7 @@ if (token()) {
   loadTagSummaryBusinessTags();
   renderTagSummaryPills();
   loadMemosConfig();
+  loadLogs();
 }
 
 for (const tab of panelTriggers) {

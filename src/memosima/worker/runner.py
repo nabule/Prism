@@ -29,6 +29,7 @@ from memosima.core.document_parsers import create_document_parser
 from memosima.core.prompts import PromptTemplate, load_prompts_or_default
 from memosima.core.summary import build_summary_memo_content
 from memosima.core.taxonomy import OrganizationPlan, TagCandidate, TaxonomyConfig
+from memosima.core.logging_handler import SQLiteLogHandler
 from memosima.db.store import Job, ReminderRecord, Store, utc_now
 from memosima.llm.provider import EmbeddingClient, LLMOrganizationDraft, LLMReminderExtraction, LLMReminderItem, OpenAICompatibleClient
 from memosima.memos.client import MemosClient
@@ -945,6 +946,13 @@ async def _run(args: argparse.Namespace) -> None:
     store = Store(config.database_path)
     store.migrate()
     store.ensure_workspace(config.workspace_id)
+
+    # Setup SQLite logging handler for worker
+    sql_handler = SQLiteLogHandler(store, config.workspace_id)
+    sql_handler.setLevel(logging.INFO)
+    sql_handler.setFormatter(logging.Formatter("%(name)s: %(message)s"))
+    logging.getLogger("memosima").addHandler(sql_handler)
+
     worker = Worker(config, store, models, models_path=args.models, config_path=args.config)
     if args.once:
         await worker.run_once()

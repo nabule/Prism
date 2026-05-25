@@ -748,8 +748,17 @@ ADMIN_UI_HTML = """<!doctype html>
     <div class="grid">
       <div class="panel stack">
         <h2>QA 离线问答 & Prompt 编译器</h2>
-        <div class="field">
-          <label>知识库标签范围 (精确标签/模糊检索词)</label>
+        <div class="field" style="position: relative;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+            <label for="pillInput" style="margin-bottom: 0;">知识库标签范围 (精确标签/模糊检索词)</label>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span style="font-size: 0.8rem; color: var(--muted);">逻辑关系：</span>
+              <select id="qaTagRelation" style="width: auto; padding: 2px 6px; font-size: 0.8rem; border-radius: 4px;">
+                <option value="OR">或 (OR)</option>
+                <option value="AND">与 (AND)</option>
+              </select>
+            </div>
+          </div>
           <div class="pills-container" id="pillsContainer">
             <!-- Pills go here -->
             <input type="text" id="pillInput" class="pill-input" placeholder="输入并回车或选择..." autocomplete="off">
@@ -2216,6 +2225,7 @@ btnGeneratePrompt.addEventListener("click", async () => {
       method: "POST",
       body: JSON.stringify({
         tags: qaSelectedTags,
+        relation: document.getElementById("qaTagRelation").value,
         system_prompt: system,
         query: query,
         include_original: qaIncludeOriginal.checked,

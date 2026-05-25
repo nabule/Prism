@@ -28,7 +28,8 @@ from memosima.api.security import require_admin
 from memosima.api.webhooks import build_idempotency_key, extract_memo_uid
 from memosima.core.config import AppConfig, ConfigError, ModelsConfig, ProviderConfig, _read_yaml, load_env_file
 from memosima.core.prompts import PromptTemplate, PromptsConfig, load_prompts_or_default
-from memosima.db.store import Job, MemoRecord, ReminderRecord, Store, TagCandidateRecord
+from memosima.core.logging_handler import SQLiteLogHandler
+from memosima.db.store import Job, MemoRecord, ReminderRecord, Store, TagCandidateRecord, SystemLogRecord
 from memosima.llm.provider import EmbeddingClient, LLMClientError, OpenAICompatibleClient
 from memosima.memos.client import MemosClient
 
@@ -96,6 +97,20 @@ class ReminderView(BaseModel):
 
 class RemindersResponse(BaseModel):
     reminders: list[ReminderView]
+
+
+class SystemLogView(BaseModel):
+    id: int
+    workspace_id: str
+    timestamp: str
+    level: str
+    component: str
+    message: str
+
+
+class SystemLogsResponse(BaseModel):
+    logs: list[SystemLogView]
+    total_count: int
 
 
 class ReviewTagCandidateRequest(BaseModel):
@@ -364,6 +379,12 @@ def create_app(
     app.state.models = models
     app.state.store = store
     app.state.admin_token = config.admin_token
+
+    # Setup SQLite logging handler for API
+    sql_handler = SQLiteLogHandler(store, config.workspace_id)
+    sql_handler.setLevel(logging.INFO)
+    sql_handler.setFormatter(logging.Formatter("%(name)s: %(message)s"))
+    logging.getLogger("memosima").addHandler(sql_handler)
 
     @app.get("/health", response_model=HealthResponse)
     async def health() -> HealthResponse:
@@ -818,6 +839,49 @@ def create_app(
         store.reset()
         store.ensure_workspace(config.workspace_id)
         return {"status": "ok", "message": "Database has been reset"}
+
+    @app.get(
+        "/admin/logs",
+        response_model=SystemLogsResponse,
+        dependencies=[Depends(require_admin)],
+    )
+    async def get_system_logs(
+        level: str | None = Query(default=None),
+        component: str | None = Query(default=None),
+        query: str | None = Query(default=None),
+        limit: int = Query(default=100, ge=1, le=1000),
+        offset: int = Query(default=0, ge=0),
+    ) -> SystemLogsResponse:
+        records, total = store.get_system_logs(
+            workspace_id=config.workspace_id,
+            level=level,
+            component=component,
+            query=query,
+            limit=limit,
+            offset=offset,
+        )
+        return SystemLogsResponse(
+            logs=[
+                SystemLogView(
+                    id=log.id,
+                    workspace_id=log.workspace_id,
+                    timestamp=log.timestamp,
+                    level=log.level,
+                    component=log.component,
+                    message=log.message,
+                )
+                for log in records
+            ],
+            total_count=total,
+        )
+
+    @app.post(
+        "/admin/logs/clear",
+        dependencies=[Depends(require_admin)],
+    )
+    async def clear_system_logs() -> dict[str, str]:
+        store.clear_system_logs(workspace_id=config.workspace_id)
+        return {"status": "ok", "message": "System logs cleared"}
 
     @app.get(
         "/admin/tag-candidates",
@@ -1346,6 +1410,7 @@ def create_app(
             conn.execute("DELETE FROM reminders WHERE workspace_id = ?", (workspace_id,))
             conn.execute("DELETE FROM vector_units WHERE workspace_id = ?", (workspace_id,))
             conn.execute("DELETE FROM artifacts WHERE workspace_id = ?", (workspace_id,))
+            conn.execute("DELETE FROM system_logs WHERE workspace_id = ?", (workspace_id,))
 
         return {"status": "ok", "message": f"Successfully deleted {deleted_count} memos and cleared local sync data."}
 

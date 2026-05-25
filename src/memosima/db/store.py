@@ -108,6 +108,16 @@ class VectorUnitRecord:
     created_at: str
 
 
+@dataclass(frozen=True)
+class SystemLogRecord:
+    id: int
+    workspace_id: str
+    timestamp: str
+    level: str
+    component: str
+    message: str
+
+
 class Store:
     def __init__(self, database_path: str | Path):
         self.database_path = Path(database_path)
@@ -256,6 +266,19 @@ class Store:
 
                 CREATE INDEX IF NOT EXISTS idx_vector_units_memo_uid
                   ON vector_units(workspace_id, memo_uid);
+
+                CREATE TABLE IF NOT EXISTS system_logs (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  workspace_id TEXT NOT NULL,
+                  timestamp TEXT NOT NULL,
+                  level TEXT NOT NULL,
+                  component TEXT NOT NULL,
+                  message TEXT NOT NULL,
+                  FOREIGN KEY (workspace_id) REFERENCES workspaces(id)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_system_logs_timestamp
+                  ON system_logs(timestamp);
                 """
             )
 
@@ -267,6 +290,96 @@ class Store:
                 connection.execute(f"DROP TABLE IF EXISTS {row['name']}")
             connection.execute("PRAGMA foreign_keys = ON")
         self.migrate()
+
+    def insert_system_log(
+        self,
+        workspace_id: str,
+        level: str,
+        component: str,
+        message: str,
+    ) -> None:
+        try:
+            with self.connect() as connection:
+                connection.execute(
+                    """
+                    INSERT INTO system_logs (workspace_id, timestamp, level, component, message)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (workspace_id, utc_now(), level, component, message),
+                )
+                # Keep database bounded by pruning to last 5000 logs
+                connection.execute(
+                    """
+                    DELETE FROM system_logs 
+                    WHERE id NOT IN (
+                        SELECT id FROM system_logs 
+                        ORDER BY id DESC LIMIT 5000
+                    )
+                    """
+                )
+        except Exception:
+            # Prevent logging database issues from crashing application components
+            pass
+
+    def get_system_logs(
+        self,
+        workspace_id: str,
+        level: str | None = None,
+        component: str | None = None,
+        query: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> tuple[list[SystemLogRecord], int]:
+        where_clauses = ["workspace_id = ?"]
+        params: list[Any] = [workspace_id]
+
+        if level:
+            where_clauses.append("level = ?")
+            params.append(level)
+
+        if component:
+            where_clauses.append("component = ?")
+            params.append(component)
+
+        if query:
+            where_clauses.append("message LIKE ?")
+            params.append(f"%{query}%")
+
+        where_str = " AND ".join(where_clauses)
+
+        with self.connect() as connection:
+            count_cursor = connection.execute(
+                f"SELECT COUNT(*) FROM system_logs WHERE {where_str}",
+                tuple(params),
+            )
+            total_count = count_cursor.fetchone()[0]
+
+            log_cursor = connection.execute(
+                f"""
+                SELECT id, workspace_id, timestamp, level, component, message
+                FROM system_logs
+                WHERE {where_str}
+                ORDER BY id DESC
+                LIMIT ? OFFSET ?
+                """,
+                tuple(params + [limit, offset]),
+            )
+            records = [
+                SystemLogRecord(
+                    id=row["id"],
+                    workspace_id=row["workspace_id"],
+                    timestamp=row["timestamp"],
+                    level=row["level"],
+                    component=row["component"],
+                    message=row["message"],
+                )
+                for row in log_cursor
+            ]
+            return records, total_count
+
+    def clear_system_logs(self, workspace_id: str) -> None:
+        with self.connect() as connection:
+            connection.execute("DELETE FROM system_logs WHERE workspace_id = ?", (workspace_id,))
 
     def ensure_workspace(self, workspace_id: str, name: str | None = None) -> None:
         now = utc_now()

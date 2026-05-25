@@ -15,10 +15,11 @@ def build_summary_memo_content(
     admin_links: str | None = None,
 ) -> str:
     ai_summary_tag = taxonomy.system_tags.get("ai_summary", "#系统/AI整理")
+    original_tag = taxonomy.system_tags.get("original", "#系统/原始记录")
     tags = _dedupe(
         [
             ai_summary_tag,
-            *organization_plan.system_tags,
+            *[t for t in organization_plan.system_tags if t != original_tag],
             *organization_plan.active_tags,
         ]
     )

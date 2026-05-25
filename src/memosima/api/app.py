@@ -269,6 +269,7 @@ class QA_Source(BaseModel):
 
 class GeneratePromptRequest(BaseModel):
     tags: list[str]
+    relation: str = "OR"
     system_prompt: str
     query: str
     top_k: int = 15
@@ -1170,6 +1171,28 @@ def create_app(
                                 retrieved_memos.append(memo)
                 except Exception as exc:
                     LOGGER.warning("QA list_memos failed for %s: %s", tag_or_word, exc)
+            
+            relation = (request_data.relation or "OR").upper()
+            if relation == "AND":
+                filtered_memos = []
+                for memo in retrieved_memos:
+                    matches_all = True
+                    for tag_or_word in request_data.tags:
+                        tag_or_word = tag_or_word.strip()
+                        if not tag_or_word:
+                            continue
+                        if tag_or_word.startswith("#"):
+                            if not _memo_matches_tag(memo, tag_or_word):
+                                matches_all = False
+                                break
+                        else:
+                            content = memo.get("content", "")
+                            if not isinstance(content, str) or tag_or_word.lower() not in content.lower():
+                                matches_all = False
+                                break
+                    if matches_all:
+                        filtered_memos.append(memo)
+                retrieved_memos = filtered_memos
                     
         # Limit to top_k
         retrieved_memos = retrieved_memos[:request_data.top_k]

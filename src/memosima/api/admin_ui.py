@@ -1275,7 +1275,6 @@ const tagSummaryTagContainer = document.getElementById("tagSummaryTagContainer")
 const tagSummaryTagRelation = document.getElementById("tagSummaryTagRelation");
 const tagSummaryTagInput = document.getElementById("tagSummaryTagInput");
 const tagSummaryTagAutocomplete = document.getElementById("tagSummaryTagAutocomplete");
-const tagSummaryOutput = document.getElementById("tagSummaryOutput");
 
 function renderTagSummaryPills() {
   const pills = tagSummaryTagContainer.querySelectorAll(".pill");

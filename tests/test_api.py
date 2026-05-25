@@ -942,7 +942,9 @@ async def test_admin_tag_summary_multi_tags_and_relation(tmp_path, monkeypatch):
     app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
     models_path = write_yaml(tmp_path / "models.yaml", models_config_text())
     monkeypatch.setenv("SIDECAR_ADMIN_TOKEN", "admin-token")
-    monkeypatch.setenv("DEEPSEEK_API_KEY", "deepseek-key")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    monkeypatch.setenv("MEMOS_BASE_URL", "http://memos.local")
+    monkeypatch.setenv("MEMOS_API_TOKEN", "memos-token")
 
     class FakeMemosClient:
         def __init__(self, *args, **kwargs):

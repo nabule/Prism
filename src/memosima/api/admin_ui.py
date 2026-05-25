@@ -664,6 +664,14 @@ ADMIN_UI_HTML = """<!doctype html>
       <input id="memosApiToken" type="password" autocomplete="off" placeholder="留空保持不变">
       <div id="memosTokenStatus" class="muted" style="margin-top: 4px; font-size: 0.85rem;"></div>
     </div>
+
+    <div class="panel" style="margin-top: 20px; border-color: var(--danger);">
+      <h2 style="color: var(--danger);">危险操作</h2>
+      <div class="muted">删除 Memos 主站中当前用户的所有笔记。此操作会物理删除 Memos 服务器上的全部笔记，并清空 Sidecar 本地数据库中的同步记录。操作不可逆，请谨慎执行！</div>
+      <div class="toolbar" style="margin-top: 10px;">
+        <button id="deleteAllMemosButton" class="danger" type="button">删除当前用户的所有 Memos</button>
+      </div>
+    </div>
   </section>
 
   <section class="tab-panel" data-panel="docparser">
@@ -1766,6 +1774,28 @@ async function saveMemosConfig() {
 
 document.getElementById("refreshMemosConfigButton").addEventListener("click", loadMemosConfig);
 document.getElementById("saveMemosConfigButton").addEventListener("click", saveMemosConfig);
+
+async function deleteAllMemos() {
+  if (!window.confirm("🚨 警告！此操作将永久删除 Memos 主站中当前用户的所有笔记，并清空 Sidecar 本地同步记录。确认删除？")) {
+    return;
+  }
+  const confirmText = window.prompt("请输入 'DELETE ALL MEMOS' 以确认删除操作：");
+  if (confirmText !== "DELETE ALL MEMOS") {
+    setNotice("操作已取消：确认字符不正确", "warn");
+    return;
+  }
+  try {
+    setNotice("正在删除全部 Memos，请稍候...", "warn");
+    const data = await requestJson("/admin/memos/delete-all", { method: "POST" });
+    setNotice(data.message, "ok");
+    await Promise.all([loadJobs(), loadCandidates(), loadReminders(), loadHealth()]);
+  } catch (error) {
+    setNotice(String(error.message || error), "error");
+  }
+}
+
+document.getElementById("deleteAllMemosButton").addEventListener("click", deleteAllMemos);
+
 
 
 /* 文档解析（MinerU）配置逻辑 */

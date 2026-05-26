@@ -1128,3 +1128,65 @@ def test_delete_all_memos(tmp_path, monkeypatch):
         assert count == 0
 
 
+def test_admin_tag_summary_with_prompt_override(tmp_path, monkeypatch):
+    app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
+    models_path = write_yaml(tmp_path / "models.yaml", models_config_text())
+    write_yaml(tmp_path / "prompts.yaml", prompts_config_text())
+    monkeypatch.setenv("SIDECAR_ADMIN_TOKEN", "admin-token")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    monkeypatch.setenv("MEMOS_BASE_URL", "http://memos.local")
+    monkeypatch.setenv("MEMOS_API_TOKEN", "memos-token")
+
+    class FakeMemosClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def list_memos(self, *, page_size, page_token=None, filter_text=None):
+            return {
+                "memos": [
+                    {
+                        "name": "memos/source1",
+                        "createTime": "2026-05-21T03:00:00Z",
+                        "content": "个人 AI 知识库推进记录 #项目/个人AI知识库",
+                        "tags": ["项目/个人AI知识库"],
+                    }
+                ]
+            }
+
+        async def create_memo(self, content):
+            return {"name": "memos/summary1", "content": content}
+
+        async def upsert_memo_reference_relation(self, *args, **kwargs):
+            pass
+
+    class FakeLLMClient:
+        seen_prompt_template = None
+
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def summarize_tag(self, *, tag, memos_markdown, memo_count, prompt_template):
+            FakeLLMClient.seen_prompt_template = prompt_template
+            return "## Override Summary"
+
+    monkeypatch.setattr("memosima.api.app.MemosClient", FakeMemosClient)
+    monkeypatch.setattr("memosima.api.app.OpenAICompatibleClient", FakeLLMClient)
+
+    client = TestClient(create_app(str(app_path), str(models_path)))
+    response = client.post(
+        "/admin/tag-summaries",
+        headers={"Authorization": "Bearer admin-token"},
+        json={
+            "tag": "#项目/个人AI知识库",
+            "limit": 20,
+            "system_prompt_override": "System Override Text",
+            "user_prompt_override": "User Override Text"
+        },
+    )
+
+    assert response.status_code == 200
+    assert FakeLLMClient.seen_prompt_template is not None
+    assert FakeLLMClient.seen_prompt_template.system == "System Override Text"
+    assert FakeLLMClient.seen_prompt_template.user == "User Override Text"
+
+

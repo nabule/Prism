@@ -85,9 +85,70 @@ ADMIN_UI_HTML = """<!doctype html>
     }
     dialog::backdrop { background: rgba(15, 23, 42, .45); }
     dialog form { padding: 16px; }
-    .tabs { display: flex; gap: 6px; overflow-x: auto; margin: 16px 0; padding-bottom: 2px; scrollbar-width: thin; }
-    .tab { min-height: 36px; border-radius: 8px; }
-    .tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+    /* Glassmorphism Tab Groups Style */
+    .tab-groups {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin: 16px 0;
+    }
+    .tab-group {
+      background: rgba(255, 255, 255, 0.45);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      border-radius: 12px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      box-shadow: 0 4px 6px rgba(16, 24, 40, .03), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+      flex: 1 1 calc(25% - 12px);
+      min-width: 220px;
+    }
+    @media (prefers-color-scheme: dark) {
+      .tab-group {
+        background: rgba(17, 24, 39, 0.45);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+      }
+    }
+    .tab-group-title {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      font-weight: 700;
+      margin-bottom: 2px;
+      border-bottom: 1px dashed var(--border);
+      padding-bottom: 4px;
+    }
+    .tab-group-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+    .tab {
+      min-height: 28px;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      padding: 4px 8px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--fg);
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+    .tab:hover {
+      background: rgba(37, 99, 235, 0.08);
+      border-color: var(--accent);
+    }
+    .tab.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+      box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
+    }
     .tab-panel { display: none; }
     .tab-panel.active { display: block; }
     .workspace { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: start; }
@@ -281,20 +342,47 @@ ADMIN_UI_HTML = """<!doctype html>
     </div>
   </header>
 
-  <nav class="tabs" role="tablist" aria-label="管理功能">
-    <button class="tab active" type="button" role="tab" aria-selected="true" data-tab-target="overview">概览</button>
-    <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="jobs">任务</button>
-    <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="tags">标签</button>
-    <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="prompts">AI 配置</button>
-    <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="models">模型</button>
-    <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="reminders">提醒</button>
-    <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="docparser">文档解析</button>
-    <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="vector-search">向量库</button>
-    <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="memos">Memos 同步</button>
-    <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="backup">备份</button>
-    <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="qa">QA 离线问答</button>
-    <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="reprocess">重新整理</button>
-    <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="logs">系统日志</button>
+  <nav class="tab-groups" role="tablist" aria-label="管理功能">
+    <!-- 数据概览 (DATA) -->
+    <div class="tab-group">
+      <span class="tab-group-title">数据概览 DATA</span>
+      <div class="tab-group-buttons">
+        <button class="tab active" type="button" role="tab" aria-selected="true" data-tab-target="overview">概览</button>
+        <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="jobs">任务</button>
+        <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="logs">系统日志</button>
+      </div>
+    </div>
+
+    <!-- 核心整理 (CORE) -->
+    <div class="tab-group">
+      <span class="tab-group-title">核心整理 CORE</span>
+      <div class="tab-group-buttons">
+        <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="tags">标签</button>
+        <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="reminders">提醒</button>
+        <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="qa">QA 离线问答</button>
+        <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="reprocess">重新整理</button>
+      </div>
+    </div>
+
+    <!-- AI 设置 (AI) -->
+    <div class="tab-group">
+      <span class="tab-group-title">AI 设置 AI</span>
+      <div class="tab-group-buttons">
+        <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="prompts">AI 配置</button>
+        <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="models">模型</button>
+        <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="docparser">文档解析</button>
+      </div>
+    </div>
+
+    <!-- 系统运维 (SYSTEM) -->
+    <div class="tab-group">
+      <span class="tab-group-title">系统运维 SYSTEM</span>
+      <div class="tab-group-buttons">
+        <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="vector-search">向量库</button>
+        <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="memos">Memos 同步</button>
+        <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="backup">备份</button>
+      </div>
+    </div>
   </nav>
 
   <section class="tab-panel active" data-panel="overview">
@@ -407,6 +495,23 @@ ADMIN_UI_HTML = """<!doctype html>
               <div style="margin-bottom: 0;">
                 <button id="createTagSummaryButton" class="primary" type="button" style="height: 38px;">生成总结</button>
               </div>
+
+              <!-- 临时修改提示词 (仅对本次生成生效，不影响系统全局配置) -->
+              <details style="grid-column: 1 / -1; margin-top: 10px; border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; background: rgba(0, 0, 0, 0.02);">
+                <summary style="cursor: pointer; font-size: 0.85rem; color: var(--muted); user-select: none; font-weight: 600;">
+                  临时修改提示词 (仅对本次生成生效，不影响系统全局配置)
+                </summary>
+                <div style="margin-top: 8px; display: flex; flex-direction: column; gap: 8px;">
+                  <div>
+                    <label for="tagSummarySystemPrompt" style="margin-bottom: 4px; font-weight: bold;">临时 System 提示词</label>
+                    <textarea id="tagSummarySystemPrompt" class="prompt" style="min-height: 100px; font-size: 0.8rem;" placeholder="加载中..."></textarea>
+                  </div>
+                  <div>
+                    <label for="tagSummaryUserPrompt" style="margin-bottom: 4px; font-weight: bold;">临时 User 提示词</label>
+                    <textarea id="tagSummaryUserPrompt" class="prompt" style="min-height: 100px; font-size: 0.8rem;" placeholder="加载中..."></textarea>
+                  </div>
+                </div>
+              </details>
             </div>
           </div>
           <pre id="tagSummaryOutput">未生成</pre>
@@ -784,6 +889,16 @@ ADMIN_UI_HTML = """<!doctype html>
             </label>
           </div>
         </div>
+
+        <div class="field">
+          <label>检索增强设置</label>
+          <div style="display: flex; flex-wrap: wrap; gap: 16px; margin-top: 6px;">
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; font-weight: bold; color: var(--accent);">
+              <input id="qaUseVector" type="checkbox" checked style="width: auto; margin: 0;">
+              从向量库里取 (优先启用向量库语义检索)
+            </label>
+          </div>
+        </div>
         
         <div class="field">
           <label for="qaSystemPrompt">系统提示词 (System Prompt)</label>
@@ -1022,9 +1137,12 @@ const overrideUser = document.getElementById("overrideUser");
 const reviewTagDialog = document.getElementById("reviewTagDialog");
 const reviewTagPath = document.getElementById("reviewTagPath");
 const reviewTagNote = document.getElementById("reviewTagNote");
-const tabButtons = Array.from(document.querySelectorAll(".tabs [data-tab-target]"));
+const tabButtons = Array.from(document.querySelectorAll(".tab-groups [data-tab-target]"));
 const panelTriggers = Array.from(document.querySelectorAll("[data-tab-target]"));
 const panels = Array.from(document.querySelectorAll("[data-panel]"));
+const tagSummarySystemPrompt = document.getElementById("tagSummarySystemPrompt");
+const tagSummaryUserPrompt = document.getElementById("tagSummaryUserPrompt");
+const qaUseVector = document.getElementById("qaUseVector");
 let promptDialogResolve = null;
 let reviewTagDialogResolve = null;
 let modelProviders = [];
@@ -1197,6 +1315,10 @@ async function loadPrompts() {
     tagSummaryUser.value = data.tag_summary.user;
     reminderSystem.value = data.reminder_extraction.system;
     reminderUser.value = data.reminder_extraction.user;
+    
+    // Pre-populate tag summary temporary prompts
+    if (tagSummarySystemPrompt) tagSummarySystemPrompt.value = data.tag_summary.system || "";
+    if (tagSummaryUserPrompt) tagSummaryUserPrompt.value = data.tag_summary.user || "";
     
     // Pre-populate reprocess prompts
     const reprocSys = document.getElementById("reprocessSystemPrompt");
@@ -1473,13 +1595,22 @@ async function createTagSummary() {
     const limit = Number(document.getElementById("tagSummaryLimit").value || "50");
     const relation = tagSummaryTagRelation.value;
 
+    const payload = {
+      tags: tagSummarySelectedTags,
+      relation: relation,
+      limit: limit
+    };
+
+    if (tagSummarySystemPrompt && tagSummarySystemPrompt.value.trim()) {
+      payload.system_prompt_override = tagSummarySystemPrompt.value.trim();
+    }
+    if (tagSummaryUserPrompt && tagSummaryUserPrompt.value.trim()) {
+      payload.user_prompt_override = tagSummaryUserPrompt.value.trim();
+    }
+
     const data = await requestJson("/admin/tag-summaries", {
       method: "POST",
-      body: JSON.stringify({
-        tags: tagSummarySelectedTags,
-        relation: relation,
-        limit: limit
-      })
+      body: JSON.stringify(payload)
     });
     tagSummaryOutput.textContent = JSON.stringify(data, null, 2);
     showDetail(data);
@@ -2305,7 +2436,8 @@ btnGeneratePrompt.addEventListener("click", async () => {
         query: query,
         include_original: qaIncludeOriginal.checked,
         include_attachments: qaIncludeAttachments.checked,
-        include_ai_summary: qaIncludeAiSummary.checked
+        include_ai_summary: qaIncludeAiSummary.checked,
+        use_vector: qaUseVector ? qaUseVector.checked : true
       })
     });
     assembledPromptOutput.value = data.assembled_prompt;

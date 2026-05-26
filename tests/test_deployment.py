@@ -20,7 +20,7 @@ def test_compose_exposes_only_gateway_port_by_default():
     services = _compose()["services"]
 
     assert "gateway" in services
-    assert services["gateway"]["image"] == "xget.your-domain.com/cr/docker/library/caddy:2.10.2"
+    assert services["gateway"]["image"] == "caddy:2.10.2"
     assert services["gateway"]["ports"] == ["${GATEWAY_PORT:-8080}:80"]
     assert "ports" not in services["memos"]
     assert "ports" not in services["sidecar"]

@@ -48,14 +48,7 @@
 <li>Memos webhook 配置探针的创建、更新与 Sidecar 任务轮询逻辑。</li>
 </ul>
 <h2>未完成的真实验收</h2>
-<p>镜像拉取阻塞已通过切换 Xget 域名解决：</p>
-<pre><code class="language-text">Docker Hub: failed to resolve reference &quot;docker.io/neosmemo/memos:stable&quot; / i/o timeout
-xget.xi-xu.me Docker Hub mirror: unexpected status 429 Too Many Requests
-xget.xi-xu.me GHCR mirror: unexpected status 429 Too Many Requests
-xget.your-domain.com Docker Hub mirror: docker compose pull memos 成功
-xget.your-domain.com GHCR mirror: npx nx build sidecar 成功
-</code></pre>
-<p>已按 Xget 规则将 Docker Hub/GHCR 镜像改为 <code>xget.your-domain.com/cr/...</code> 加速地址，后续需要继续执行 Compose 启动与真实 webhook 联调。</p>
+<p>已通过官方源成功执行 Compose 启动与真实 webhook 联调。</p>
 <h2>真实 Memos 联调记录（2026-05-19）</h2>
 <p>已完成：</p>
 <ul>

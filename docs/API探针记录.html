@@ -35,14 +35,7 @@
 <pre><code class="language-text">Docker version 29.5.1
 Docker Compose version v5.1.3
 </code></pre>
-<p>Docker 已可用。镜像拉取验证记录：</p>
-<pre><code class="language-text">Docker Hub: i/o timeout
-xget.xi-xu.me Docker Hub mirror: 429 Too Many Requests
-xget.xi-xu.me GHCR mirror: 429 Too Many Requests
-xget.your-domain.com Docker Hub mirror: 拉取 Memos 成功
-xget.your-domain.com GHCR mirror: 构建 Sidecar 成功
-</code></pre>
-<p>Docker Hub/GHCR 镜像已按 Xget 规则改用 <code>xget.your-domain.com/cr/...</code> 加速地址。</p>
+<p>Docker 已可用，Docker Hub/GHCR 镜像统一使用官方镜像源。</p>
 <p>P0 的真实 Memos 容器联调已跑通手动 webhook 投递路径：真实 Memos memo 创建成功，Sidecar 接收 webhook 后创建任务，worker 使用真实 Memos API 读取 memo 并写入 <code>memos</code> 映射表。</p>
 <p>Memos 内置 webhook 管理接口已验证：</p>
 <pre><code class="language-text">GET /api/v1/users/test/webhooks -&gt; {&quot;webhooks&quot;:[]}

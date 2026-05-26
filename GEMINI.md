@@ -7,10 +7,10 @@
 2. 在WSL中开发和测试
 3. 完成的代码必须经过完整的测试验证
 4. 所有依赖安装、测试、构建和常用开发命令必须优先通过 `npx nx ...` 这类项目任务入口执行；不要直接运行 `pip install` 或在文档中要求直接使用 pip。Python 包和虚拟环境统一使用 `uv` 管理，并封装在 Nx target、容器构建或后续统一脚本中。
-5. Docker 镜像下载优先使用 Xget 加速方案（https://github.com/xixu-me/Xget）：Docker Hub 镜像使用 `xget.your-domain.com/cr/docker/<namespace>/<image>:<tag>`，GHCR 镜像使用 `xget.your-domain.com/cr/ghcr/<namespace>/<image>:<tag>`；Dockerfile、docker-compose 和文档中的镜像地址应同步使用该规则，除非明确验证加速源不可用。
+5. 项目中所有第三方公共镜像（如 Caddy、Memos、uv 运行底座等）统一使用官方源（如 Docker Hub、GHCR），不再使用任何 Xget 镜像加速方案。
 6. 开发阶段优先下载/查看源码、实现本地代码并通过 `npx nx test ...` 验证；Docker 构建和 Compose 联调放在阶段末尾做验收，不作为每次小改动的中途验证。
 7. 部署测试、Compose 联调和用户验收前必须确认运行的是最新代码：先完成必要的构建或源码启动，确认容器/进程未使用旧镜像、旧挂载或旧进程，再从运行中的容器或实际监听端口访问接口和页面做结论。不能只根据本地源码、测试通过或镜像构建成功判断部署已更新；涉及管理页面变更时，必须验证已部署页面包含本次新增/修改的关键文案或 DOM。
-8. 严禁向 git 提交任何机密信息，包括但不限于 API key、access token、Personal Access Token、密码、私钥、真实 `.env`、cookie、会话信息、内网敏感地址以及用户的私有域名（如 `xget.*.xyz` 等私有加速源，必须统一脱敏为 `xget.your-domain.com` 占位符）。提交前必须检查 diff，确认只包含占位符、示例值或已脱敏内容；如误写入机密，应先移除并通过 `git reset --hard` 或重写 Git 历史彻底抹除，并通知用户。
+8. 严禁向 git 提交任何机密信息，包括但不限于 API key、access token、Personal Access Token、密码、私钥、真实 `.env`、cookie、会话信息、内网敏感地址以及用户的私有域名等。提交前必须检查 diff，确认只包含占位符、示例值或已脱敏内容；如误写入机密，应先移除并通过 `git reset --hard` 或重写 Git 历史彻底抹除，并通知用户。
 9. 本地部署测试时，禁止通过 Docker 启动进行验证——Docker 容器使用的是构建时的镜像快照，修改源码后若不重新构建镜像，容器内运行的仍是旧代码，极易误判"改动未生效"或"已修复的 bug 仍在"；必须使用 `npx nx serve ...` 或直接通过 `uv run` / 项目脚本以源码方式启动服务，确保每次验证运行的都是最新代码。
 
 ### Code Search

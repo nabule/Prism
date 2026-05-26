@@ -49,7 +49,7 @@ def test_compose_exposes_only_gateway_port_by_default():
     services = _compose()["services"]
 
     assert "gateway" in services
-    assert services["gateway"]["image"] == "xget.your-domain.com/cr/docker/library/caddy:2.10.2"
+    assert services["gateway"]["image"] == "caddy:2.10.2"
     assert services["gateway"]["ports"] == ["${GATEWAY_PORT:-8080}:80"]
     assert "ports" not in services["memos"]
     assert "ports" not in services["sidecar"]
@@ -107,7 +107,7 @@ def test_caddy_routes_sidecar_paths_and_memos_root():
 ```yaml
 services:
   gateway:
-    image: xget.your-domain.com/cr/docker/library/caddy:2.10.2
+    image: caddy:2.10.2
     container_name: memosima-gateway
     restart: unless-stopped
     depends_on:
@@ -121,7 +121,7 @@ services:
       - ./logs/caddy:/var/log/caddy
 
   memos:
-    image: xget.your-domain.com/cr/docker/neosmemo/memos:stable
+    image: neosmemo/memos:stable
     container_name: memosima-memos
     restart: unless-stopped
     volumes:

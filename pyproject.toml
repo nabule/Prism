@@ -1,6 +1,6 @@
 [project]
 name = "memosima"
-version = "0.6.2"
+version = "0.6.3"
 description = "AI sidecar service for a private Memos knowledge base."
 requires-python = ">=3.11"
 dependencies = [

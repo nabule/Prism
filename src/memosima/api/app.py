@@ -169,6 +169,8 @@ class TagSummaryRequest(BaseModel):
     tags: list[str] | None = Field(default=None)
     relation: str = Field(default="OR", max_length=10)
     limit: int = Field(default=50, ge=1, le=200)
+    system_prompt_override: str | None = Field(default=None, max_length=20000)
+    user_prompt_override: str | None = Field(default=None, max_length=20000)
 
 
 class TagSummaryResponse(BaseModel):
@@ -277,6 +279,7 @@ class GeneratePromptRequest(BaseModel):
     include_original: bool = True
     include_attachments: bool = True
     include_ai_summary: bool = True
+    use_vector: bool = True
 
 
 class GeneratePromptResponse(BaseModel):
@@ -593,12 +596,19 @@ def create_app(
             api_key=api_key,
             timeout_seconds=config.memos_timeout_seconds,
         )
+        prompt_template = prompts.tag_summary
+        if request.system_prompt_override is not None or request.user_prompt_override is not None:
+            prompt_template = PromptTemplate(
+                system=request.system_prompt_override if request.system_prompt_override is not None else prompt_template.system,
+                user=request.user_prompt_override if request.user_prompt_override is not None else prompt_template.user,
+                provider=prompt_template.provider,
+            )
         try:
             summary = await llm_client.summarize_tag(
                 tag=tag_desc,
                 memos_markdown=memos_markdown,
                 memo_count=len(memos),
-                prompt_template=prompts.tag_summary,
+                prompt_template=prompt_template,
             )
         except LLMClientError as exc:
             raise HTTPException(
@@ -1138,37 +1148,122 @@ def create_app(
             api_token=config.memos_api_token,
             timeout_seconds=config.memos_timeout_seconds,
         )
-        
-        retrieved_memos = []
-        seen_memos = set()
-        
-        # If there are no tags, we can just fetch recent memos
-        if not request_data.tags:
-            try:
-                response = await memos_client.list_memos(page_size=50)
-                memos = response.get("memos", [])
-                if isinstance(memos, list):
-                    for memo in memos:
-                        uid = memo.get("uid") or memo.get("name")
-                        if uid and uid not in seen_memos:
-                            seen_memos.add(uid)
-                            retrieved_memos.append(memo)
-            except Exception as exc:
-                LOGGER.warning("QA list_memos failed: %s", exc)
-        else:
-            for tag_or_word in request_data.tags:
-                tag_or_word = tag_or_word.strip()
-                if not tag_or_word:
-                    continue
-                
-                # Check if it's a tag or a keyword
-                if tag_or_word.startswith("#"):
-                    filter_str = f"tag in ['{tag_or_word}']"
-                else:
-                    filter_str = f"content.contains('{tag_or_word}')"
-                
+
+        sources = []
+        context_parts = []
+        retrieved_count = 0
+
+        # Decide whether to use vector retrieval or traditional text-matching retrieval
+        if request_data.use_vector and config.vector_search_enabled:
+            api_key = os.getenv(config.vector_search_api_key_env)
+            if api_key:
+                client = EmbeddingClient(
+                    base_url=config.vector_search_base_url,
+                    api_key=api_key,
+                    model=config.vector_search_model,
+                )
                 try:
-                    response = await memos_client.list_memos(page_size=50, filter_text=filter_str)
+                    embeddings = await client.get_embeddings([request_data.query])
+                except LLMClientError as exc:
+                    raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
+                
+                if embeddings:
+                    query_embedding = embeddings[0]
+                    results = store.search_similar_chunks(
+                        workspace_id=config.workspace_id,
+                        query_embedding=query_embedding,
+                        limit=request_data.top_k,
+                    )
+                    
+                    filtered_results = []
+                    for unit, score in results:
+                        # Apply strict tag filtering in post-processing if user specified tags
+                        if request_data.tags:
+                            chunk_tags = []
+                            for part in unit.chunk_text.split():
+                                if part.startswith("#") and len(part) > 1:
+                                    chunk_tags.append(part)
+                            
+                            relation = (request_data.relation or "OR").upper()
+                            if relation == "AND":
+                                matches_all = True
+                                for tag_or_word in request_data.tags:
+                                    tag_or_word = tag_or_word.strip()
+                                    if not tag_or_word:
+                                        continue
+                                    if tag_or_word.startswith("#"):
+                                        if tag_or_word not in chunk_tags:
+                                            matches_all = False
+                                            break
+                                    else:
+                                        if tag_or_word.lower() not in unit.chunk_text.lower():
+                                            matches_all = False
+                                            break
+                                if not matches_all:
+                                    continue
+                            else: # OR
+                                matches_any = False
+                                for tag_or_word in request_data.tags:
+                                    tag_or_word = tag_or_word.strip()
+                                    if not tag_or_word:
+                                        continue
+                                    if tag_or_word.startswith("#"):
+                                        if tag_or_word in chunk_tags:
+                                            matches_any = True
+                                            break
+                                    else:
+                                        if tag_or_word.lower() in unit.chunk_text.lower():
+                                            matches_any = True
+                                            break
+                                if not matches_any:
+                                    continue
+                                        
+                        filtered_results.append((unit, score))
+
+                    retrieved_count = len(filtered_results)
+                    for unit, score in filtered_results:
+                        is_ai_summary = "#系统/AI整理" in unit.chunk_text or "#系统/标签总结" in unit.chunk_text or "#系统/AI文档" in unit.chunk_text
+                        if is_ai_summary and not request_data.include_ai_summary:
+                            continue
+                        if not is_ai_summary and not request_data.include_original:
+                            continue
+
+                        artifacts = []
+                        if request_data.include_attachments:
+                            artifacts = store.list_artifacts(workspace_id=config.workspace_id, memo_uid=unit.memo_uid)
+
+                        chunk_tags = []
+                        for part in unit.chunk_text.split():
+                            if part.startswith("#") and len(part) > 1:
+                                chunk_tags.append(part)
+
+                        sources.append(QA_Source(
+                            memos_uid=unit.memo_uid,
+                            content_excerpt=unit.chunk_text[:200] + "..." if len(unit.chunk_text) > 200 else unit.chunk_text,
+                            tags=chunk_tags
+                        ))
+
+                        snippet = f"### 来源 Memo [ID: {unit.memo_uid}] (向量库语义召回)\n"
+                        if chunk_tags:
+                            snippet += f"标签: {', '.join(chunk_tags)}\n"
+                        snippet += f"内容:\n{unit.chunk_text}\n"
+
+                        if artifacts:
+                            snippet += "\n-- 关联解析附件 --\n"
+                            for art in artifacts:
+                                snippet += f"附件名称: {art.resource_uid}\n"
+                                snippet += f"内容:\n{art.content_markdown}\n"
+
+                        context_parts.append(snippet)
+        
+        # Fallback to traditional text/tag filtering retrieval if no vector matches or use_vector is disabled
+        if not context_parts:
+            retrieved_memos = []
+            seen_memos = set()
+            
+            if not request_data.tags:
+                try:
+                    response = await memos_client.list_memos(page_size=50)
                     memos = response.get("memos", [])
                     if isinstance(memos, list):
                         for memo in memos:
@@ -1177,84 +1272,100 @@ def create_app(
                                 seen_memos.add(uid)
                                 retrieved_memos.append(memo)
                 except Exception as exc:
-                    LOGGER.warning("QA list_memos failed for %s: %s", tag_or_word, exc)
-            
-            relation = (request_data.relation or "OR").upper()
-            if relation == "AND":
-                filtered_memos = []
-                for memo in retrieved_memos:
-                    matches_all = True
-                    for tag_or_word in request_data.tags:
-                        tag_or_word = tag_or_word.strip()
-                        if not tag_or_word:
-                            continue
-                        if tag_or_word.startswith("#"):
-                            if not _memo_matches_tag(memo, tag_or_word):
-                                matches_all = False
-                                break
-                        else:
-                            content = memo.get("content", "")
-                            if not isinstance(content, str) or tag_or_word.lower() not in content.lower():
-                                matches_all = False
-                                break
-                    if matches_all:
-                        filtered_memos.append(memo)
-                retrieved_memos = filtered_memos
+                    LOGGER.warning("QA list_memos failed: %s", exc)
+            else:
+                for tag_or_word in request_data.tags:
+                    tag_or_word = tag_or_word.strip()
+                    if not tag_or_word:
+                        continue
                     
-        # Limit to top_k
-        retrieved_memos = retrieved_memos[:request_data.top_k]
-        
-        sources = []
-        context_parts = []
-        
-        for memo in retrieved_memos:
-            uid = memo.get("uid") or memo.get("name")
-            if not uid:
-                continue
-            clean_uid = uid.split("/")[-1] if "/" in uid else uid
-            content = memo.get("content", "")
-            
-            # Determine if this memo is an AI-generated summary or system summary
-            is_ai_summary = "#系统/AI整理" in content or "#系统/标签总结" in content or "#系统/AI文档" in content
-            
-            # Apply RAG filters
-            if is_ai_summary and not request_data.include_ai_summary:
-                continue
-            if not is_ai_summary and not request_data.include_original:
-                continue
+                    if tag_or_word.startswith("#"):
+                        filter_str = f"tag in ['{tag_or_word}']"
+                    else:
+                        filter_str = f"content.contains('{tag_or_word}')"
+                    
+                    try:
+                        response = await memos_client.list_memos(page_size=50, filter_text=filter_str)
+                        memos = response.get("memos", [])
+                        if isinstance(memos, list):
+                            for memo in memos:
+                                uid = memo.get("uid") or memo.get("name")
+                                if uid and uid not in seen_memos:
+                                    seen_memos.add(uid)
+                                    retrieved_memos.append(memo)
+                    except Exception as exc:
+                        LOGGER.warning("QA list_memos failed for %s: %s", tag_or_word, exc)
                 
-            # Retrieve associated high-fidelity parsed attachments if enabled
-            artifacts = []
-            if request_data.include_attachments:
-                artifacts = store.list_artifacts(workspace_id=config.workspace_id, memo_uid=clean_uid)
+                relation = (request_data.relation or "OR").upper()
+                if relation == "AND":
+                    filtered_memos = []
+                    for memo in retrieved_memos:
+                        matches_all = True
+                        for tag_or_word in request_data.tags:
+                            tag_or_word = tag_or_word.strip()
+                            if not tag_or_word:
+                                continue
+                            if tag_or_word.startswith("#"):
+                                if not _memo_matches_tag(memo, tag_or_word):
+                                    matches_all = False
+                                    break
+                            else:
+                                content = memo.get("content", "")
+                                if not isinstance(content, str) or tag_or_word.lower() not in content.lower():
+                                    matches_all = False
+                                    break
+                        if matches_all:
+                            filtered_memos.append(memo)
+                    retrieved_memos = filtered_memos
+                        
+            retrieved_memos = retrieved_memos[:request_data.top_k]
+            retrieved_count = len(retrieved_memos)
             
-            memo_tags = []
-            for part in content.split():
-                if part.startswith("#") and len(part) > 1:
-                    memo_tags.append(part)
+            for memo in retrieved_memos:
+                uid = memo.get("uid") or memo.get("name")
+                if not uid:
+                    continue
+                clean_uid = uid.split("/")[-1] if "/" in uid else uid
+                content = memo.get("content", "")
+                
+                is_ai_summary = "#系统/AI整理" in content or "#系统/标签总结" in content or "#系统/AI文档" in content
+                
+                if is_ai_summary and not request_data.include_ai_summary:
+                    continue
+                if not is_ai_summary and not request_data.include_original:
+                    continue
                     
-            sources.append(
-                QA_Source(
-                    memos_uid=clean_uid,
-                    content_excerpt=content[:200] + "..." if len(content) > 200 else content,
-                    tags=memo_tags,
+                artifacts = []
+                if request_data.include_attachments:
+                    artifacts = store.list_artifacts(workspace_id=config.workspace_id, memo_uid=clean_uid)
+                
+                memo_tags = []
+                for part in content.split():
+                    if part.startswith("#") and len(part) > 1:
+                        memo_tags.append(part)
+                        
+                sources.append(
+                    QA_Source(
+                        memos_uid=clean_uid,
+                        content_excerpt=content[:200] + "..." if len(content) > 200 else content,
+                        tags=memo_tags,
+                    )
                 )
-            )
-            
-            snippet = f"### 来源 Memo [ID: {clean_uid}]\n"
-            snippet += f"创建时间: {memo.get('createTime') or memo.get('create_time') or '未知'}\n"
-            if memo_tags:
-                snippet += f"标签: {', '.join(memo_tags)}\n"
-            snippet += f"内容:\n{content}\n"
-            
-            if artifacts:
-                snippet += "\n-- 关联解析附件 --\n"
-                for art in artifacts:
-                    snippet += f"附件名称: {art.resource_uid}\n"
-                    snippet += f"内容:\n{art.content_markdown}\n"
-                    
-            context_parts.append(snippet)
-            
+                
+                snippet = f"### 来源 Memo [ID: {clean_uid}]\n"
+                snippet += f"创建时间: {memo.get('createTime') or memo.get('create_time') or '未知'}\n"
+                if memo_tags:
+                    snippet += f"标签: {', '.join(memo_tags)}\n"
+                snippet += f"内容:\n{content}\n"
+                
+                if artifacts:
+                    snippet += "\n-- 关联解析附件 --\n"
+                    for art in artifacts:
+                        snippet += f"附件名称: {art.resource_uid}\n"
+                        snippet += f"内容:\n{art.content_markdown}\n"
+                        
+                context_parts.append(snippet)
+        
         assembled_prompt = ""
         assembled_prompt += f"# 系统提示\n{request_data.system_prompt}\n\n"
         assembled_prompt += "# 知识库参考上下文\n"
@@ -1266,7 +1377,7 @@ def create_app(
         
         return GeneratePromptResponse(
             assembled_prompt=assembled_prompt,
-            retrieved_count=len(retrieved_memos),
+            retrieved_count=retrieved_count,
             sources=sources,
         )
 
@@ -1444,63 +1555,6 @@ def create_app(
 
         return {"status": "ok", "message": f"Successfully deleted {deleted_count} memos and cleared local sync data."}
 
-
-    @app.post(
-        "/admin/qa/generate-prompt",
-        response_model=GeneratePromptResponse,
-        dependencies=[Depends(require_admin)],
-    )
-    async def generate_prompt(request: GeneratePromptRequest) -> GeneratePromptResponse:
-        cfg: AppConfig = app.state.config
-        if not cfg.vector_search_enabled:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Vector search is disabled")
-            
-        api_key = os.getenv(cfg.vector_search_api_key_env)
-        if not api_key:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Vector search API key is not configured")
-            
-        client = EmbeddingClient(
-            base_url=cfg.vector_search_base_url,
-            api_key=api_key,
-            model=cfg.vector_search_model,
-        )
-        
-        try:
-            embeddings = await client.get_embeddings([request.query])
-        except LLMClientError as exc:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
-            
-        if not embeddings:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to get embedding for query")
-            
-        query_embedding = embeddings[0]
-        results = store.search_similar_chunks(
-            workspace_id=config.workspace_id,
-            query_embedding=query_embedding,
-            limit=request.top_k,
-        )
-        
-        sources = []
-        context_parts = []
-        for unit, score in results:
-            # We can optionally filter by tag here if we load the tags for each memo, but for V1 we just return top similar chunks.
-            # In V2, we would inner join vector_units with memos or artifacts to apply strict tag filters.
-            sources.append(QA_Source(
-                memos_uid=unit.memo_uid,
-                content_excerpt=unit.chunk_text[:100] + "...",
-                tags=[] # Tag fetching is deferred
-            ))
-            context_parts.append(f"Source (Memo UID {unit.memo_uid}):\n{unit.chunk_text}")
-            
-        context_text = "\n\n---\n\n".join(context_parts)
-        
-        assembled = f"{request.system_prompt}\n\n[References Context]\n{context_text}\n\n[User Query]\n{request.query}"
-        
-        return GeneratePromptResponse(
-            assembled_prompt=assembled,
-            retrieved_count=len(results),
-            sources=sources,
-        )
 
 
     return app

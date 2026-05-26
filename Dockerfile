@@ -6,7 +6,7 @@ ENV UV_PROJECT_ENVIRONMENT=/app/.venv
 ENV PATH="/app/.venv/bin:${PATH}"
 
 COPY pyproject.toml uv.lock README.html ./
-RUN mkdir -p src/memosima && printf '__version__ = "0.5.0"\\n' > src/memosima/__init__.py
+RUN mkdir -p src/memosima && printf '__version__ = "0.6.0"\\n' > src/memosima/__init__.py
 RUN uv sync --frozen --no-dev --no-install-project
 COPY src ./src
 RUN uv sync --frozen --no-dev

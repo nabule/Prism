@@ -605,7 +605,12 @@ def create_app(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail="LLM tag summary request failed",
             ) from exc
-        content = _tag_summary_memo_content(tag=tag_desc, summary=summary, memos=memos)
+        content = _tag_summary_memo_content(
+            tags=tags,
+            tag_desc=tag_desc,
+            summary=summary,
+            memos=memos,
+        )
         created = await memos_client.create_memo(content)
         summary_uid = _memo_uid_from_name(created.get("name"))
         if not summary_uid:
@@ -1986,16 +1991,62 @@ def _memos_markdown(memos: list[dict[str, Any]]) -> str:
     return "\n\n---\n\n".join(blocks)
 
 
-def _tag_summary_memo_content(*, tag: str, summary: str, memos: list[dict[str, Any]]) -> str:
-    tag_clean = tag.strip().removeprefix("#")
-    tag_with_hash = f"#{tag_clean}"
+def _extract_title_and_cleanup_summary(summary: str) -> tuple[str, str]:
+    import re
+    lines = summary.splitlines()
+    title = ""
+    cleaned_lines = []
+    
+    # 常见客套话的匹配特征
+    skip_keywords = [
+        "好的", "收到您的指令", "我将为", "为您呈现", "为您生成",
+        "经检查", "不涉及获取真实内容", "不涉及分析", "现在为您",
+        "基于标签", "专题整理", "整体总结"
+    ]
+    
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            cleaned_lines.append("")
+            continue
+            
+        # 1. 提取大模型起的最合理的贴切大标题
+        if stripped.startswith("# "):
+            if not title:
+                title = stripped.lstrip("#").strip()
+            continue
+            
+        # 2. 强力过滤客套话废话
+        if any(keyword in stripped for keyword in skip_keywords):
+            continue
+            
+        cleaned_lines.append(line)
+        
+    cleaned_text = "\n".join(cleaned_lines)
+    cleaned_text = re.sub(r"\n{3,}", "\n\n", cleaned_text).strip()
+    return title, cleaned_text
+
+
+def _tag_summary_memo_content(*, tags: list[str], tag_desc: str, summary: str, memos: list[dict[str, Any]]) -> str:
+    title, cleaned_summary = _extract_title_and_cleanup_summary(summary)
+    
+    # 1. 第一行纯标签（去除所有的 #，再统一加上 # 以最简化）
+    tags_str = " ".join(f"#{t.strip().removeprefix('#')}" for t in tags)
+    
+    # 2. 第二行大标题与第三行基于标签的陈述（描述里可以带关系括号）
+    tag_desc_clean = tag_desc.replace("#", "")
+    
+    # 3. 兜底标题（如果大模型没起标题）
+    if not title:
+        title = f"专题整理报告 · {tag_desc_clean}"
+        
     references = "\n".join(f"- {str(memo.get('name', '')).removeprefix('memos/')}" for memo in memos)
     return (
-        f"#系统/标签总结 {tag_with_hash}\n\n"
-        f"# 棱镜 AI 专题整理 · {tag_clean}\n\n"
-        f"基于标签：{tag_clean} 总结\n\n"
+        f"#系统/标签总结 {tags_str}\n\n"
+        f"# {title}\n\n"  # 贴切大标题
+        f"基于标签：{tag_desc_clean} 总结\n\n"  # 下移副标题描述，带关系括号
         f"---\n\n"
-        f"{_sanitize_memo_name_references(summary.strip())}\n\n"
+        f"{_sanitize_memo_name_references(cleaned_summary)}\n\n"
         "## 相关 memo UID\n\n"
         f"{references}\n"
     )

@@ -235,7 +235,9 @@ class OpenAICompatibleClient:
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
         }
-        async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
+        # 对大模型核心生成服务提供不低于 90 秒的宽裕超时上限，消除高并发推理和长文本返回引起的超时报错
+        timeout = max(self.timeout_seconds, 90.0)
+        async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.request(
                 method,
                 _join_url(self.provider.base_url, path),

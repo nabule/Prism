@@ -159,6 +159,41 @@ def test_tag_candidate_leaf_is_unique_across_levels(tmp_path):
         )
 
 
+def test_review_tag_candidate_with_custom_path(tmp_path):
+    store = Store(tmp_path / "sidecar.db")
+    store.migrate()
+    store.ensure_workspace("default")
+
+    created = store.upsert_tag_candidate(
+        workspace_id="default",
+        path="#项目/老方向",
+        parent_path="#项目",
+        reason="memo contains a tag outside the approved taxonomy",
+        source_memo_uid="abc123",
+        similar_tags=[],
+        confidence=0.5,
+    )
+
+    # 审核通过并修改 path
+    reviewed = store.review_tag_candidate(
+        candidate_id=created.id,
+        status="approved",
+        reviewer_note="修改后纳入正式标签",
+        path="#项目/自定义新方向",
+    )
+
+    assert reviewed is not None
+    assert reviewed.status == "approved"
+    assert reviewed.reviewer_note == "修改后纳入正式标签"
+    assert reviewed.path == "#项目/自定义新方向"
+    assert reviewed.parent_path == "#项目"
+
+    active_tags = store.list_business_tags(workspace_id="default")
+    assert len(active_tags) == 1
+    assert active_tags[0].path == "#项目/自定义新方向"
+    assert active_tags[0].status == "active"
+
+
 def test_memo_records_can_be_listed_by_type_and_source(tmp_path):
     store = Store(tmp_path / "sidecar.db")
     store.migrate()

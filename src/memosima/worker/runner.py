@@ -416,7 +416,7 @@ class Worker:
                         }
                     )
             except Exception as exc:
-                LOGGER.warning("Attachment parse failed for memo %s resource %s: %s", memo_uid, resource.name, exc)
+                LOGGER.warning("Attachment parse failed for memo %s resource %s", memo_uid, resource.name, exc_info=True)
                 results.append(
                     {
                         "resource": resource.name,

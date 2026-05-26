@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import httpx
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from memosima.core.config import ProviderConfig
 from memosima.core.prompts import PromptTemplate, default_organize_memo_prompt, default_reminder_extraction_prompt
@@ -16,10 +16,33 @@ class LLMClientError(RuntimeError):
     pass
 
 
+def parse_confidence(v: Any) -> float:
+    if isinstance(v, (int, float)):
+        return float(v)
+    if isinstance(v, str):
+        v_lower = v.strip().lower()
+        if v_lower == "high":
+            return 0.9
+        elif v_lower == "medium":
+            return 0.5
+        elif v_lower == "low":
+            return 0.2
+        try:
+            return float(v)
+        except ValueError:
+            pass
+    return 0.5
+
+
 class LLMTagCandidate(BaseModel):
     path: str = Field(min_length=2, max_length=120)
     reason: str = Field(min_length=1, max_length=500)
     confidence: float = Field(default=0.5, ge=0, le=1)
+
+    @field_validator("confidence", mode="before")
+    @classmethod
+    def convert_confidence(cls, v: Any) -> float:
+        return parse_confidence(v)
 
 
 class LLMOrganizationDraft(BaseModel):
@@ -40,6 +63,11 @@ class LLMReminderItem(BaseModel):
     timezone: str = Field(min_length=1, max_length=80)
     confidence: float = Field(default=0.5, ge=0, le=1)
     raw_text: str = Field(default="", max_length=1000)
+
+    @field_validator("confidence", mode="before")
+    @classmethod
+    def convert_confidence(cls, v: Any) -> float:
+        return parse_confidence(v)
 
 
 class LLMReminderExtraction(BaseModel):
@@ -63,37 +91,45 @@ class EmbeddingClient:
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
         }
-        payload = {
-            "model": self.model,
-            "input": texts,
-            "encoding_format": "float",
-        }
         base = self.base_url.rstrip("/")
+        batch_size = 16
+        results: list[list[float]] = []
+
         async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
-            response = await client.post(f"{base}/embeddings", headers=headers, json=payload)
-        
-        try:
-            response.raise_for_status()
-        except httpx.HTTPStatusError as exc:
-            raise LLMClientError(f"Embedding request failed: {response.status_code}") from exc
-        
-        try:
-            data = response.json()
-        except ValueError as exc:
-            raise LLMClientError("Embedding returned non-JSON response") from exc
-        
-        if "data" not in data or not isinstance(data["data"], list):
-            raise LLMClientError(f"Embedding response missing 'data' list: {data}")
-            
-        embeddings = [None] * len(texts)
-        for item in data["data"]:
-            if isinstance(item, dict) and "index" in item and "embedding" in item:
-                embeddings[item["index"]] = item["embedding"]
-                
-        if any(e is None for e in embeddings):
-            raise LLMClientError("Embedding response did not contain embeddings for all inputs")
-            
-        return embeddings # type: ignore
+            for i in range(0, len(texts), batch_size):
+                batch_texts = texts[i : i + batch_size]
+                payload = {
+                    "model": self.model,
+                    "input": batch_texts,
+                    "encoding_format": "float",
+                }
+                try:
+                    response = await client.post(f"{base}/embeddings", headers=headers, json=payload)
+                    response.raise_for_status()
+                except httpx.HTTPStatusError as exc:
+                    raise LLMClientError(f"Embedding request failed: {response.status_code}") from exc
+                except httpx.RequestError as exc:
+                    raise LLMClientError(f"Embedding network request failed: {exc}") from exc
+
+                try:
+                    data = response.json()
+                except ValueError as exc:
+                    raise LLMClientError("Embedding returned non-JSON response") from exc
+
+                if "data" not in data or not isinstance(data["data"], list):
+                    raise LLMClientError(f"Embedding response missing 'data' list: {data}")
+
+                batch_embeddings = [None] * len(batch_texts)
+                for item in data["data"]:
+                    if isinstance(item, dict) and "index" in item and "embedding" in item:
+                        batch_embeddings[item["index"]] = item["embedding"]
+
+                if any(e is None for e in batch_embeddings):
+                    raise LLMClientError("Embedding response did not contain embeddings for all inputs in batch")
+
+                results.extend(batch_embeddings) # type: ignore
+
+        return results
 
 
 @dataclass(frozen=True)

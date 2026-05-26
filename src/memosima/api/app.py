@@ -1868,7 +1868,24 @@ def _memo_matches_tags(memo: dict[str, Any], tags: list[str], relation: str) -> 
 
 def _tag_path_matches(candidate: str, normalized_tag: str) -> bool:
     normalized_candidate = _memos_tag(candidate)
-    return normalized_candidate == normalized_tag or normalized_candidate.startswith(f"{normalized_tag}/")
+    
+    # 1. 完全一致
+    if normalized_candidate == normalized_tag:
+        return True
+        
+    # 2. 前缀级联匹配（例如候选为 "project/deploy/test"，输入为 "project/deploy"）
+    if normalized_candidate.startswith(f"{normalized_tag}/"):
+        return True
+        
+    # 3. 后缀匹配（例如候选为 "project/deploy"，输入为 "deploy"）
+    if normalized_candidate.endswith(f"/{normalized_tag}"):
+        return True
+        
+    # 4. 中间路径段匹配（例如候选为 "project/deploy/test/daily"，输入为 "deploy/test"）
+    if f"/{normalized_tag}/" in f"/{normalized_candidate}/":
+        return True
+        
+    return False
 
 
 def _extract_content_tags(content: str) -> list[str]:

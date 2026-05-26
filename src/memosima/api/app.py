@@ -115,6 +115,7 @@ class SystemLogsResponse(BaseModel):
 
 class ReviewTagCandidateRequest(BaseModel):
     note: str | None = Field(default=None, max_length=1000)
+    path: str | None = Field(default=None, max_length=255)
 
 
 class PromptTemplateView(BaseModel):
@@ -1070,6 +1071,7 @@ def create_app(
                 candidate_id=candidate_id,
                 status="approved",
                 reviewer_note=review.note if review else None,
+                path=review.path if review else None,
             )
         except ValueError as exc:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc

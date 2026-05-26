@@ -302,6 +302,38 @@ def test_admin_tag_candidates_review_flow(tmp_path, monkeypatch):
     assert remaining.json()["candidates"] == []
 
 
+def test_admin_tag_candidates_review_flow_with_custom_path(tmp_path, monkeypatch):
+    app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
+    models_path = write_yaml(tmp_path / "models.yaml", models_config_text())
+    monkeypatch.setenv("SIDECAR_ADMIN_TOKEN", "admin-token")
+
+    app = create_app(str(app_path), str(models_path))
+    app.state.store.upsert_tag_candidate(
+        workspace_id="default",
+        path="#项目/新方向",
+        parent_path="#项目",
+        reason="memo contains a tag outside the approved taxonomy",
+        source_memo_uid="abc123",
+        similar_tags=["#项目/个人AI知识库"],
+    )
+    client = TestClient(app)
+
+    listed = client.get("/admin/tag-candidates", headers={"Authorization": "Bearer admin-token"})
+    candidate_id = listed.json()["candidates"][0]["id"]
+    
+    approved = client.post(
+        f"/admin/tag-candidates/{candidate_id}/approve",
+        headers={"Authorization": "Bearer admin-token"},
+        json={"note": "修改并纳入正式标签", "path": "#项目/修改后的新方向"},
+    )
+    
+    assert approved.status_code == 200
+    assert approved.json()["status"] == "approved"
+    assert approved.json()["reviewer_note"] == "修改并纳入正式标签"
+    assert approved.json()["path"] == "#项目/修改后的新方向"
+    assert approved.json()["parent_path"] == "#项目"
+
+
 def test_admin_reminders_requires_token_lists_retries_and_cancels(tmp_path, monkeypatch):
     app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
     models_path = write_yaml(tmp_path / "models.yaml", models_config_text())

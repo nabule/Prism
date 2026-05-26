@@ -963,6 +963,24 @@ ADMIN_UI_HTML = """<!doctype html>
   </form>
 </dialog>
 
+<dialog id="reviewTagDialog">
+  <form method="dialog">
+    <h2>审核候选标签</h2>
+    <div style="margin-bottom: 12px;">
+      <label for="reviewTagPath" style="display: block; font-weight: bold; margin-bottom: 4px;">标签路径</label>
+      <input type="text" id="reviewTagPath" style="width: 100%; box-sizing: border-box; padding: 6px; border: 1px solid var(--border); border-radius: 4px;" required>
+    </div>
+    <div style="margin-bottom: 12px;">
+      <label for="reviewTagNote" style="display: block; font-weight: bold; margin-bottom: 4px;">审核备注 (可选)</label>
+      <textarea id="reviewTagNote" class="prompt" style="height: 60px; width: 100%; box-sizing: border-box; padding: 6px; border: 1px solid var(--border); border-radius: 4px; resize: vertical;" placeholder="请输入审核备注..." spellcheck="false"></textarea>
+    </div>
+    <div class="actions" style="justify-content: flex-end; margin-top: 14px;">
+      <button type="submit" value="cancel">取消</button>
+      <button class="primary" type="submit" value="confirm">确认通过</button>
+    </div>
+  </form>
+</dialog>
+
 <script>
 const storageKey = "memosima.adminToken";
 const tokenInput = document.getElementById("tokenInput");
@@ -1001,10 +1019,14 @@ const modelExtraBody = document.getElementById("modelExtraBody");
 const promptDialog = document.getElementById("promptDialog");
 const overrideSystem = document.getElementById("overrideSystem");
 const overrideUser = document.getElementById("overrideUser");
+const reviewTagDialog = document.getElementById("reviewTagDialog");
+const reviewTagPath = document.getElementById("reviewTagPath");
+const reviewTagNote = document.getElementById("reviewTagNote");
 const tabButtons = Array.from(document.querySelectorAll(".tabs [data-tab-target]"));
 const panelTriggers = Array.from(document.querySelectorAll("[data-tab-target]"));
 const panels = Array.from(document.querySelectorAll("[data-panel]"));
 let promptDialogResolve = null;
+let reviewTagDialogResolve = null;
 let modelProviders = [];
 let promptConfig = null;
 const hashPanelMap = {
@@ -1598,6 +1620,26 @@ promptDialog.addEventListener("close", () => {
   promptDialogResolve = null;
 });
 
+function openReviewTagDialog(initialPath) {
+  reviewTagPath.value = initialPath || "";
+  reviewTagNote.value = "";
+  reviewTagDialog.returnValue = "";
+  reviewTagDialog.showModal();
+  return new Promise((resolve) => {
+    reviewTagDialogResolve = resolve;
+  });
+}
+
+reviewTagDialog.addEventListener("close", () => {
+  if (!reviewTagDialogResolve) return;
+  if (reviewTagDialog.returnValue === "confirm") {
+    reviewTagDialogResolve({ path: reviewTagPath.value, note: reviewTagNote.value });
+  } else {
+    reviewTagDialogResolve(null);
+  }
+  reviewTagDialogResolve = null;
+});
+
 async function loadCandidates() {
   try {
     const status = document.getElementById("candidateStatus").value;
@@ -1626,20 +1668,28 @@ function renderCandidateRow(candidate) {
   actions.className = "actions";
   actions.append(button("详情", "", () => showDetail(candidate)));
   if (candidate.status === "candidate") {
-    actions.append(button("通过", "primary", () => reviewCandidate(candidate.id, "approve")));
-    actions.append(button("拒绝", "danger", () => reviewCandidate(candidate.id, "reject")));
+    actions.append(button("通过", "primary", () => reviewCandidate(candidate, "approve")));
+    actions.append(button("拒绝", "danger", () => reviewCandidate(candidate, "reject")));
   }
   tr.append(actions);
   return tr;
 }
 
-async function reviewCandidate(id, action) {
-  const note = window.prompt("审核备注", "");
-  if (note === null) return;
+async function reviewCandidate(candidate, action) {
+  let bodyData = {};
+  if (action === "approve") {
+    const result = await openReviewTagDialog(candidate.path);
+    if (!result) return;
+    bodyData = { path: result.path, note: result.note };
+  } else {
+    const note = window.prompt("审核备注", "");
+    if (note === null) return;
+    bodyData = { note };
+  }
   try {
-    const data = await requestJson(`/admin/tag-candidates/${id}/${action}`, {
+    const data = await requestJson(`/admin/tag-candidates/${candidate.id}/${action}`, {
       method: "POST",
-      body: JSON.stringify({ note })
+      body: JSON.stringify(bodyData)
     });
     showDetail(data);
     await loadCandidates();

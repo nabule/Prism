@@ -760,19 +760,31 @@ class Store:
         candidate_id: int,
         status: str,
         reviewer_note: str | None = None,
+        path: str | None = None,
     ) -> TagCandidateRecord | None:
         if status not in {"approved", "rejected"}:
             raise ValueError(f"Unsupported tag candidate review status: {status}")
         now = utc_now()
         with self.connect() as connection:
-            connection.execute(
-                """
-                UPDATE tag_candidates
-                SET status = ?, reviewer_note = ?, updated_at = ?
-                WHERE id = ? AND status = 'candidate'
-                """,
-                (status, reviewer_note, now, candidate_id),
-            )
+            if path is not None:
+                parent_path = path.rsplit("/", maxsplit=1)[0] if "/" in path else None
+                connection.execute(
+                    """
+                    UPDATE tag_candidates
+                    SET status = ?, reviewer_note = ?, path = ?, parent_path = ?, updated_at = ?
+                    WHERE id = ? AND status = 'candidate'
+                    """,
+                    (status, reviewer_note, path, parent_path, now, candidate_id),
+                )
+            else:
+                connection.execute(
+                    """
+                    UPDATE tag_candidates
+                    SET status = ?, reviewer_note = ?, updated_at = ?
+                    WHERE id = ? AND status = 'candidate'
+                    """,
+                    (status, reviewer_note, now, candidate_id),
+                )
             row = connection.execute(
                 "SELECT * FROM tag_candidates WHERE id = ?",
                 (candidate_id,),

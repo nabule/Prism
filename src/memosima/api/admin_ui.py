@@ -1413,6 +1413,10 @@ async function loadTagSummaryBusinessTags() {
   }
 }
 
+tagSummaryTagInput.addEventListener("focus", () => {
+  loadTagSummaryBusinessTags();
+});
+
 tagSummaryTagInput.addEventListener("input", () => {
   const val = tagSummaryTagInput.value.trim().toLowerCase();
   if (!val) {
@@ -2000,8 +2004,25 @@ function renderLogLine(log) {
   
   const compSpan = `<span style="background: ${compColor}; color: #fff; padding: 1px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; margin-right: 4px;">${compText}</span>`;
   
-  // Format timestamp
-  const cleanTime = log.timestamp.replace("T", " ").substring(0, 19);
+  // Format timestamp (local timezone)
+  let cleanTime = log.timestamp;
+  try {
+    const logDate = new Date(log.timestamp);
+    if (!isNaN(logDate.getTime())) {
+      const pad = (num) => String(num).padStart(2, '0');
+      const yyyy = logDate.getFullYear();
+      const mm = pad(logDate.getMonth() + 1);
+      const dd = pad(logDate.getDate());
+      const hh = pad(logDate.getHours());
+      const min = pad(logDate.getMinutes());
+      const ss = pad(logDate.getSeconds());
+      cleanTime = `${yyyy}-${mm}-${dd} ${hh}:${min}:${ss}`;
+    } else {
+      cleanTime = log.timestamp.replace("T", " ").substring(0, 19);
+    }
+  } catch (e) {
+    cleanTime = log.timestamp.replace("T", " ").substring(0, 19);
+  }
   const timeSpan = `<span style="color: #8c8c8c;">${cleanTime}</span>`;
   
   // Escape message HTML
@@ -2216,6 +2237,10 @@ async function loadQABusinessTags() {
   }
 }
 
+pillInput.addEventListener("focus", () => {
+  loadQABusinessTags();
+});
+
 pillInput.addEventListener("input", () => {
   const val = pillInput.value.trim().toLowerCase();
   if (!val) {
@@ -2404,6 +2429,10 @@ function addReprocessPill(tag) {
   reprocessTagInput.value = "";
   reprocessTagAutocomplete.style.display = "none";
 }
+
+reprocessTagInput.addEventListener("focus", () => {
+  loadReprocessBusinessTags();
+});
 
 reprocessTagInput.addEventListener("input", () => {
   const val = reprocessTagInput.value.trim().toLowerCase();

@@ -69,3 +69,30 @@ def test_build_summary_memo_content_can_hide_candidate_tags_from_memos(tmp_path)
     assert "已使用：项目/个人AI知识库" in content
     assert "待审核：项目/新方向" in content
     assert "> 个人 AI 知识库开发记录 #AI知识库 项目/新方向" in content
+
+
+def test_tag_path_matches():
+    from memosima.api.app import _tag_path_matches
+    
+    # 1. 完全一致
+    assert _tag_path_matches("project/deploy", "project/deploy")
+    assert _tag_path_matches("#project/deploy", "project/deploy")
+    
+    # 2. 前缀级联匹配
+    assert _tag_path_matches("project/deploy/test", "project/deploy")
+    assert _tag_path_matches("#project/deploy/test", "project/deploy")
+    
+    # 3. 后缀匹配
+    assert _tag_path_matches("project/deploy", "deploy")
+    assert _tag_path_matches("project/deploy/test", "test")
+    assert _tag_path_matches("#project/deploy", "deploy")
+    
+    # 4. 中间路径段匹配
+    assert _tag_path_matches("project/deploy/test/daily", "deploy/test")
+    assert _tag_path_matches("project/deploy/test/daily", "test")
+    
+    # 5. 不匹配的情况
+    assert not _tag_path_matches("project/deploy", "depl")
+    assert not _tag_path_matches("project/deploy", "project/de")
+    assert not _tag_path_matches("project/deploy", "oy")
+

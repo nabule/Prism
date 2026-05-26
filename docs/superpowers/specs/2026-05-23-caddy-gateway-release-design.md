@@ -25,7 +25,7 @@
 新增 Caddy 网关容器：
 
 - 服务名：`gateway`
-- 镜像：`xget.your-domain.com/cr/docker/library/caddy:<固定版本>`
+- 镜像：`caddy:<固定版本>`
 - 配置文件：`gateway/Caddyfile`
 - 端口映射：`${GATEWAY_PORT:-8080}:80`
 - 依赖：`memos`、`sidecar`
@@ -74,7 +74,7 @@ Nx target 调整：
 
 - 新增测试读取 `docker-compose.yml` 和 `gateway/Caddyfile`，断言：
   - Compose 定义 `gateway` 服务。
-  - `gateway` 使用 Xget Caddy 镜像。
+  - `gateway` 使用官方 Caddy 镜像。
   - `gateway` 暴露 `${GATEWAY_PORT:-8080}:80`。
   - `memos` 和 `sidecar` 默认没有 `ports`。
   - Caddyfile 将 `/admin/*`、`/health`、`/webhooks/*` 转发到 `sidecar:8080`。

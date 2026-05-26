@@ -1,6 +1,6 @@
 services:
   gateway:
-    image: xget.your-domain.com/cr/docker/library/caddy:2.10.2
+    image: caddy:2.10.2
     container_name: memosima-gateway
     restart: unless-stopped
     depends_on:
@@ -15,7 +15,7 @@ services:
       - ./docs:/usr/share/caddy/docs:ro
 
   memos:
-    image: xget.your-domain.com/cr/docker/neosmemo/memos:stable
+    image: neosmemo/memos:stable
     container_name: memosima-memos
     restart: unless-stopped
     volumes:

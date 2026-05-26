@@ -218,7 +218,7 @@ curl -X POST -H &quot;Authorization: Bearer&lt;空格&gt;$SIDECAR_ADMIN_TOKEN&qu
 <p>对于正文为空、只有附件的原 memo，worker 会在 LLM 分析完成后使用 <code>PATCH /api/v1/memos/{memo_uid}</code> 回写一级标题。标题来自 LLM draft 的 <code>title</code> 字段，并会去掉多余的 <code>AI整理</code> 前缀和 Markdown <code>#</code> 符号，避免把原 memo 变成标签或覆盖已有正文。</p>
 <p>解析结果会出现在 job <code>result.attachments</code> 中，状态可能是 <code>parsed</code>、<code>skipped</code> 或 <code>failed</code>。如果未配置 <code>MINERU_API_TOKEN</code>，Office/PDF 附件会记录为 <code>document_parser_not_configured</code>，不会阻塞普通正文整理。</p>
 <h2>Docker 状态</h2>
-<p>仓库已提供可发布的 <code>docker-compose.yml</code>、<code>Dockerfile</code> 和 <code>gateway/Caddyfile</code>。Docker Hub/GHCR 镜像下载优先使用 Xget 加速地址，例如 <code>xget.your-domain.com/cr/docker/neosmemo/memos:stable</code> 和 <code>xget.your-domain.com/cr/docker/library/caddy:2.10.2</code>。</p>
+<p>仓库已提供可发布的 <code>docker-compose.yml</code>、<code>Dockerfile</code> 和 <code>gateway/Caddyfile</code>。</p>
 <p><code>npx nx build sidecar</code> 会执行 <code>docker compose build</code>，覆盖 Sidecar、worker 和网关发布栈。真实联调时需先确认 Compose 正在运行最新镜像和当前挂载配置，再从实际监听的 Caddy 网关端口访问 Memos、<code>/admin/ui</code> 和 <code>/health</code>。</p>
 <p>Dockerfile 已将第三方依赖安装与项目源码拷贝分层，后续普通代码变更不会反复下载全部 Python 依赖。</p>
 <p>Compose 中 Sidecar 和 worker 的 <code>./config:/app/config</code> 挂载保持可写，便于管理页面保存 <code>config/prompts.yaml</code>。不要把真实密钥写入 config 文件；密钥仍只通过环境变量或部署密钥管理提供。</p>

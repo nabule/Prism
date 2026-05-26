@@ -1987,10 +1987,14 @@ def _memos_markdown(memos: list[dict[str, Any]]) -> str:
 
 
 def _tag_summary_memo_content(*, tag: str, summary: str, memos: list[dict[str, Any]]) -> str:
+    tag_clean = tag.strip().removeprefix("#")
+    tag_with_hash = f"#{tag_clean}"
     references = "\n".join(f"- {str(memo.get('name', '')).removeprefix('memos/')}" for memo in memos)
     return (
-        f"#系统/标签总结 {tag}\n\n"
-        f"# {tag} 整体总结\n\n"
+        f"#系统/标签总结 {tag_with_hash}\n\n"
+        f"# 棱镜 AI 专题整理 · {tag_clean}\n\n"
+        f"基于标签：{tag_clean} 总结\n\n"
+        f"---\n\n"
         f"{_sanitize_memo_name_references(summary.strip())}\n\n"
         "## 相关 memo UID\n\n"
         f"{references}\n"

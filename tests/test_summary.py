@@ -96,3 +96,27 @@ def test_tag_path_matches():
     assert not _tag_path_matches("project/deploy", "project/de")
     assert not _tag_path_matches("project/deploy", "oy")
 
+
+def test_extract_title_and_cleanup_summary():
+    from memosima.api.app import _extract_title_and_cleanup_summary
+    
+    dirty_summary = """# 非结构化文档分类分级项目整体总结
+
+好的，收到您的指令。我将为标签 #技术/分类分级系统 和 #项目/非结构化文档分类分级 下的 8 条 memo 生成一份整体总结。
+
+经检查，memo列表中未包含任何URL，因此不涉及获取真实内容并分析的操作。
+
+现在为您呈现总结：
+
+## 1. 总览
+本专题针对非结构化文档分类分级...
+"""
+    title, cleaned = _extract_title_and_cleanup_summary(dirty_summary)
+    
+    assert title == "非结构化文档分类分级项目整体总结"
+    assert "好的" not in cleaned
+    assert "经检查" not in cleaned
+    assert "现在为您呈现" not in cleaned
+    assert "## 1. 总览" in cleaned
+
+

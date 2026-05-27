@@ -272,7 +272,85 @@ TEAMS_UI_HTML = """<!doctype html>
       </div>
 
       <div class="tab-panel" data-tab-panel="entries">
-        <p class="muted small">（词条 CRUD 即将在下一步上线，本骨架已具备团队切换能力。）</p>
+        <div class="stack">
+          <div>
+            <h3 style="margin: 0 0 8px;">筛选</h3>
+            <div class="row">
+              <div>
+                <label for="entryTagFilter">按标签精确过滤（去 # 自动）</label>
+                <input id="entryTagFilter" type="text" placeholder="例如：postgres" autocomplete="off">
+              </div>
+              <div>
+                <label for="entryQueryFilter">正文/标题 substring</label>
+                <input id="entryQueryFilter" type="text" placeholder="例如：REINDEX" autocomplete="off">
+              </div>
+              <div>
+                <label for="entryPageSize">每页</label>
+                <select id="entryPageSize">
+                  <option value="20">20</option>
+                  <option value="50" selected>50</option>
+                  <option value="100">100</option>
+                </select>
+              </div>
+              <div style="display: flex; align-items: end; gap: 6px;">
+                <button type="button" class="primary" id="entryFilterBtn">查询</button>
+                <button type="button" id="entryResetBtn">清空</button>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <h3 style="margin: 0 0 8px;">新建词条</h3>
+            <div class="stack">
+              <div>
+                <label for="entryNewTitle">标题</label>
+                <input id="entryNewTitle" type="text" placeholder="例如：数据库迁移手册" autocomplete="off">
+              </div>
+              <div>
+                <label for="entryNewBody">正文（Markdown 友好，最长 50000 字符）</label>
+                <textarea id="entryNewBody" placeholder="详细内容..."></textarea>
+              </div>
+              <div>
+                <label for="entryNewTags">标签（空白 / 中英文逗号 / 顿号分隔，自动去 # 与去重）</label>
+                <input id="entryNewTags" type="text" placeholder="postgres runbook db" autocomplete="off">
+              </div>
+              <div class="actions">
+                <button type="button" class="primary" id="entryCreateBtn">写入词条</button>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div style="display: flex; align-items: baseline; gap: 12px;">
+              <h3 style="margin: 0;">词条列表</h3>
+              <span id="entryListMeta" class="muted small"></span>
+              <span style="flex: 1;"></span>
+              <button type="button" class="ghost" id="entryPrevBtn">← 上一页</button>
+              <button type="button" class="ghost" id="entryNextBtn">下一页 →</button>
+            </div>
+            <table style="margin-top: 8px;">
+              <colgroup>
+                <col style="width: 26%;">
+                <col style="width: 22%;">
+                <col style="width: 14%;">
+                <col style="width: 14%;">
+                <col style="width: 24%;">
+              </colgroup>
+              <thead>
+                <tr>
+                  <th>标题</th>
+                  <th>标签</th>
+                  <th>作者</th>
+                  <th>更新时间</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="entryListBody">
+                <tr><td colspan="5" class="empty-hint">尚未加载</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
       <div class="tab-panel hidden" data-tab-panel="search">
         <p class="muted small">（检索 + QA Prompt 即将在下一步上线。）</p>
@@ -301,6 +379,31 @@ TEAMS_UI_HTML = """<!doctype html>
       <div class="actions" style="justify-content: flex-end;">
         <button type="button" value="cancel" data-close-dialog="joinDialog">取消</button>
         <button type="button" class="primary" id="dlgJoinSubmit">加入</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- 编辑词条对话框 -->
+  <dialog id="entryEditDialog">
+    <form method="dialog" class="stack">
+      <h3 style="margin: 0;">编辑词条</h3>
+      <p class="muted small" id="entryEditMeta" style="margin: 0;"></p>
+      <input type="hidden" id="entryEditUid">
+      <div>
+        <label for="entryEditTitle">标题</label>
+        <input id="entryEditTitle" type="text" autocomplete="off">
+      </div>
+      <div>
+        <label for="entryEditBody">正文</label>
+        <textarea id="entryEditBody" style="min-height: 200px;"></textarea>
+      </div>
+      <div>
+        <label for="entryEditTags">标签（空白 / 中英文逗号 / 顿号分隔）</label>
+        <input id="entryEditTags" type="text" autocomplete="off">
+      </div>
+      <div class="actions" style="justify-content: flex-end;">
+        <button type="button" value="cancel" data-close-dialog="entryEditDialog">取消</button>
+        <button type="button" class="primary" id="entryEditSubmit">保存</button>
       </div>
     </form>
   </dialog>
@@ -456,6 +559,16 @@ TEAMS_UI_HTML = """<!doctype html>
     document.querySelectorAll('[data-owner-only="1"]').forEach(btn => {
       btn.style.display = ownerOnly ? "" : "none";
     });
+
+    // 切到「有团队」状态时，自动 reload 一次词条列表（如果当前 tab 是 entries）
+    if (hasTeam) {
+      const selectedTab = document.querySelector('.tab-btn[aria-selected="true"]');
+      const tabName = selectedTab ? selectedTab.dataset.tab : "entries";
+      if (tabName === "entries") {
+        entryState.offset = 0;
+        loadEntries().catch(e => console.warn("auto loadEntries failed:", e));
+      }
+    }
   }
 
   function switchTab(tab) {
@@ -465,6 +578,155 @@ TEAMS_UI_HTML = """<!doctype html>
     document.querySelectorAll("[data-tab-panel]").forEach(panel => {
       panel.classList.toggle("hidden", panel.dataset.tabPanel !== tab);
     });
+    // 切到「词条」tab 时自动 reload 一次
+    if (tab === "entries") {
+      loadEntries().catch(e => showNotice("err", `加载词条失败：${e.message}`, 6000));
+    }
+  }
+
+  // ---------- 词条 CRUD ----------
+  const entryState = {
+    tag: "",
+    query: "",
+    limit: 50,
+    offset: 0,
+    total: 0,
+  };
+
+  function parseTags(input) {
+    if (!input) return [];
+    return String(input)
+      .split(/[\\s,，、]+/)
+      .map(t => t.trim().replace(/^#+/, ""))
+      .filter(Boolean);
+  }
+
+  function truncate(text, max) {
+    const flat = String(text || "").replace(/\\s+/g, " ").trim();
+    if (flat.length <= max) return flat;
+    return flat.slice(0, max - 1) + "…";
+  }
+
+  function renderTagPills(tags) {
+    if (!tags || !tags.length) return '<span class="muted small">—</span>';
+    return tags.map(t => `<span class="pill">#${escapeHtml(t)}</span>`).join("");
+  }
+
+  function formatDateTime(s) {
+    if (!s) return "—";
+    try {
+      const d = new Date(s);
+      if (Number.isNaN(d.getTime())) return s;
+      return d.toLocaleString();
+    } catch (e) {
+      return s;
+    }
+  }
+
+  async function loadEntries() {
+    const active = getActiveTeam();
+    if (!active) return;
+    const tbody = document.getElementById("entryListBody");
+    tbody.innerHTML = `<tr><td colspan="5" class="empty-hint">加载中…</td></tr>`;
+    const params = new URLSearchParams();
+    params.set("limit", String(entryState.limit));
+    params.set("offset", String(entryState.offset));
+    if (entryState.tag) params.set("tag", entryState.tag);
+    if (entryState.query) params.set("query", entryState.query);
+    const path = `/teams/${encodeURIComponent(active.slug)}/entries?${params.toString()}`;
+    const data = await requestJson("GET", path);
+    const entries = (data && data.entries) || [];
+    entryState.total = (data && typeof data.total === "number") ? data.total : entries.length;
+
+    const meta = document.getElementById("entryListMeta");
+    const from = entries.length ? entryState.offset + 1 : 0;
+    const to = entryState.offset + entries.length;
+    meta.textContent = `共 ${entryState.total} 条，当前 ${from}–${to}`;
+
+    document.getElementById("entryPrevBtn").disabled = entryState.offset <= 0;
+    document.getElementById("entryNextBtn").disabled = entryState.offset + entries.length >= entryState.total;
+
+    if (!entries.length) {
+      tbody.innerHTML = `<tr><td colspan="5" class="empty-hint">没有匹配的词条</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = entries.map(entry => `
+      <tr data-entry-uid="${escapeHtml(entry.uid)}">
+        <td><strong>${escapeHtml(entry.title || "（无标题）")}</strong>
+          <div class="muted small" style="margin-top: 4px;">${escapeHtml(truncate(entry.body, 120))}</div>
+        </td>
+        <td>${renderTagPills(entry.tags)}</td>
+        <td class="small">${escapeHtml(entry.author_display_name || "—")}</td>
+        <td class="small">${escapeHtml(formatDateTime(entry.updated_at))}</td>
+        <td>
+          <div class="actions">
+            <button type="button" data-action="edit-entry" data-uid="${escapeHtml(entry.uid)}">编辑</button>
+            <button type="button" class="danger" data-action="delete-entry" data-uid="${escapeHtml(entry.uid)}">删除</button>
+          </div>
+        </td>
+      </tr>
+    `).join("");
+  }
+
+  async function createEntryAction() {
+    const active = getActiveTeam();
+    if (!active) return;
+    const title = document.getElementById("entryNewTitle").value.trim();
+    const body = document.getElementById("entryNewBody").value.trim();
+    const tags = parseTags(document.getElementById("entryNewTags").value);
+    if (!body) {
+      showNotice("err", "正文必填", 4000);
+      return;
+    }
+    await requestJson("POST", `/teams/${encodeURIComponent(active.slug)}/entries`, { title, body, tags });
+    document.getElementById("entryNewTitle").value = "";
+    document.getElementById("entryNewBody").value = "";
+    document.getElementById("entryNewTags").value = "";
+    showNotice("ok", "已写入词条", 3000);
+    entryState.offset = 0;
+    await loadEntries();
+  }
+
+  async function openEditEntry(uid) {
+    const active = getActiveTeam();
+    if (!active) return;
+    const data = await requestJson("GET", `/teams/${encodeURIComponent(active.slug)}/entries/${encodeURIComponent(uid)}`);
+    document.getElementById("entryEditUid").value = data.uid;
+    document.getElementById("entryEditTitle").value = data.title || "";
+    document.getElementById("entryEditBody").value = data.body || "";
+    document.getElementById("entryEditTags").value = (data.tags || []).map(t => `#${t}`).join(" ");
+    document.getElementById("entryEditMeta").textContent =
+      `UID: ${data.uid} · 作者：${data.author_display_name || "—"} · 创建：${formatDateTime(data.created_at)}`;
+    document.getElementById("entryEditDialog").showModal();
+  }
+
+  async function submitEditEntry() {
+    const active = getActiveTeam();
+    if (!active) return;
+    const uid = document.getElementById("entryEditUid").value;
+    const payload = {
+      title: document.getElementById("entryEditTitle").value,
+      body: document.getElementById("entryEditBody").value,
+      tags: parseTags(document.getElementById("entryEditTags").value),
+    };
+    await requestJson("PUT", `/teams/${encodeURIComponent(active.slug)}/entries/${encodeURIComponent(uid)}`, payload);
+    document.getElementById("entryEditDialog").close();
+    showNotice("ok", "已保存", 3000);
+    await loadEntries();
+  }
+
+  async function deleteEntryAction(uid) {
+    const active = getActiveTeam();
+    if (!active) return;
+    if (!confirm(`确定删除词条 ${uid}？此操作不可撤销。`)) return;
+    await requestJson("DELETE", `/teams/${encodeURIComponent(active.slug)}/entries/${encodeURIComponent(uid)}`);
+    showNotice("ok", "已删除", 3000);
+    // 如果当前页删空了，回到上一页
+    const remaining = entryState.total - 1;
+    if (remaining > 0 && entryState.offset >= remaining) {
+      entryState.offset = Math.max(0, entryState.offset - entryState.limit);
+    }
+    await loadEntries();
   }
 
   // ---------- 业务动作 ----------
@@ -626,6 +888,56 @@ TEAMS_UI_HTML = """<!doctype html>
       } catch (e) {
         showNotice("err", `加入失败：${e.message}`, 6000);
       }
+    });
+
+    // ---------- 词条 tab 事件 ----------
+    document.getElementById("entryFilterBtn").addEventListener("click", () => {
+      entryState.tag = document.getElementById("entryTagFilter").value.trim().replace(/^#+/, "");
+      entryState.query = document.getElementById("entryQueryFilter").value.trim();
+      entryState.limit = parseInt(document.getElementById("entryPageSize").value, 10) || 50;
+      entryState.offset = 0;
+      loadEntries().catch(e => showNotice("err", `加载词条失败：${e.message}`, 6000));
+    });
+
+    document.getElementById("entryResetBtn").addEventListener("click", () => {
+      document.getElementById("entryTagFilter").value = "";
+      document.getElementById("entryQueryFilter").value = "";
+      entryState.tag = "";
+      entryState.query = "";
+      entryState.offset = 0;
+      loadEntries().catch(e => showNotice("err", `加载词条失败：${e.message}`, 6000));
+    });
+
+    document.getElementById("entryPrevBtn").addEventListener("click", () => {
+      if (entryState.offset <= 0) return;
+      entryState.offset = Math.max(0, entryState.offset - entryState.limit);
+      loadEntries().catch(e => showNotice("err", `加载词条失败：${e.message}`, 6000));
+    });
+
+    document.getElementById("entryNextBtn").addEventListener("click", () => {
+      entryState.offset = entryState.offset + entryState.limit;
+      loadEntries().catch(e => showNotice("err", `加载词条失败：${e.message}`, 6000));
+    });
+
+    document.getElementById("entryCreateBtn").addEventListener("click", () => {
+      createEntryAction().catch(e => showNotice("err", `写入失败：${e.message}`, 6000));
+    });
+
+    // 列表里的「编辑 / 删除」按钮：用事件委托
+    document.getElementById("entryListBody").addEventListener("click", (e) => {
+      const target = e.target.closest("[data-action]");
+      if (!target) return;
+      const action = target.dataset.action;
+      const uid = target.dataset.uid;
+      if (action === "edit-entry") {
+        openEditEntry(uid).catch(err => showNotice("err", `打开编辑失败：${err.message}`, 6000));
+      } else if (action === "delete-entry") {
+        deleteEntryAction(uid).catch(err => showNotice("err", `删除失败：${err.message}`, 6000));
+      }
+    });
+
+    document.getElementById("entryEditSubmit").addEventListener("click", () => {
+      submitEditEntry().catch(e => showNotice("err", `保存失败：${e.message}`, 6000));
     });
   });
   </script>

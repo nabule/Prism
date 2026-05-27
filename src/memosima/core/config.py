@@ -177,7 +177,7 @@ class AppConfig:
             reminders_webhook_url=_env_value(reminders_webhook_url_env),
             reminders_confidence_threshold=float(reminders.get("confidence_threshold", 0.75)),
             reminders_request_timeout_seconds=float(reminders.get("request_timeout_seconds", 10)),
-            vector_search_enabled=bool(vector_search.get("enabled", False)),
+            vector_search_enabled=bool(vector_search.get("enabled", True)),
             vector_search_api_key_env=str(vector_search.get("api_key_env", "SILICONFLOW_API_KEY")),
             vector_search_base_url=str(vector_search.get("base_url", "https://api.siliconflow.cn/v1")),
             vector_search_model=str(vector_search.get("model", "BAAI/bge-m3")),

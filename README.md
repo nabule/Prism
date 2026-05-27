@@ -197,11 +197,15 @@ bash <(curl -s -L https://raw.githubusercontent.com/nabule/Prism/master/deploy.s
 
 ### 🚀 典型工作流
 
-1. **管理员开团**：`POST /admin/teams` 提交 `slug` 与 `name`，返回的 `owner_token` 仅显示一次，请第一时间交给团队负责人。
-2. **负责人邀请**：负责人持 `owner_token` 调用 `POST /teams/{slug}/invites`，按需设置 `role`（默认 `editor`）和 `max_uses`，把生成的 `code` 通过安全渠道分发。
-3. **成员加入**：成员在前端或脚本中 `POST /teams/join`，提交邀请码和昵称，拿到属于自己的 `team_xxx` token。
-4. **沉淀知识**：editor 通过 `POST /teams/{slug}/entries` 写入条目，标签可以带 `#` 也可以不带（统一存为去 `#` 的小写形式）；如果配置了 `SILICONFLOW_API_KEY`，每次写入会异步重建向量索引。
-5. **检索/问答**：业务方调用 `/teams/{slug}/search` 做语义/文本检索；调用 `/teams/{slug}/qa/generate-prompt` 把检索到的条目自动拼接成超级 Prompt（与个人 RAG 接口同款渲染），最终把 Prompt 复制到任意大模型客户端即可获得答复。
+> 自 v0.7 起，下列动作全部可以通过纯 Web 完成：管理员到 `/admin/ui` 新增「团队 TEAMS」tab 组里
+> 开团/管成员/发邀请/写词条；普通成员到 `/teams/ui` 用邀请码加入，多团队 token 由浏览器 localStorage 自动切换，
+> 词条 CRUD、向量检索、QA Prompt 拼装、owner 专属的成员/邀请管理一站完成。仍保留 REST 接口以便脚本化与 CI。
+
+1. **管理员开团**：在 `/admin/ui` →「团队 TEAMS · 团队」点击「新建团队」，或 `POST /admin/teams` 提交 `slug` 与 `name`，返回的 `owner_token` 仅显示一次，请第一时间交给团队负责人。
+2. **负责人邀请**：负责人持 `owner_token` 在 `/admin/ui` →「邀请」生成邀请码，或 `POST /teams/{slug}/invites`，按需设置 `role`（默认 `editor`）和 `max_uses`，把生成的 `code` 通过安全渠道分发。
+3. **成员加入**：成员打开 `/teams/ui` 填入邀请码 + 展示名（也可调 `POST /teams/join`），浏览器自动保存 `team_xxx` token 并写入本地多团队池子，下次回访直接下拉切换。
+4. **沉淀知识**：editor 在 `/teams/ui` →「词条」直接写入条目（或 `POST /teams/{slug}/entries`），标签可以带 `#` 也可以不带（统一存为去 `#` 的小写形式）；如果配置了 `SILICONFLOW_API_KEY`，每次写入会异步重建向量索引。
+5. **检索/问答**：成员在 `/teams/ui` →「检索 / QA」勾选「启用向量语义检索」即可双通道召回，点「生成超级 Prompt」一键拼装并复制到剪贴板（或脚本化调用 `/teams/{slug}/search` 与 `/teams/{slug}/qa/generate-prompt`），把 Prompt 复制到任意大模型客户端即可获得答复。
 
 ### 🛡️ 安全与隔离要点
 

@@ -26,6 +26,7 @@ from memosima import __version__
 from memosima.api.admin_ui import ADMIN_UI_HTML
 from memosima.api.security import require_admin
 from memosima.api.teams import register_team_routes
+from memosima.api.teams_ui import TEAMS_UI_HTML
 from memosima.api.webhooks import build_idempotency_key, extract_memo_uid
 from memosima.core.config import AppConfig, ConfigError, ModelsConfig, ProviderConfig, _read_yaml, load_env_file
 from memosima.core.prompts import PromptTemplate, PromptsConfig, load_prompts_or_default
@@ -413,6 +414,10 @@ def create_app(
     @app.get("/admin/ui", include_in_schema=False)
     async def admin_ui() -> Response:
         return Response(content=ADMIN_UI_HTML, media_type="text/html; charset=utf-8")
+
+    @app.get("/teams/ui", include_in_schema=False)
+    async def teams_ui() -> Response:
+        return Response(content=TEAMS_UI_HTML, media_type="text/html; charset=utf-8")
 
     @app.post("/webhooks/memos", response_model=WebhookAccepted, status_code=status.HTTP_202_ACCEPTED)
     async def memos_webhook(request: Request) -> WebhookAccepted:

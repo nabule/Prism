@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import secrets
 import sqlite3
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -11,6 +13,10 @@ from typing import Any, Iterator
 
 def utc_now() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds")
+
+
+def _hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 @dataclass(frozen=True)
@@ -116,6 +122,80 @@ class SystemLogRecord:
     level: str
     component: str
     message: str
+
+
+# === Team knowledge base ===
+
+
+TEAM_ROLES: tuple[str, ...] = ("owner", "editor", "viewer")
+_TEAM_ROLE_RANK: dict[str, int] = {role: index for index, role in enumerate(TEAM_ROLES)}
+
+
+def team_role_at_least(role: str, required: str) -> bool:
+    """Return True when the actor's role is at least as privileged as the required one."""
+    if role not in _TEAM_ROLE_RANK or required not in _TEAM_ROLE_RANK:
+        return False
+    return _TEAM_ROLE_RANK[role] <= _TEAM_ROLE_RANK[required]
+
+
+@dataclass(frozen=True)
+class TeamRecord:
+    id: int
+    workspace_id: str
+    slug: str
+    name: str
+    description: str
+    created_at: str
+    updated_at: str
+
+
+@dataclass(frozen=True)
+class TeamMemberRecord:
+    id: int
+    team_id: int
+    display_name: str
+    role: str
+    token_hash: str
+    created_at: str
+    updated_at: str
+    last_active_at: str | None
+
+
+@dataclass(frozen=True)
+class TeamInviteRecord:
+    id: int
+    team_id: int
+    code: str
+    role: str
+    max_uses: int
+    uses: int
+    expires_at: str | None
+    created_at: str
+    revoked_at: str | None
+
+
+@dataclass(frozen=True)
+class TeamEntryRecord:
+    id: int
+    team_id: int
+    uid: str
+    title: str
+    body: str
+    tags: list[str]
+    author_member_id: int | None
+    author_display_name: str | None
+    created_at: str
+    updated_at: str
+
+
+@dataclass(frozen=True)
+class TeamEntryVectorRecord:
+    id: int
+    team_id: int
+    entry_uid: str
+    chunk_text: str
+    embedding: list[float]
+    created_at: str
 
 
 class Store:
@@ -279,6 +359,87 @@ class Store:
 
                 CREATE INDEX IF NOT EXISTS idx_system_logs_timestamp
                   ON system_logs(timestamp);
+
+                CREATE TABLE IF NOT EXISTS teams (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  workspace_id TEXT NOT NULL,
+                  slug TEXT NOT NULL,
+                  name TEXT NOT NULL,
+                  description TEXT NOT NULL DEFAULT '',
+                  created_at TEXT NOT NULL,
+                  updated_at TEXT NOT NULL,
+                  UNIQUE (workspace_id, slug),
+                  FOREIGN KEY (workspace_id) REFERENCES workspaces(id)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_teams_workspace
+                  ON teams(workspace_id, slug);
+
+                CREATE TABLE IF NOT EXISTS team_members (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  team_id INTEGER NOT NULL,
+                  display_name TEXT NOT NULL,
+                  role TEXT NOT NULL,
+                  token_hash TEXT NOT NULL,
+                  created_at TEXT NOT NULL,
+                  updated_at TEXT NOT NULL,
+                  last_active_at TEXT,
+                  UNIQUE (team_id, display_name),
+                  UNIQUE (token_hash),
+                  FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_team_members_team
+                  ON team_members(team_id);
+
+                CREATE TABLE IF NOT EXISTS team_invites (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  team_id INTEGER NOT NULL,
+                  code TEXT NOT NULL,
+                  role TEXT NOT NULL,
+                  max_uses INTEGER NOT NULL DEFAULT 0,
+                  uses INTEGER NOT NULL DEFAULT 0,
+                  expires_at TEXT,
+                  created_at TEXT NOT NULL,
+                  revoked_at TEXT,
+                  UNIQUE (code),
+                  FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_team_invites_team
+                  ON team_invites(team_id);
+
+                CREATE TABLE IF NOT EXISTS team_entries (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  team_id INTEGER NOT NULL,
+                  uid TEXT NOT NULL,
+                  title TEXT NOT NULL,
+                  body TEXT NOT NULL,
+                  tags_json TEXT NOT NULL DEFAULT '[]',
+                  author_member_id INTEGER,
+                  author_display_name TEXT,
+                  created_at TEXT NOT NULL,
+                  updated_at TEXT NOT NULL,
+                  UNIQUE (team_id, uid),
+                  FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE,
+                  FOREIGN KEY (author_member_id) REFERENCES team_members(id) ON DELETE SET NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_team_entries_team_updated
+                  ON team_entries(team_id, updated_at);
+
+                CREATE TABLE IF NOT EXISTS team_entry_vectors (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  team_id INTEGER NOT NULL,
+                  entry_uid TEXT NOT NULL,
+                  chunk_text TEXT NOT NULL,
+                  embedding_json TEXT NOT NULL,
+                  created_at TEXT NOT NULL,
+                  FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_team_entry_vectors_lookup
+                  ON team_entry_vectors(team_id, entry_uid);
                 """
             )
 
@@ -1143,6 +1304,670 @@ class Store:
             
         scored_units.sort(key=lambda x: x[1], reverse=True)
         return scored_units[:limit]
+
+    # === Team knowledge base ===
+
+    def create_team(
+        self,
+        *,
+        workspace_id: str,
+        slug: str,
+        name: str,
+        description: str = "",
+    ) -> TeamRecord:
+        slug_clean = slug.strip()
+        if not slug_clean:
+            raise ValueError("Team slug cannot be empty")
+        now = utc_now()
+        with self.connect() as connection:
+            try:
+                cursor = connection.execute(
+                    """
+                    INSERT INTO teams (workspace_id, slug, name, description, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (workspace_id, slug_clean, name.strip() or slug_clean, description.strip(), now, now),
+                )
+            except sqlite3.IntegrityError as exc:
+                raise ValueError(f"Team slug already exists in workspace: {slug_clean}") from exc
+            team_id = int(cursor.lastrowid or 0)
+            row = connection.execute("SELECT * FROM teams WHERE id = ?", (team_id,)).fetchone()
+        if row is None:
+            raise RuntimeError("Team insert did not return a row")
+        return _team_from_row(row)
+
+    def update_team(
+        self,
+        *,
+        team_id: int,
+        name: str | None = None,
+        description: str | None = None,
+    ) -> TeamRecord | None:
+        if name is None and description is None:
+            return self.get_team_by_id(team_id)
+        now = utc_now()
+        fields: list[str] = []
+        params: list[Any] = []
+        if name is not None:
+            fields.append("name = ?")
+            params.append(name.strip() or "")
+        if description is not None:
+            fields.append("description = ?")
+            params.append(description.strip())
+        fields.append("updated_at = ?")
+        params.append(now)
+        params.append(team_id)
+        with self.connect() as connection:
+            connection.execute(
+                f"UPDATE teams SET {', '.join(fields)} WHERE id = ?",
+                tuple(params),
+            )
+            row = connection.execute("SELECT * FROM teams WHERE id = ?", (team_id,)).fetchone()
+        return _team_from_row(row) if row else None
+
+    def delete_team(self, *, team_id: int) -> bool:
+        with self.connect() as connection:
+            connection.execute(
+                "DELETE FROM team_entry_vectors WHERE team_id = ?", (team_id,),
+            )
+            connection.execute(
+                "DELETE FROM team_entries WHERE team_id = ?", (team_id,),
+            )
+            connection.execute(
+                "DELETE FROM team_invites WHERE team_id = ?", (team_id,),
+            )
+            connection.execute(
+                "DELETE FROM team_members WHERE team_id = ?", (team_id,),
+            )
+            cursor = connection.execute("DELETE FROM teams WHERE id = ?", (team_id,))
+            return cursor.rowcount > 0
+
+    def list_teams(self, *, workspace_id: str, limit: int = 200) -> list[TeamRecord]:
+        with self.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM teams
+                WHERE workspace_id = ?
+                ORDER BY created_at ASC, id ASC
+                LIMIT ?
+                """,
+                (workspace_id, limit),
+            ).fetchall()
+        return [_team_from_row(row) for row in rows]
+
+    def get_team_by_slug(self, *, workspace_id: str, slug: str) -> TeamRecord | None:
+        with self.connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM teams WHERE workspace_id = ? AND slug = ?",
+                (workspace_id, slug),
+            ).fetchone()
+        return _team_from_row(row) if row else None
+
+    def get_team_by_id(self, team_id: int) -> TeamRecord | None:
+        with self.connect() as connection:
+            row = connection.execute("SELECT * FROM teams WHERE id = ?", (team_id,)).fetchone()
+        return _team_from_row(row) if row else None
+
+    def count_team_owners(self, *, team_id: int) -> int:
+        with self.connect() as connection:
+            row = connection.execute(
+                "SELECT COUNT(*) AS n FROM team_members WHERE team_id = ? AND role = 'owner'",
+                (team_id,),
+            ).fetchone()
+        return int(row["n"]) if row else 0
+
+    def add_team_member(
+        self,
+        *,
+        team_id: int,
+        display_name: str,
+        role: str,
+        token: str | None = None,
+    ) -> tuple[TeamMemberRecord, str]:
+        if role not in _TEAM_ROLE_RANK:
+            raise ValueError(f"Unsupported team role: {role}")
+        display_name_clean = display_name.strip()
+        if not display_name_clean:
+            raise ValueError("Member display name cannot be empty")
+        raw_token = token or f"team_{secrets.token_urlsafe(24)}"
+        token_hash = _hash_token(raw_token)
+        now = utc_now()
+        with self.connect() as connection:
+            try:
+                cursor = connection.execute(
+                    """
+                    INSERT INTO team_members (
+                      team_id, display_name, role, token_hash, created_at, updated_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (team_id, display_name_clean, role, token_hash, now, now),
+                )
+            except sqlite3.IntegrityError as exc:
+                raise ValueError(
+                    f"Member already exists in team: {display_name_clean}"
+                ) from exc
+            member_id = int(cursor.lastrowid or 0)
+            row = connection.execute(
+                "SELECT * FROM team_members WHERE id = ?", (member_id,),
+            ).fetchone()
+        if row is None:
+            raise RuntimeError("Team member insert did not return a row")
+        return _team_member_from_row(row), raw_token
+
+    def list_team_members(self, *, team_id: int) -> list[TeamMemberRecord]:
+        with self.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM team_members
+                WHERE team_id = ?
+                ORDER BY created_at ASC, id ASC
+                """,
+                (team_id,),
+            ).fetchall()
+        return [_team_member_from_row(row) for row in rows]
+
+    def get_team_member(self, *, member_id: int) -> TeamMemberRecord | None:
+        with self.connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM team_members WHERE id = ?", (member_id,),
+            ).fetchone()
+        return _team_member_from_row(row) if row else None
+
+    def update_team_member_role(
+        self,
+        *,
+        member_id: int,
+        role: str,
+    ) -> TeamMemberRecord | None:
+        if role not in _TEAM_ROLE_RANK:
+            raise ValueError(f"Unsupported team role: {role}")
+        now = utc_now()
+        with self.connect() as connection:
+            connection.execute(
+                "UPDATE team_members SET role = ?, updated_at = ? WHERE id = ?",
+                (role, now, member_id),
+            )
+            row = connection.execute(
+                "SELECT * FROM team_members WHERE id = ?", (member_id,),
+            ).fetchone()
+        return _team_member_from_row(row) if row else None
+
+    def delete_team_member(self, *, member_id: int) -> bool:
+        with self.connect() as connection:
+            cursor = connection.execute(
+                "DELETE FROM team_members WHERE id = ?", (member_id,),
+            )
+            return cursor.rowcount > 0
+
+    def find_team_member_by_token(
+        self, token: str,
+    ) -> tuple[TeamMemberRecord, TeamRecord] | None:
+        if not token:
+            return None
+        token_hash = _hash_token(token)
+        now = utc_now()
+        with self.connect() as connection:
+            row = connection.execute(
+                """
+                SELECT m.*, t.workspace_id AS team_workspace_id, t.slug AS team_slug,
+                       t.name AS team_name, t.description AS team_description,
+                       t.created_at AS team_created_at, t.updated_at AS team_updated_at
+                FROM team_members AS m
+                JOIN teams AS t ON t.id = m.team_id
+                WHERE m.token_hash = ?
+                """,
+                (token_hash,),
+            ).fetchone()
+            if row is None:
+                return None
+            connection.execute(
+                "UPDATE team_members SET last_active_at = ? WHERE id = ?",
+                (now, int(row["id"])),
+            )
+        member = TeamMemberRecord(
+            id=int(row["id"]),
+            team_id=int(row["team_id"]),
+            display_name=str(row["display_name"]),
+            role=str(row["role"]),
+            token_hash=str(row["token_hash"]),
+            created_at=str(row["created_at"]),
+            updated_at=str(row["updated_at"]),
+            last_active_at=now,
+        )
+        team = TeamRecord(
+            id=int(row["team_id"]),
+            workspace_id=str(row["team_workspace_id"]),
+            slug=str(row["team_slug"]),
+            name=str(row["team_name"]),
+            description=str(row["team_description"]),
+            created_at=str(row["team_created_at"]),
+            updated_at=str(row["team_updated_at"]),
+        )
+        return member, team
+
+    def create_team_invite(
+        self,
+        *,
+        team_id: int,
+        role: str = "editor",
+        max_uses: int = 0,
+        expires_at: str | None = None,
+        code: str | None = None,
+    ) -> TeamInviteRecord:
+        if role not in _TEAM_ROLE_RANK:
+            raise ValueError(f"Unsupported team role: {role}")
+        if max_uses < 0:
+            raise ValueError("max_uses cannot be negative")
+        code_value = code or secrets.token_urlsafe(8)
+        now = utc_now()
+        with self.connect() as connection:
+            try:
+                cursor = connection.execute(
+                    """
+                    INSERT INTO team_invites (
+                      team_id, code, role, max_uses, uses, expires_at, created_at
+                    )
+                    VALUES (?, ?, ?, ?, 0, ?, ?)
+                    """,
+                    (team_id, code_value, role, max_uses, expires_at, now),
+                )
+            except sqlite3.IntegrityError as exc:
+                raise ValueError("Invite code collision; please retry") from exc
+            invite_id = int(cursor.lastrowid or 0)
+            row = connection.execute(
+                "SELECT * FROM team_invites WHERE id = ?", (invite_id,),
+            ).fetchone()
+        if row is None:
+            raise RuntimeError("Team invite insert did not return a row")
+        return _team_invite_from_row(row)
+
+    def list_team_invites(self, *, team_id: int) -> list[TeamInviteRecord]:
+        with self.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM team_invites
+                WHERE team_id = ?
+                ORDER BY created_at DESC, id DESC
+                """,
+                (team_id,),
+            ).fetchall()
+        return [_team_invite_from_row(row) for row in rows]
+
+    def revoke_team_invite(self, *, invite_id: int) -> TeamInviteRecord | None:
+        now = utc_now()
+        with self.connect() as connection:
+            connection.execute(
+                "UPDATE team_invites SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL",
+                (now, invite_id),
+            )
+            row = connection.execute(
+                "SELECT * FROM team_invites WHERE id = ?", (invite_id,),
+            ).fetchone()
+        return _team_invite_from_row(row) if row else None
+
+    def redeem_team_invite(
+        self,
+        *,
+        code: str,
+        display_name: str,
+    ) -> tuple[TeamRecord, TeamMemberRecord, str]:
+        if not code:
+            raise ValueError("Invite code is required")
+        display_name_clean = display_name.strip()
+        if not display_name_clean:
+            raise ValueError("Display name is required")
+        now = utc_now()
+        with self.connect() as connection:
+            invite_row = connection.execute(
+                "SELECT * FROM team_invites WHERE code = ?", (code,),
+            ).fetchone()
+            if invite_row is None:
+                raise ValueError("Invite code not found")
+            if invite_row["revoked_at"]:
+                raise ValueError("Invite code has been revoked")
+            expires_at = invite_row["expires_at"]
+            if expires_at and str(expires_at) <= now:
+                raise ValueError("Invite code has expired")
+            max_uses = int(invite_row["max_uses"])
+            uses = int(invite_row["uses"])
+            if max_uses > 0 and uses >= max_uses:
+                raise ValueError("Invite code has reached its maximum uses")
+            team_row = connection.execute(
+                "SELECT * FROM teams WHERE id = ?", (invite_row["team_id"],),
+            ).fetchone()
+            if team_row is None:
+                raise ValueError("Team for invite no longer exists")
+            existing = connection.execute(
+                "SELECT id FROM team_members WHERE team_id = ? AND display_name = ?",
+                (team_row["id"], display_name_clean),
+            ).fetchone()
+            if existing is not None:
+                raise ValueError(
+                    f"Member already exists in team: {display_name_clean}"
+                )
+            raw_token = f"team_{secrets.token_urlsafe(24)}"
+            token_hash = _hash_token(raw_token)
+            cursor = connection.execute(
+                """
+                INSERT INTO team_members (
+                  team_id, display_name, role, token_hash, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    team_row["id"],
+                    display_name_clean,
+                    str(invite_row["role"]),
+                    token_hash,
+                    now,
+                    now,
+                ),
+            )
+            member_id = int(cursor.lastrowid or 0)
+            connection.execute(
+                "UPDATE team_invites SET uses = uses + 1 WHERE id = ?",
+                (invite_row["id"],),
+            )
+            member_row = connection.execute(
+                "SELECT * FROM team_members WHERE id = ?", (member_id,),
+            ).fetchone()
+        if member_row is None:
+            raise RuntimeError("Team member insert did not return a row")
+        return _team_from_row(team_row), _team_member_from_row(member_row), raw_token
+
+    def create_team_entry(
+        self,
+        *,
+        team_id: int,
+        title: str,
+        body: str,
+        tags: list[str] | None = None,
+        author_member_id: int | None = None,
+        author_display_name: str | None = None,
+        uid: str | None = None,
+    ) -> TeamEntryRecord:
+        title_clean = title.strip()
+        body_clean = body.rstrip()
+        if not title_clean and not body_clean:
+            raise ValueError("Entry must include title or body")
+        if not title_clean:
+            title_clean = body_clean.splitlines()[0][:80] if body_clean else "未命名条目"
+        clean_tags = _clean_tag_list(tags or [])
+        uid_value = uid or f"e_{secrets.token_urlsafe(8)}"
+        now = utc_now()
+        with self.connect() as connection:
+            try:
+                cursor = connection.execute(
+                    """
+                    INSERT INTO team_entries (
+                      team_id, uid, title, body, tags_json,
+                      author_member_id, author_display_name,
+                      created_at, updated_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        team_id,
+                        uid_value,
+                        title_clean,
+                        body_clean,
+                        json.dumps(clean_tags, ensure_ascii=False),
+                        author_member_id,
+                        author_display_name,
+                        now,
+                        now,
+                    ),
+                )
+            except sqlite3.IntegrityError as exc:
+                raise ValueError("Entry UID collision; please retry") from exc
+            row = connection.execute(
+                "SELECT * FROM team_entries WHERE id = ?",
+                (int(cursor.lastrowid or 0),),
+            ).fetchone()
+        if row is None:
+            raise RuntimeError("Team entry insert did not return a row")
+        return _team_entry_from_row(row)
+
+    def update_team_entry(
+        self,
+        *,
+        team_id: int,
+        uid: str,
+        title: str | None = None,
+        body: str | None = None,
+        tags: list[str] | None = None,
+    ) -> TeamEntryRecord | None:
+        if title is None and body is None and tags is None:
+            return self.get_team_entry(team_id=team_id, uid=uid)
+        fields: list[str] = []
+        params: list[Any] = []
+        if title is not None:
+            fields.append("title = ?")
+            params.append(title.strip() or "未命名条目")
+        if body is not None:
+            fields.append("body = ?")
+            params.append(body.rstrip())
+        if tags is not None:
+            fields.append("tags_json = ?")
+            params.append(json.dumps(_clean_tag_list(tags), ensure_ascii=False))
+        fields.append("updated_at = ?")
+        now = utc_now()
+        params.append(now)
+        params.extend([team_id, uid])
+        with self.connect() as connection:
+            connection.execute(
+                f"UPDATE team_entries SET {', '.join(fields)} WHERE team_id = ? AND uid = ?",
+                tuple(params),
+            )
+            row = connection.execute(
+                "SELECT * FROM team_entries WHERE team_id = ? AND uid = ?",
+                (team_id, uid),
+            ).fetchone()
+        return _team_entry_from_row(row) if row else None
+
+    def delete_team_entry(self, *, team_id: int, uid: str) -> bool:
+        with self.connect() as connection:
+            connection.execute(
+                "DELETE FROM team_entry_vectors WHERE team_id = ? AND entry_uid = ?",
+                (team_id, uid),
+            )
+            cursor = connection.execute(
+                "DELETE FROM team_entries WHERE team_id = ? AND uid = ?",
+                (team_id, uid),
+            )
+            return cursor.rowcount > 0
+
+    def get_team_entry(self, *, team_id: int, uid: str) -> TeamEntryRecord | None:
+        with self.connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM team_entries WHERE team_id = ? AND uid = ?",
+                (team_id, uid),
+            ).fetchone()
+        return _team_entry_from_row(row) if row else None
+
+    def list_team_entries(
+        self,
+        *,
+        team_id: int,
+        tag: str | None = None,
+        query: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[TeamEntryRecord]:
+        conditions = ["team_id = ?"]
+        params: list[Any] = [team_id]
+        if tag:
+            conditions.append("tags_json LIKE ?")
+            params.append(f"%{json.dumps(tag, ensure_ascii=False)}%")
+        if query:
+            conditions.append("(title LIKE ? OR body LIKE ?)")
+            params.extend([f"%{query}%", f"%{query}%"])
+        params.extend([limit, offset])
+        with self.connect() as connection:
+            rows = connection.execute(
+                f"""
+                SELECT * FROM team_entries
+                WHERE {' AND '.join(conditions)}
+                ORDER BY updated_at DESC, id DESC
+                LIMIT ? OFFSET ?
+                """,
+                tuple(params),
+            ).fetchall()
+        return [_team_entry_from_row(row) for row in rows]
+
+    def replace_team_entry_vectors(
+        self,
+        *,
+        team_id: int,
+        entry_uid: str,
+        chunks: list[tuple[str, list[float]]],
+    ) -> None:
+        now = utc_now()
+        with self.connect() as connection:
+            connection.execute(
+                "DELETE FROM team_entry_vectors WHERE team_id = ? AND entry_uid = ?",
+                (team_id, entry_uid),
+            )
+            if not chunks:
+                return
+            connection.executemany(
+                """
+                INSERT INTO team_entry_vectors (
+                  team_id, entry_uid, chunk_text, embedding_json, created_at
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                [
+                    (team_id, entry_uid, text, json.dumps(embedding), now)
+                    for text, embedding in chunks
+                ],
+            )
+
+    def list_team_entry_vectors(self, *, team_id: int) -> list[TeamEntryVectorRecord]:
+        with self.connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM team_entry_vectors WHERE team_id = ?",
+                (team_id,),
+            ).fetchall()
+        return [_team_entry_vector_from_row(row) for row in rows]
+
+    def search_team_entries_semantic(
+        self,
+        *,
+        team_id: int,
+        query_embedding: list[float],
+        limit: int = 10,
+    ) -> list[tuple[TeamEntryVectorRecord, float]]:
+        import math
+
+        all_units = self.list_team_entry_vectors(team_id=team_id)
+        if not all_units:
+            return []
+
+        def cos_sim(v1: list[float], v2: list[float]) -> float:
+            if len(v1) != len(v2):
+                return 0.0
+            dot = sum(a * b for a, b in zip(v1, v2))
+            norm1 = math.sqrt(sum(a * a for a in v1))
+            norm2 = math.sqrt(sum(b * b for b in v2))
+            if norm1 == 0 or norm2 == 0:
+                return 0.0
+            return dot / (norm1 * norm2)
+
+        scored = [(unit, cos_sim(query_embedding, unit.embedding)) for unit in all_units]
+        scored.sort(key=lambda x: x[1], reverse=True)
+        return scored[:limit]
+
+
+def _clean_tag_list(values: list[str]) -> list[str]:
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        if not isinstance(value, str):
+            continue
+        text = value.strip()
+        if not text:
+            continue
+        # Allow tags with or without leading #; canonicalize without leading # to keep
+        # storage uniform; the API layer can render with # when serializing.
+        normalized = text.lstrip("#").strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        cleaned.append(normalized)
+    return cleaned
+
+
+def _team_from_row(row: sqlite3.Row) -> TeamRecord:
+    return TeamRecord(
+        id=int(row["id"]),
+        workspace_id=str(row["workspace_id"]),
+        slug=str(row["slug"]),
+        name=str(row["name"]),
+        description=str(row["description"] or ""),
+        created_at=str(row["created_at"]),
+        updated_at=str(row["updated_at"]),
+    )
+
+
+def _team_member_from_row(row: sqlite3.Row) -> TeamMemberRecord:
+    return TeamMemberRecord(
+        id=int(row["id"]),
+        team_id=int(row["team_id"]),
+        display_name=str(row["display_name"]),
+        role=str(row["role"]),
+        token_hash=str(row["token_hash"]),
+        created_at=str(row["created_at"]),
+        updated_at=str(row["updated_at"]),
+        last_active_at=str(row["last_active_at"]) if row["last_active_at"] else None,
+    )
+
+
+def _team_invite_from_row(row: sqlite3.Row) -> TeamInviteRecord:
+    return TeamInviteRecord(
+        id=int(row["id"]),
+        team_id=int(row["team_id"]),
+        code=str(row["code"]),
+        role=str(row["role"]),
+        max_uses=int(row["max_uses"]),
+        uses=int(row["uses"]),
+        expires_at=str(row["expires_at"]) if row["expires_at"] else None,
+        created_at=str(row["created_at"]),
+        revoked_at=str(row["revoked_at"]) if row["revoked_at"] else None,
+    )
+
+
+def _team_entry_from_row(row: sqlite3.Row) -> TeamEntryRecord:
+    tags_raw = row["tags_json"]
+    try:
+        tags = json.loads(tags_raw) if tags_raw else []
+        if not isinstance(tags, list):
+            tags = []
+    except (TypeError, ValueError):
+        tags = []
+    return TeamEntryRecord(
+        id=int(row["id"]),
+        team_id=int(row["team_id"]),
+        uid=str(row["uid"]),
+        title=str(row["title"]),
+        body=str(row["body"]),
+        tags=[str(tag) for tag in tags],
+        author_member_id=int(row["author_member_id"]) if row["author_member_id"] is not None else None,
+        author_display_name=str(row["author_display_name"]) if row["author_display_name"] else None,
+        created_at=str(row["created_at"]),
+        updated_at=str(row["updated_at"]),
+    )
+
+
+def _team_entry_vector_from_row(row: sqlite3.Row) -> TeamEntryVectorRecord:
+    return TeamEntryVectorRecord(
+        id=int(row["id"]),
+        team_id=int(row["team_id"]),
+        entry_uid=str(row["entry_uid"]),
+        chunk_text=str(row["chunk_text"]),
+        embedding=json.loads(row["embedding_json"]),
+        created_at=str(row["created_at"]),
+    )
 
 
 def _job_from_row(row: sqlite3.Row) -> Job:

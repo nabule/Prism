@@ -25,6 +25,7 @@ from pydantic import BaseModel, Field
 from memosima import __version__
 from memosima.api.admin_ui import ADMIN_UI_HTML
 from memosima.api.security import require_admin
+from memosima.api.teams import register_team_routes
 from memosima.api.webhooks import build_idempotency_key, extract_memo_uid
 from memosima.core.config import AppConfig, ConfigError, ModelsConfig, ProviderConfig, _read_yaml, load_env_file
 from memosima.core.prompts import PromptTemplate, PromptsConfig, load_prompts_or_default
@@ -1556,6 +1557,8 @@ def create_app(
         return {"status": "ok", "message": f"Successfully deleted {deleted_count} memos and cleared local sync data."}
 
 
+
+    register_team_routes(app)
 
     return app
 

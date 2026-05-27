@@ -26,6 +26,31 @@
     .note { background: #f9fafb; border: 1px solid var(--border); border-radius: 8px; padding: 1rem; color: var(--muted); }
     .warn { background: #fff7ed; border: 1px solid #fdba74; border-radius: 8px; padding: 1rem; color: #9a3412; }
     ul, ol { padding-left: 1.6rem; }
+    figure.shot { margin: 1rem 0 1.4rem; padding: 0; }
+    figure.shot img {
+      display: block;
+      width: 100%;
+      max-width: 960px;
+      margin: 0 auto;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: 0 1px 4px rgba(16,24,40,.06);
+      background: var(--bg);
+    }
+    figure.shot figcaption {
+      margin-top: .5rem;
+      text-align: center;
+      color: var(--muted);
+      font-size: .9rem;
+    }
+    .shot-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      gap: 12px;
+      margin: 1rem 0 1.4rem;
+    }
+    .shot-grid figure.shot { margin: 0; }
+    .shot-grid figure.shot img { max-width: 100%; }
     @media (prefers-color-scheme: dark) {
       :root { --bg:#0b1220; --fg:#e5e7eb; --muted:#9ca3af; --panel:#111827; --border:#374151; --accent:#60a5fa; --code:#e5e7eb; --codebg:#1f2937; }
       th, .note { background: #1f2937; }
@@ -78,6 +103,31 @@
   <p>因为后端把 <code>SIDECAR_ADMIN_TOKEN</code> 视作所有团队的「合成 owner」，所以管理端
     只需要这一个 token 即可跨所有团队执行写操作，无需录入每个 <code>team_xxx</code>。</p>
 
+  <figure class="shot">
+    <img src="images/teams-ui/admin-team-list.png" alt="管理员 /admin/ui 的「团队 TEAMS · 团队」面板，左侧为团队列表，右侧为新建团队表单。">
+    <figcaption>图 0a-1：管理员「团队」面板——左侧列出全部团队（含成员/词条数与操作按钮），右侧为新建团队表单。</figcaption>
+  </figure>
+
+  <figure class="shot">
+    <img src="images/teams-ui/admin-owner-token-dialog.png" alt="新建团队后弹出的 owner_token reveal 对话框，token 仅显示一次。">
+    <figcaption>图 0a-2：新建团队成功后的 <code>owner_token</code> reveal 对话框——此 token 仅显示一次，必须立刻通过安全渠道交给团队负责人（截图中已用 <code>team_demo_owner_••••••</code> 占位）。</figcaption>
+  </figure>
+
+  <div class="shot-grid">
+    <figure class="shot">
+      <img src="images/teams-ui/admin-team-members.png" alt="管理员「成员」面板，下拉选择团队后渲染成员列表，可内联调整角色或移除。">
+      <figcaption>图 0a-3：管理员「成员」面板——内联角色下拉、移除按钮，受最后 owner 保护。</figcaption>
+    </figure>
+    <figure class="shot">
+      <img src="images/teams-ui/admin-team-invites.png" alt="管理员「邀请」面板，列出已撤销/可用/已耗尽邀请，右侧表单可新建邀请。">
+      <figcaption>图 0a-4：管理员「邀请」面板——左表列出邀请记录及状态，右栏新建邀请（截图中邀请码已脱敏）。</figcaption>
+    </figure>
+    <figure class="shot">
+      <img src="images/teams-ui/admin-team-entries.png" alt="管理员「词条」面板，按团队/标签/关键字过滤词条，并支持新建/编辑/删除。">
+      <figcaption>图 0a-5：管理员「词条」面板——管理员通过「合成 owner」可改任意团队任意作者的词条。</figcaption>
+    </figure>
+  </div>
+
   <h3>0a.2 成员入口 <code>/teams/ui</code></h3>
   <p>普通成员打开 <code>/teams/ui</code>，<strong>无需任何 token</strong>即可使用：</p>
   <ol>
@@ -95,6 +145,42 @@
     <li><strong>退出</strong>：顶栏「退出」只清掉本浏览器对该团队的 token，<strong>不会</strong>
       删除服务器上的成员关系；后续使用同一邀请码或新邀请码可再次加入。</li>
   </ol>
+
+  <figure class="shot">
+    <img src="images/teams-ui/teams-onboard.png" alt="/teams/ui 首次访问 onboarding 面板，提供「邀请码加入」与「已有令牌直连」两种方式。">
+    <figcaption>图 0a-6：onboarding 面板——「方式 A」用邀请码 + 展示名加入；「方式 B」对已有 <code>team_xxx</code> 直接绑定（需自报角色以决定显隐 owner-only 入口）。</figcaption>
+  </figure>
+
+  <div class="shot-grid">
+    <figure class="shot">
+      <img src="images/teams-ui/teams-entries.png" alt="editor 视角下的「词条」tab，左右两栏：左侧筛选+新建表单，下方词条列表。">
+      <figcaption>图 0a-7：editor 视角下的「词条」tab——筛选 + 新建 + 内联编辑/删除（编辑者隔离：仅能改自己创建的）。</figcaption>
+    </figure>
+    <figure class="shot">
+      <img src="images/teams-ui/teams-edit-dialog.png" alt="点击「编辑」后弹出的词条编辑对话框，可改标题/正文/标签。">
+      <figcaption>图 0a-8：词条「编辑」对话框——保存时调用 <code>PUT /teams/{slug}/entries/{uid}</code>，按需异步重建向量。</figcaption>
+    </figure>
+  </div>
+
+  <figure class="shot">
+    <img src="images/teams-ui/teams-search-qa.png" alt="「检索 / QA」tab：上方是 query + tag + top_k + 向量开关，下方是 hits 列表和已拼装的超级 Prompt。">
+    <figcaption>图 0a-9：「检索 / QA」tab——文本/向量双通道召回，点「生成超级 Prompt」即可一键拼装并复制到任意大模型客户端使用（截图为本机未配 <code>SILICONFLOW_API_KEY</code> 的纯文本模式）。</figcaption>
+  </figure>
+
+  <div class="shot-grid">
+    <figure class="shot">
+      <img src="images/teams-ui/teams-members.png" alt="owner 视角下的「成员」tab，列出本团队全部成员，可内联改角色或移除。">
+      <figcaption>图 0a-10：owner 专属「成员」tab——内联角色下拉、移除按钮，受最后 owner 保护。</figcaption>
+    </figure>
+    <figure class="shot">
+      <img src="images/teams-ui/teams-invites.png" alt="owner 视角下的「邀请」tab，含新建邀请表单与已发邀请的状态/操作列表。">
+      <figcaption>图 0a-11：owner 专属「邀请」tab——左栏新建邀请，下表列出全部邀请记录（含已撤销/已耗尽以便审计，截图中所有邀请码已脱敏）。</figcaption>
+    </figure>
+    <figure class="shot">
+      <img src="images/teams-ui/teams-invite-reveal.png" alt="新建邀请成功后的 reveal 对话框，邀请码仅显示一次。">
+      <figcaption>图 0a-12：邀请码 reveal 对话框——同样只显示一次，关闭后无法找回（截图中邀请码已脱敏）。</figcaption>
+    </figure>
+  </div>
 
   <div class="warn">
     ⚠️ Web UI 里所有 <code>owner_token</code> / <code>team_xxx</code> / 邀请码都<strong>只显示一次</strong>，

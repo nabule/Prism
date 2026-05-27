@@ -1,0 +1,651 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prism (Memosima) 详细设计文档</title>
+<style>:root{color-scheme:light dark;--bg:#f7f8fa;--fg:#1f2937;--muted:#667085;--panel:#fff;--border:#d0d5dd;--accent:#2563eb;--code:#101828;--codebg:#eef2f6;--warn:#b45309;--danger:#b91c1c}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{max-width:1080px;margin:0 auto;padding:40px 24px 72px}article{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:32px;box-shadow:0 1px 2px rgba(16,24,40,.05)}h1,h2,h3,h4{line-height:1.25;margin:1.4em 0 .6em}h1{margin-top:0;font-size:2rem}h2{border-top:1px solid var(--border);padding-top:1.1em;font-size:1.5rem}h3{font-size:1.18rem;color:var(--accent)}h4{font-size:1.02rem;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}a{color:var(--accent)}table{border-collapse:collapse;width:100%;margin:1rem 0;display:block;overflow-x:auto}th,td{border:1px solid var(--border);padding:.55rem .7rem;text-align:left;vertical-align:top}th{background:#f2f4f7}pre{background:var(--codebg);color:var(--code);padding:1rem;border-radius:8px;overflow-x:auto;font-size:.88rem;line-height:1.5}code{background:var(--codebg);color:var(--code);padding:.12rem .28rem;border-radius:4px;font-size:.92em}pre code{background:transparent;padding:0;font-size:1em}blockquote{border-left:4px solid var(--accent);margin:1rem 0;padding:.4rem 1rem;color:var(--muted);background:#f3f6fb}.meta{color:var(--muted);font-size:.92rem;margin-bottom:1.5rem}.toc{background:#f9fafb;border:1px solid var(--border);border-radius:8px;padding:1rem 1.2rem;margin:1rem 0 2rem;font-size:.94rem}.toc h2{border:0;padding:0;margin:0 0 .6rem;font-size:1.1rem;color:var(--fg)}.toc ol{margin:0;padding-left:1.4rem}.toc li{margin:.18rem 0}.toc a{text-decoration:none}.toc a:hover{text-decoration:underline}.badge{display:inline-block;padding:.05rem .45rem;border-radius:999px;font-size:.78rem;border:1px solid var(--border);background:#f2f4f7;color:var(--muted);margin-left:.4rem;vertical-align:middle}.badge.warn{border-color:#fbbf24;background:#fef3c7;color:var(--warn)}.badge.danger{border-color:#fca5a5;background:#fee2e2;color:var(--danger)}.method{display:inline-block;min-width:48px;padding:.05rem .4rem;border-radius:4px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.78rem;text-align:center;font-weight:600}.m-get{background:#dbeafe;color:#1d4ed8}.m-post{background:#dcfce7;color:#15803d}.m-put{background:#fef3c7;color:#a16207}.m-del{background:#fee2e2;color:#b91c1c}.callout{border-left:4px solid var(--warn);background:#fef3c7;color:#7c2d12;padding:.75rem 1rem;margin:1rem 0;border-radius:0 6px 6px 0}.callout.danger{border-color:var(--danger);background:#fee2e2;color:#7f1d1d}@media (prefers-color-scheme:dark){:root{--bg:#0b1220;--fg:#e5e7eb;--muted:#9ca3af;--panel:#111827;--border:#374151;--accent:#60a5fa;--code:#e5e7eb;--codebg:#1f2937}th{background:#1f2937}.toc,blockquote{background:#111827}.callout{background:#3f2d0d;color:#fde68a}.callout.danger{background:#3f1212;color:#fecaca}.badge{background:#1f2937;color:#d1d5db}.badge.warn{background:#3f2d0d;color:#fde68a}.badge.danger{background:#3f1212;color:#fecaca}}</style>
+</head>
+<body>
+<main>
+<article>
+
+<div class="meta">来源：详细设计.html · 适用版本 <code>memosima</code> ≥ 0.6.6 · 上游 README：<a href="../README.md">../README.md</a></div>
+<h1>Prism (Memosima) 详细设计文档</h1>
+
+<p>本文档是面向源码贡献者的 <strong>全链路设计参考</strong>，从架构分层、模块边界、数据库 schema、任务生命周期、提示词契约、向量与提醒子系统，到 REST API 与部署拓扑。目标是让任何一位新加入的工程师，<strong>不必反复阅读源码即可定位修改点、评估影响半径</strong>。</p>
+
+<nav class="toc">
+<h2>目录</h2>
+<ol>
+  <li><a href="#s1">系统目标与设计原则</a></li>
+  <li><a href="#s2">顶层架构</a></li>
+  <li><a href="#s3">源码模块分层</a></li>
+  <li><a href="#s4">数据库 Schema</a></li>
+  <li><a href="#s5">任务生命周期</a></li>
+  <li><a href="#s6">LLM Provider 抽象</a></li>
+  <li><a href="#s7">附件解析流水线</a></li>
+  <li><a href="#s8">标签治理</a></li>
+  <li><a href="#s9">提醒子系统</a></li>
+  <li><a href="#s10">备份 / 恢复</a></li>
+  <li><a href="#s11">管理 REST API 全量索引</a></li>
+  <li><a href="#s12">部署与运维</a></li>
+  <li><a href="#s13">测试与质量门</a></li>
+  <li><a href="#s14">可扩展点与改造指引</a></li>
+  <li><a href="#s15">风险与已知约束</a></li>
+  <li><a href="#s16">后续路线建议</a></li>
+</ol>
+</nav>
+
+<!-- =================== 1 =================== -->
+<h2 id="s1">1. 系统目标与设计原则</h2>
+
+<h3>1.1 业务目标</h3>
+<ul>
+  <li>在 Memos 既有「极速记录」体验之上，叠加 <strong>AI 折射式整理</strong>（标题 / 摘要 / 要点 / 待办 / 标签 / 双向引用）。</li>
+  <li><strong>标签治理</strong>：杜绝 AI 与人工双向污染；引入「正式 / 候选」两层物理隔离。</li>
+  <li><strong>本地优先 + 隐私可控</strong>：附件（Draw.io、Mind Elixir）100% 本地解析；MinerU 仅在必要时上云；向量服务可关闭。</li>
+  <li><strong>个人级单租户</strong>：单实例绑定单 <code>MEMOS_API_TOKEN</code>，多用户必须物理隔离部署。</li>
+</ul>
+
+<h3>1.2 设计原则</h3>
+<ol>
+  <li><strong>Sidecar 解耦</strong>：所有 AI 能力放在伴生进程，Memos 主站二进制保持纯净，升级不互锁。</li>
+  <li><strong>API + Worker 双进程</strong>：API 层只接收事件并入队，所有耗时处理移至 Worker，避免长轮询拖垮请求线程。</li>
+  <li><strong>幂等 + 队列</strong>：每个 memo 事件唯一映射一条 <code>jobs.idempotency_key</code>，重投/重试不会重复整理。</li>
+  <li><strong>配置三层</strong>：环境变量 &gt; <code>config/.env.local</code>（密钥） &gt; <code>config/*.yaml</code>（静态结构），所有改动可热写回。</li>
+  <li><strong>降级而非失败</strong>：嵌入服务、文档解析、Webhook 不可达时自动降级而非中断整条流水线。</li>
+  <li><strong>可观测</strong>：所有关键阶段写入 <code>system_logs</code> 与 stdout，管理页面可在线检索。</li>
+</ol>
+
+<!-- =================== 2 =================== -->
+<h2 id="s2">2. 顶层架构</h2>
+
+<pre><code>┌─────────────────────────────────────────────────────────────────────┐
+│                       Caddy Gateway (8085)                          │
+│   /docs/* /admin/* /health /webhooks/*  →  sidecar (FastAPI)        │
+│              其余                         →  memos:5230              │
+└─────────────────────────────────────────────────────────────────────┘
+                ▲                                  ▲
+                │ HTTP                             │ HTTP
+                ▼                                  ▼
+        ┌──────────────────┐                ┌───────────────────┐
+        │  memosima-api    │   shared SQLite│ memosima-worker   │
+        │  FastAPI/Uvicorn │ ◀─────────────▶│ asyncio loop      │
+        │  · Admin UI      │  data/sidecar/ │ · poll memos      │
+        │  · Webhook 入口  │  sidecar.db    │ · process jobs    │
+        │  · QA / RAG      │     (WAL)      │ · send reminders  │
+        └──────────────────┘                └───────────────────┘
+                ▲                                  ▲
+                │ REST API                         │ REST API
+                ▼                                  ▼
+        ┌──────────────────────────────────────────────────────┐
+        │             neosmemo/memos (主站, :5230)              │
+        │  · memos / comments / relations / resources / pat     │
+        └──────────────────────────────────────────────────────┘
+                ▲
+                │ HTTPS（按需）
+                ▼
+   ┌──────────────────────┬─────────────────────────┬─────────────────┐
+   │ DeepSeek / OpenRouter│  SiliconFlow embeddings │   MinerU OCR    │
+   │     / OpenAI         │   (BAAI/bge-m3)         │   Bark 推送      │
+   └──────────────────────┴─────────────────────────┴─────────────────┘
+</code></pre>
+
+<h3>2.1 进程拓扑</h3>
+<table>
+<thead><tr><th>容器</th><th>进程入口</th><th>角色</th></tr></thead>
+<tbody>
+<tr><td><code>memosima-gateway</code></td><td><code>caddy run</code></td><td>边缘反代 + 路由分发 + 静态文档</td></tr>
+<tr><td><code>memosima-memos</code></td><td><code>neosmemo/memos:stable</code></td><td>原生 Memos 主站</td></tr>
+<tr><td><code>memosima-sidecar</code></td><td><code>uvicorn memosima.api.app:create_app --factory</code></td><td>API + Admin UI</td></tr>
+<tr><td><code>memosima-worker</code></td><td><code>python -m memosima.worker.runner</code></td><td>异步整理 / 提醒派发</td></tr>
+</tbody>
+</table>
+
+<blockquote>两个 sidecar 容器共享同一个 <code>data/sidecar/sidecar.db</code>，依赖 SQLite WAL 模式保证并发读写安全；任务通过 <code>claim_next_job()</code> 的 <code>UPDATE ... WHERE status='pending'</code> 原子领取，多个 worker 可水平扩展（默认 1 个）。</blockquote>
+
+<!-- =================== 3 =================== -->
+<h2 id="s3">3. 源码模块分层</h2>
+
+<pre><code>src/memosima/
+├── __init__.py              # 包版本：importlib.metadata.version("memosima")
+├── api/                     # FastAPI 应用层
+│   ├── app.py               # create_app() 工厂，36+ 路由
+│   ├── admin_ui.py          # 管理后台 SPA（HTML/JS 内嵌字符串）
+│   ├── security.py          # require_admin Bearer 校验
+│   └── webhooks.py          # extract_memo_uid / build_idempotency_key
+├── core/                    # 业务无状态算法层
+│   ├── config.py            # AppConfig dataclass + load_env_file
+│   ├── prompts.py           # 提示词模板加载
+│   ├── taxonomy.py          # 标签治理（active/candidate/disabled/alias）
+│   ├── attachments.py       # Draw.io / Mind Elixir 本地解析
+│   ├── document_parsers.py  # MinerU REST 客户端
+│   ├── admin_entry.py       # 管理入口 memo 渲染
+│   ├── summary.py           # AI 整理 memo 文本组装
+│   └── logging_handler.py   # 自定义 Handler → system_logs 表
+├── db/
+│   └── store.py             # SQLite Store + dataclass + migrate()
+├── llm/
+│   └── provider.py          # OpenAICompatibleClient + EmbeddingClient
+├── memos/
+│   ├── client.py            # Memos REST 封装
+│   └── probe.py             # CLI 探针：注册用户 / PAT / Webhook
+└── worker/
+    └── runner.py            # Worker 主循环 + 整理流水线
+</code></pre>
+
+<h3>3.1 层间依赖规则</h3>
+<ul>
+  <li><code>api</code> 与 <code>worker</code> 同时依赖 <code>core / db / llm / memos</code>；二者 <strong>禁止互相 import</strong>。</li>
+  <li><code>core</code> 是纯函数包，不依赖 FastAPI、httpx 客户端；便于单元测试。</li>
+  <li><code>db.store</code> 是唯一允许执行 SQL 的位置；其它模块只看 dataclass。</li>
+  <li>所有外部 HTTP 调用统一通过 <code>httpx.AsyncClient</code>，timeout 由各模块 owner 决定。</li>
+</ul>
+
+<h3>3.2 关键数据类（<code>db/store.py</code>）</h3>
+<ul>
+  <li><code>Job(id, type, status, idempotency_key, payload_json, result_json, error, retry_count, ...)</code></li>
+  <li><code>MemoRecord(memos_uid, type, source_memo_uid, content_hash, status, ...)</code></li>
+  <li><code>TagCandidateRecord(path, parent_path, status, reason, source_memo_uid, similar_tags_json, confidence, reviewer_note, ...)</code></li>
+  <li><code>BusinessTagRecord(path, status, source, ...)</code></li>
+  <li><code>ArtifactRecord(memo_uid, resource_uid, kind, content_markdown, metadata_json, ...)</code></li>
+  <li><code>ReminderRecord(source_memo_uid, title, body, due_at, timezone, status, confidence, raw_text, sent_at, error, ...)</code></li>
+  <li><code>VectorUnitRecord(memo_uid, chunk_text, embedding_json, ...)</code></li>
+  <li><code>SystemLogRecord(timestamp, level, component, message)</code></li>
+</ul>
+
+<!-- =================== 4 =================== -->
+<h2 id="s4">4. 数据库 Schema</h2>
+
+<p>数据库文件：<code>data/sidecar/sidecar.db</code>（默认）；统一携带 <code>workspace_id</code>，未来可演进多工作区。</p>
+
+<pre><code>-- 工作区（当前固定 default）
+workspaces(id PK, name, created_at, updated_at)
+
+-- memo 元数据（既包含原始 memo 也包含 AI 整理 memo）
+memos(id PK, workspace_id FK, memos_uid, type, source_memo_uid, content_hash, status,
+      created_at, updated_at,
+      UNIQUE(workspace_id, memos_uid, type))
+
+-- 任务队列（核心）
+jobs(id PK, workspace_id FK, type, status, idempotency_key, payload_json, result_json,
+     error, retry_count, created_at, updated_at,
+     UNIQUE(workspace_id, idempotency_key))
+INDEX idx_jobs_status_created(status, created_at)
+
+-- 候选标签队列
+tag_candidates(id PK, workspace_id FK, path, parent_path, status, reason,
+               source_memo_uid, similar_tags_json, confidence, reviewer_note,
+               created_at, updated_at,
+               UNIQUE(workspace_id, path))
+INDEX idx_tag_candidates_status_created(status, created_at)
+
+-- 正式业务标签
+business_tags(id PK, workspace_id FK, path, status, source, created_at, updated_at,
+              UNIQUE(workspace_id, path))
+INDEX idx_business_tags_status_path(status, path)
+
+-- 附件解析结果
+artifacts(id PK, workspace_id FK, memo_uid, resource_uid, kind, content_markdown,
+          metadata_json, created_at,
+          UNIQUE(workspace_id, memo_uid, resource_uid, kind))
+INDEX idx_artifacts_memo_kind(workspace_id, memo_uid, kind)
+
+-- 提醒事项
+reminders(id PK, workspace_id FK, source_memo_uid, title, body, due_at, timezone,
+          status, confidence, raw_text, sent_at, error, created_at, updated_at,
+          UNIQUE(workspace_id, source_memo_uid, due_at, title))
+INDEX idx_reminders_status_due(status, due_at)
+
+-- 向量分块
+vector_units(id PK, workspace_id FK, memo_uid, chunk_text, embedding_json, created_at)
+INDEX idx_vector_units_memo_uid(workspace_id, memo_uid)
+
+-- 结构化系统日志
+system_logs(id PK, workspace_id FK, timestamp, level, component, message)
+INDEX idx_system_logs_timestamp(timestamp)
+</code></pre>
+
+<h3>4.1 状态机</h3>
+<table>
+<thead><tr><th>实体</th><th>取值</th><th>转移触发</th></tr></thead>
+<tbody>
+<tr><td><code>jobs.status</code></td><td><code>pending</code> → <code>in_progress</code> → <code>completed</code> / <code>failed</code></td><td><code>claim_next_job()</code> / <code>process()</code> / <code>retry</code> 路由</td></tr>
+<tr><td><code>memos.status</code></td><td><code>pending</code> / <code>linked</code> / <code>ignored</code></td><td>在整理结束后由 worker 写回</td></tr>
+<tr><td><code>tag_candidates.status</code></td><td><code>pending</code> / <code>approved</code> / <code>rejected</code></td><td>Admin 审核接口</td></tr>
+<tr><td><code>reminders.status</code></td><td><code>pending</code> / <code>sent</code> / <code>failed</code> / <code>canceled</code></td><td>Worker <code>_send_due_reminders_once()</code></td></tr>
+</tbody>
+</table>
+
+<h3>4.2 内置 PRAGMA</h3>
+<ul>
+  <li><code>PRAGMA journal_mode = WAL</code>：双进程并发读写。</li>
+  <li><code>PRAGMA foreign_keys = ON</code>：strict FK；reset 时显式关闭再开。</li>
+</ul>
+
+<!-- =================== 5 =================== -->
+<h2 id="s5">5. 任务生命周期</h2>
+
+<h3>5.1 Worker 主循环（<code>worker/runner.py: Worker.run_once</code>）</h3>
+<pre><code class="language-python"># 简化伪代码
+async def run_once() -&gt; bool:
+    if await self._send_due_reminders_once():    # 1. 优先派发到期提醒
+        return True
+    job = self.store.claim_next_job()             # 2. 抢占下一个 pending job
+    if job:
+        await self._process_job(job)
+        return True
+    if await self._ensure_admin_entry_memo_once():# 3. 维护管理入口 memo
+        return True
+    return await self._poll_memos_once()          # 4. 主动轮询 memos（poll/both 模式）
+</code></pre>
+<p>外层以 <code>worker.poll_interval_seconds</code>（默认 2s）作为节流；任何一步处理过工作就立即重入下一轮，避免拥塞。</p>
+
+<h3>5.2 memo → AI 整理 端到端时序</h3>
+<pre><code>[Memos]
+   │  ① 用户保存新 memo
+   ▼
+[Sidecar API: POST /webhooks/memos]      ┐
+   │  解析 memo_uid                       ├─ poll 模式：worker._poll_memos_once 拉取
+   │  build_idempotency_key()             │  并直接调用 enqueue
+   │  store.enqueue_job("organize_memo")  ┘
+   ▼
+[jobs.status = pending]
+   ▼
+[Worker._process_job]
+   ├─ 拉取 memo 全文 + relations + resources
+   ├─ 下载附件 → core.attachments.parse_resource()
+   │     ├─ .drawio/.drawio.svg → zlib 解压 → XML mxCell value
+   │     ├─ Mind Elixir JSON   → 递归 DFS → Markdown 大纲
+   │     └─ Office/PDF         → document_parsers.MinerU
+   ├─ 写入 artifacts 表（去重 memo_uid+resource_uid+kind）
+   ├─ 构造 organization_plan：taxonomy.local_plan + active_tags + content
+   ├─ llm.organize_memo()  →  JSON{title, summary, key_points, todos,
+   │                              active_tags, candidate_tags, ...}
+   ├─ tag 合并：active_tags ∩ taxonomy.active；其余进 tag_candidates
+   │           （去重 + 拼音模糊归一）
+   ├─ summary.build_summary_memo_content() → AI 整理 memo 正文
+   ├─ memos.client 创建/更新 AI memo + REFERENCE relation
+   ├─ 若 reminders.enabled 且正文含 trigger_tag →
+   │     llm.extract_reminders → reminders 表
+   ├─ 若 vector_search.enabled → 切块 500 字 → embeddings → vector_units
+   └─ jobs.status = completed；memos.status = linked
+</code></pre>
+
+<h3>5.3 错误与重试</h3>
+<ul>
+  <li>任意异常 → <code>jobs.status = failed</code>，<code>retry_count += 1</code>，<code>error = traceback.format_exc()</code>。</li>
+  <li><code>worker.max_attempts</code>（默认 3）内会被 <code>claim_next_job()</code> 自动重新拉起；超过则停留在 <code>failed</code>，由管理员手动 <code>POST /admin/jobs/{id}/retry</code> 恢复。</li>
+  <li>嵌入 / MinerU / Reminder Webhook 不可达：<strong>降级而非失败</strong>，主任务仍可完成；降级原因记录到 <code>system_logs</code>。</li>
+</ul>
+
+<h3>5.4 幂等键</h3>
+<p><code>webhooks.build_idempotency_key(memo_uid, event)</code>：以 <code>memo_uid</code> + 事件类型派生，确保 Memos 重投同一事件不会重复入队；<code>jobs</code> 表上 <code>UNIQUE(workspace_id, idempotency_key)</code> 提供数据库级守门。</p>
+
+<!-- =================== 6 =================== -->
+<h2 id="s6">6. LLM Provider 抽象（<code>llm/provider.py</code>）</h2>
+
+<h3>6.1 OpenAICompatibleClient</h3>
+<ul>
+  <li>统一走 OpenAI Chat Completions 协议（base_url + Bearer）。</li>
+  <li>三个高层方法：<code>organize_memo()</code> / <code>extract_reminders()</code> / <code>summarize_tag()</code>。</li>
+  <li>通用规则：
+    <ul>
+      <li><code>response_format = json_object</code>（除 <code>tag_summary</code> 使用 markdown）。</li>
+      <li>timeout 下限 90s（推理时间偏长，避免误杀）。</li>
+      <li><code>extra_body</code> 透传，例如 DeepSeek 的 <code>thinking.type=enabled</code>。</li>
+    </ul>
+  </li>
+</ul>
+
+<h3>6.2 Provider 切换</h3>
+<ul>
+  <li><code>config/models.yaml.default_provider</code> 控制默认入口。</li>
+  <li>管理页面 <code>/admin/ui#models</code> 调用 <code>PUT /admin/models</code>：
+    <ul>
+      <li>非密钥字段（<code>model</code> / <code>temperature</code> / <code>extra_body</code>）写回 <code>config/models.yaml</code>。</li>
+      <li><code>api_key_env</code> 指定的 Key 写入 <code>config/.env.local</code>（不入备份/Git）。</li>
+    </ul>
+  </li>
+  <li>切换后无需重启 API，但建议触发一次空 <code>organize_memo</code> 验证连通性。</li>
+</ul>
+
+<h3>6.3 EmbeddingClient</h3>
+<ul>
+  <li>当前实现：SiliconFlow <code>/v1/embeddings</code>（OpenAI-compatible）。</li>
+  <li>批量上限 16 chunk；超出自动分批，串行调用。</li>
+  <li>输出向量直接 JSON 序列化存入 <code>vector_units.embedding_json</code>（FLOAT[]）。</li>
+</ul>
+
+<h3>6.4 检索算法</h3>
+<ul>
+  <li>Query 端：embed 单条 query 向量。</li>
+  <li>库端：<code>SELECT * FROM vector_units WHERE workspace_id = ?</code> 全量取出，<strong>在 Python 层计算 cosine similarity</strong> → top-K。</li>
+  <li>适合个人级 ≤ 10 万 chunk；超过时建议接入 sqlite-vss / 外置向量库（见 <a href="#s14">§14 扩展点</a>）。</li>
+</ul>
+
+<h3>6.5 QA 双通道</h3>
+<p><code>POST /admin/qa/generate-prompt</code>：</p>
+<ul>
+  <li><code>use_vector=true</code>：embedding → 向量召回 → 后置标签 + AND/OR 过滤。</li>
+  <li><code>use_vector=false</code> 或 embedding 不可用：业务标签 + 正文模糊（SQLite <code>LIKE</code> + 标签匹配）。</li>
+  <li>两路均融合 <code>artifacts.content_markdown</code> 大纲作为高保真上下文。</li>
+  <li>输出一段「超级 Prompt」，前端「一键复制」。</li>
+</ul>
+
+<!-- =================== 7 =================== -->
+<h2 id="s7">7. 附件解析流水线（<code>core/attachments.py</code> + <code>core/document_parsers.py</code>）</h2>
+
+<h3>7.1 准入</h3>
+<ul>
+  <li><code>limits.allowed_parse_extensions</code>（默认含 <code>.txt / .md / .doc(x) / .xls(x) / .ppt(x) / .pdf / .drawio / .drawio.svg / .json</code>）。</li>
+  <li>单个附件 ≤ <code>limits.max_attachment_mb</code>（默认 50MB）。</li>
+</ul>
+
+<h3>7.2 解析器路由</h3>
+<table>
+<thead><tr><th>后缀</th><th>走向</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td><code>.drawio</code></td><td>本地 zlib + base64 + XML</td><td>抽取所有 <code>&lt;mxCell value&gt;</code>，过滤 HTML。</td></tr>
+<tr><td><code>.drawio.svg</code></td><td>本地从 SVG <code>&lt;diagram&gt;</code> 节点抽嵌入字节</td><td>与上同。</td></tr>
+<tr><td>Mind Elixir JSON</td><td>本地 DFS 递归</td><td>转 Markdown 嵌套列表。</td></tr>
+<tr><td><code>.txt / .md / .json</code>（无 schema）</td><td>直接读取</td><td>直接当作文本入 artifacts。</td></tr>
+<tr><td><code>.doc(x) / .xls(x) / .ppt(x) / .pdf</code></td><td>MinerU <code>/api/v4/file-urls/batch</code> → <code>/api/v4/extract-results/batch/</code></td><td>周期 <code>poll_interval_seconds</code>，至多 <code>max_polls</code> 次。</td></tr>
+</tbody>
+</table>
+
+<h3>7.3 缓存与幂等</h3>
+<ul>
+  <li><code>artifacts UNIQUE(workspace_id, memo_uid, resource_uid, kind)</code> 防止重复解析。</li>
+  <li><code>metadata_json</code> 存放原始资源信息、MinerU task id、解析耗时等。</li>
+</ul>
+
+<!-- =================== 8 =================== -->
+<h2 id="s8">8. 标签治理（<code>core/taxonomy.py</code> + <code>config/taxonomy.yaml</code>）</h2>
+
+<h3>8.1 三类标签</h3>
+<ul>
+  <li><strong>System Tags</strong>：<code>#系统/...</code> 固定前缀，例如 <code>#系统/AI整理</code>、<code>#系统/标签待审核</code>、<code>#系统/处理失败</code>。</li>
+  <li><strong>Active Business Tags</strong>：受审核业务标签（<code>config/taxonomy.yaml.business_tags</code>）。</li>
+  <li><strong>Candidate Tags</strong>：AI 提议或用户手写但尚未在 active 列表里的标签，进 <code>tag_candidates</code> 队列。</li>
+</ul>
+
+<h3>8.2 治理规则</h3>
+<ol>
+  <li><strong>唯一末级</strong>：同名末级标签全局唯一，禁止 <code>#项目/数管</code> 与 <code>#其他/数管</code> 并存。</li>
+  <li><strong>别名归一</strong>：<code>aliases[].alias → target</code> 自动映射，提交 AI 之前先归一。</li>
+  <li><strong>禁用列表</strong>：<code>disabled[]</code> 中的标签即便 AI 提出也被丢弃。</li>
+  <li><strong>拼音模糊去重</strong>：候选标签入队前做拼音首字母比对，去除 <code>#部署 / #deployment / #deploy</code> 类污染。</li>
+  <li><strong>限额</strong>：<code>limits.max_ai_active_tags</code>（默认 5）、<code>limits.max_ai_candidate_tags</code>（默认 2）。</li>
+</ol>
+
+<h3>8.3 审核流</h3>
+<ul>
+  <li><code>GET /admin/tag-candidates</code> 拉队列。</li>
+  <li><code>POST /admin/tag-candidates/{id}/approve</code>：升级为 <code>business_tags</code> 并写回 <code>config/taxonomy.yaml</code>。</li>
+  <li><code>POST /admin/tag-candidates/{id}/reject</code>：标记 <code>rejected</code>，可补充 <code>reviewer_note</code>。</li>
+</ul>
+
+<!-- =================== 9 =================== -->
+<h2 id="s9">9. 提醒子系统</h2>
+
+<h3>9.1 触发与抽取</h3>
+<ol>
+  <li>整理流水线检测到正文包含 <code>reminders.trigger_tag</code>（默认 <code>#提醒</code>）。</li>
+  <li>调用 <code>llm.extract_reminders()</code>：携带 <code>now</code>、<code>timezone</code>（默认 <code>Asia/Shanghai</code>）。</li>
+  <li>LLM 返回 <code>items[].due_at</code>（ISO 8601 + 时区偏移），低于 <code>confidence_threshold</code>（默认 0.75）或 <code>needs_clarification=true</code> 会被打回为待澄清。</li>
+</ol>
+
+<h3>9.2 派发</h3>
+<ul>
+  <li>Worker 每个 tick 优先调用 <code>_send_due_reminders_once()</code>：
+    <ul>
+      <li><code>SELECT * FROM reminders WHERE status='pending' AND due_at &lt;= now()</code>。</li>
+      <li>以 <code>reminders.request_timeout_seconds</code>（默认 10s）超时调用 <code>REMINDER_WEBHOOK_URL</code>。</li>
+      <li>兼容 Bark 表单契约：<code>{title, body}</code>。</li>
+      <li>成功 → <code>status=sent, sent_at=now()</code>；失败 → <code>status=failed, error=...</code>。</li>
+    </ul>
+  </li>
+  <li>管理端 <code>POST /admin/reminders/{id}/retry</code> 可手动重发；<code>cancel</code> 取消未发送的提醒。</li>
+</ul>
+
+<h3>9.3 配置热修改</h3>
+<p><code>GET/PUT /admin/reminders/config</code> 实时调整触发标签、阈值、Webhook URL；Webhook URL 写入 <code>config/.env.local</code>。</p>
+
+<!-- =================== 10 =================== -->
+<h2 id="s10">10. 备份 / 恢复</h2>
+
+<h3>10.1 格式</h3>
+<p>ZIP 包，根目录布局：</p>
+<pre><code>manifest.json            { "version": "0.6.6", "exported_at": "...", "workspace_id": "default" }
+config/app.yaml
+config/models.yaml
+config/prompts.yaml
+config/taxonomy.yaml
+config/.env.local        # 仅限有权限的运维下载
+database/sidecar.db      # 通过 SQLite Online Backup API 拷贝
+</code></pre>
+
+<h3>10.2 端点</h3>
+<ul>
+  <li><span class="method m-get">GET</span> <code>/admin/backups/download</code> → 流式 ZIP，要求 Admin Bearer。</li>
+  <li><span class="method m-post">POST</span> <code>/admin/backups/restore</code>（<code>multipart/form-data, file=...</code>）→ 覆盖现有配置 + 数据库；建议先停 worker 容器，恢复后再启。</li>
+</ul>
+
+<h3>10.3 <code>backup.sh</code> / <code>restore.sh</code></h3>
+<ul>
+  <li>宿主机脚本：<code>docker compose stop</code> → <code>tar</code> 整个挂载目录（含 Memos 主站资源）→ 远端 <code>scp</code>。</li>
+  <li>与 Admin API 提供的逻辑备份 <strong>互补</strong>：Admin API 只覆盖 sidecar 配置 + DB，宿主脚本覆盖 Memos 原始库。</li>
+</ul>
+
+<!-- =================== 11 =================== -->
+<h2 id="s11">11. 管理 REST API 全量索引</h2>
+
+<blockquote>所有 <code>/admin/*</code> 均要求 <code>Authorization: Bearer ${SIDECAR_ADMIN_TOKEN}</code>，校验逻辑在 <code>api/security.py: require_admin</code>。<br><code>/health</code>、<code>/admin/ui</code>、<code>/webhooks/memos</code> 公开。字段细节以 <code>src/memosima/api/app.py</code> 中对应路由的 Pydantic 模型为准。</blockquote>
+
+<h3>11.1 健康与入口</h3>
+<table>
+<thead><tr><th>方法</th><th>路径</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td><span class="method m-get">GET</span></td><td><code>/health</code></td><td>返回 <code>{status, version, worker_heartbeat_at}</code></td></tr>
+<tr><td><span class="method m-get">GET</span></td><td><code>/admin/ui</code></td><td>内嵌 HTML/JS 单页</td></tr>
+<tr><td><span class="method m-post">POST</span></td><td><code>/webhooks/memos</code></td><td>Memos 推送回调，202 Accepted；内部按 memo_uid 入队</td></tr>
+</tbody>
+</table>
+
+<h3>11.2 任务队列</h3>
+<table>
+<thead><tr><th>方法</th><th>路径</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td><span class="method m-get">GET</span></td><td><code>/admin/jobs</code></td><td>分页 + 过滤 (status/type)</td></tr>
+<tr><td><span class="method m-post">POST</span></td><td><code>/admin/jobs/{job_id}/retry</code></td><td>强制将单个 failed/completed Job 重置为 pending</td></tr>
+<tr><td><span class="method m-post">POST</span></td><td><code>/admin/jobs/reprocess-memo</code></td><td>body 含 <code>memo_uid</code>，强制再次整理</td></tr>
+<tr><td><span class="method m-post">POST</span></td><td><code>/admin/jobs/batch-reprocess-tag</code></td><td>body 含 <code>tag_path</code>，按业务标签批量重排</td></tr>
+</tbody>
+</table>
+
+<h3>11.3 提示词</h3>
+<table>
+<thead><tr><th>方法</th><th>路径</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td><span class="method m-get">GET</span></td><td><code>/admin/prompts</code></td><td>一次性返回三种模板</td></tr>
+<tr><td><span class="method m-put">PUT</span></td><td><code>/admin/prompts/organize-memo</code></td><td>写回 <code>config/prompts.yaml.organize_memo</code></td></tr>
+<tr><td><span class="method m-put">PUT</span></td><td><code>/admin/prompts/tag-summary</code></td><td>写回 <code>config/prompts.yaml.tag_summary</code></td></tr>
+<tr><td><span class="method m-put">PUT</span></td><td><code>/admin/prompts/reminder-extraction</code></td><td>写回 <code>config/prompts.yaml.reminder_extraction</code></td></tr>
+</tbody>
+</table>
+
+<h3>11.4 模型</h3>
+<table>
+<thead><tr><th>方法</th><th>路径</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td><span class="method m-get">GET</span></td><td><code>/admin/models</code></td><td>列 provider + default + 已配置的 Key 状态（不回显明文）</td></tr>
+<tr><td><span class="method m-put">PUT</span></td><td><code>/admin/models</code></td><td>切换默认 provider/model；可选附带 API Key 写入 <code>.env.local</code></td></tr>
+</tbody>
+</table>
+
+<h3>11.5 标签</h3>
+<table>
+<thead><tr><th>方法</th><th>路径</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td><span class="method m-get">GET</span></td><td><code>/admin/tag-candidates</code></td><td>分页候选标签</td></tr>
+<tr><td><span class="method m-post">POST</span></td><td><code>/admin/tag-candidates/{id}/approve</code></td><td>升级为正式业务标签</td></tr>
+<tr><td><span class="method m-post">POST</span></td><td><code>/admin/tag-candidates/{id}/reject</code></td><td>拒绝并记录原因</td></tr>
+<tr><td><span class="method m-get">GET</span></td><td><code>/admin/tags/business</code></td><td>列出全部正式业务标签</td></tr>
+<tr><td><span class="method m-post">POST</span></td><td><code>/admin/tag-summaries</code></td><td>触发标签总结 Job（body 含 <code>tag_path</code>、可选 <code>prompt_override</code>）</td></tr>
+</tbody>
+</table>
+
+<h3>11.6 提醒</h3>
+<table>
+<thead><tr><th>方法</th><th>路径</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td><span class="method m-get">GET</span></td><td><code>/admin/reminders</code></td><td>列表 + 过滤 (status)</td></tr>
+<tr><td><span class="method m-post">POST</span></td><td><code>/admin/reminders/{id}/retry</code></td><td>重发</td></tr>
+<tr><td><span class="method m-post">POST</span></td><td><code>/admin/reminders/{id}/cancel</code></td><td>取消 pending</td></tr>
+<tr><td><span class="method m-get">GET</span> / <span class="method m-put">PUT</span></td><td><code>/admin/reminders/config</code></td><td>触发标签、阈值、Webhook</td></tr>
+</tbody>
+</table>
+
+<h3>11.7 向量与 QA</h3>
+<table>
+<thead><tr><th>方法</th><th>路径</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td><span class="method m-get">GET</span> / <span class="method m-put">PUT</span></td><td><code>/admin/vector-search/config</code></td><td>provider、模型、Key、enabled 开关</td></tr>
+<tr><td><span class="method m-post">POST</span></td><td><code>/admin/qa/generate-prompt</code></td><td>body: <code>{question, tags?, logic?, use_vector?}</code> → 返回拼装好的「超级 Prompt」</td></tr>
+</tbody>
+</table>
+
+<h3>11.8 文档解析</h3>
+<table>
+<thead><tr><th>方法</th><th>路径</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td><span class="method m-get">GET</span> / <span class="method m-put">PUT</span></td><td><code>/admin/document-parser</code></td><td>MinerU Token、<code>model_version</code>、超时与轮询参数</td></tr>
+</tbody>
+</table>
+
+<h3>11.9 Memos 同步</h3>
+<table>
+<thead><tr><th>方法</th><th>路径</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td><span class="method m-get">GET</span> / <span class="method m-put">PUT</span></td><td><code>/admin/memos/config</code></td><td>base_url / PAT / 入口模式 / 可见性</td></tr>
+<tr><td><span class="method m-post">POST</span></td><td><code>/admin/memos/delete-all</code> <span class="badge danger">DANGER</span></td><td>清空 Memos 主站 memo（需二次确认 header）</td></tr>
+</tbody>
+</table>
+
+<h3>11.10 备份 / 系统</h3>
+<table>
+<thead><tr><th>方法</th><th>路径</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td><span class="method m-get">GET</span></td><td><code>/admin/backups/download</code></td><td>流式 ZIP</td></tr>
+<tr><td><span class="method m-post">POST</span></td><td><code>/admin/backups/restore</code></td><td>multipart 上传 ZIP</td></tr>
+<tr><td><span class="method m-post">POST</span></td><td><code>/admin/database/reset</code> <span class="badge danger">DANGER</span></td><td>drop 所有表并重建（保留配置）</td></tr>
+<tr><td><span class="method m-get">GET</span></td><td><code>/admin/logs</code></td><td>系统日志查询（component/level/keyword）</td></tr>
+<tr><td><span class="method m-post">POST</span></td><td><code>/admin/logs/clear</code></td><td>清空 <code>system_logs</code> 表</td></tr>
+</tbody>
+</table>
+
+<!-- =================== 12 =================== -->
+<h2 id="s12">12. 部署与运维</h2>
+
+<h3>12.1 一键部署</h3>
+<pre><code class="language-bash">mkdir prism-prod &amp;&amp; cd prism-prod
+bash &lt;(curl -s -L https://raw.githubusercontent.com/nabule/Prism/master/deploy.sh)
+</code></pre>
+<p><code>deploy.sh</code> 行为：</p>
+<ol>
+  <li>初始化 <code>config/</code>、<code>data/{memos,sidecar}/</code>、<code>logs/caddy/</code>。</li>
+  <li>生成 <code>gateway/Caddyfile</code>、<code>config/app.yaml</code>（仅当缺失）。</li>
+  <li><code>openssl rand -hex 16</code> 生成 <code>SIDECAR_ADMIN_TOKEN</code> 写入 <code>.env</code>。</li>
+  <li><code>docker compose -f docker-compose.release.yml pull &amp;&amp; up -d</code>。</li>
+</ol>
+
+<h3>12.2 镜像</h3>
+<ul>
+  <li><code>ghcr.io/nabule/prism:${PRISM_VERSION:-latest}</code>，由 GitHub Actions 在 tag push 时构建。</li>
+  <li><code>Dockerfile</code> 基于 <code>python:3.11-slim</code>，使用 <code>uv pip install --system</code> 装依赖；运行入口：<code>uvicorn memosima.api.app:create_app --factory --reload-dir /app/src</code>（开发态启用 <code>--reload</code>）。</li>
+</ul>
+
+<h3>12.3 端口</h3>
+<ul>
+  <li>默认网关：<code>GATEWAY_PORT=8085</code> → <code>:80</code>（容器内 Caddy）。</li>
+  <li>Memos 不直接对外，Sidecar 不直接对外，全部经 Caddy 出口。</li>
+</ul>
+
+<h3>12.4 多租户隔离</h3>
+<div class="callout danger"><strong>单实例严禁混用多人</strong>。共享 sidecar.db 会导致跨账号召回，请按下方方案做物理隔离。</div>
+<ul>
+  <li>每用户独立工作目录 + <code>.env</code>（不同 <code>MEMOS_API_TOKEN</code>/<code>SIDECAR_ADMIN_TOKEN</code>）。</li>
+  <li>端口递增（<code>8085 / 8086 / ...</code>）。</li>
+  <li>上游 Nginx/Caddy 按子域名分流。</li>
+</ul>
+
+<h3>12.5 热开发</h3>
+<ul>
+  <li>本地源码挂载：<code>docker-compose.yml</code> 把 <code>./src</code> 映射到 <code>/app/src</code>。</li>
+  <li>Uvicorn <code>--reload</code> 监听 <code>src/</code>，编辑保存后约 100ms 内重启进程。</li>
+  <li>worker 容器同样挂载源码，需 <code>docker compose restart sidecar-worker</code> 应用变更（worker 无 reload）。</li>
+</ul>
+
+<!-- =================== 13 =================== -->
+<h2 id="s13">13. 测试与质量门</h2>
+<table>
+<thead><tr><th>类型</th><th>命令</th><th>范围</th></tr></thead>
+<tbody>
+<tr><td>单元测试</td><td><code>npx nx test sidecar</code>（等价 <code>uv run pytest</code>）</td><td><code>tests/</code> 覆盖 LLM client、Memos client、attachments、taxonomy、reminders、summary、QA 拼装</td></tr>
+<tr><td>语法编译</td><td><code>npx nx run sidecar:compile</code></td><td><code>uv run python -m compileall -q src tests</code></td></tr>
+<tr><td>镜像构建</td><td><code>npx nx build sidecar</code></td><td><code>docker compose build</code></td></tr>
+<tr><td>Memos 探针</td><td><code>npx nx run sidecar:probe-memos</code></td><td>初始化用户、签发 PAT、注册 Webhook、验证 sidecar 健康</td></tr>
+</tbody>
+</table>
+
+<h4>测试约定</h4>
+<ul>
+  <li>使用 <code>pytest-asyncio</code> 自动模式（<code>pyproject.toml</code>）。</li>
+  <li><code>httpx</code> 调用通过 <code>httpx.MockTransport</code> 或本地 <code>httpx.AsyncClient</code> + 自建 ASGI server stub 覆盖。</li>
+  <li>涉及 SQLite 的测试在 <code>tmp_path</code> 下建库，避免污染。</li>
+</ul>
+
+<!-- =================== 14 =================== -->
+<h2 id="s14">14. 可扩展点与改造指引</h2>
+<table>
+<thead><tr><th>需求</th><th>改造位置</th><th>注意事项</th></tr></thead>
+<tbody>
+<tr><td>新增 LLM provider（如 Anthropic、Qwen）</td><td><code>config/models.yaml.providers.*</code> + <code>llm/provider.py</code>（若协议非 OpenAI 兼容则需扩展 <code>OpenAICompatibleClient</code> 抽象）</td><td>timeout 下限 ≥ 90s</td></tr>
+<tr><td>替换嵌入服务</td><td><code>llm/provider.py: EmbeddingClient</code> + <code>vector_search.*</code> 配置</td><td>注意向量维度与现有 <code>vector_units</code> 兼容；不同维度需先 <code>POST /admin/database/reset</code> 或新增 <code>dimension</code> 字段</td></tr>
+<tr><td>引入 sqlite-vss / 外置向量库</td><td><code>db/store.py</code> 中向量检索方法 + 索引建表 SQL</td><td>保留现有 <code>vector_units</code> 作为冷备</td></tr>
+<tr><td>新附件格式</td><td><code>core/attachments.py</code> 添加 parser；<code>limits.allowed_parse_extensions</code> 加白名单</td><td>优先本地解析，避免上传第三方</td></tr>
+<tr><td>多工作区</td><td>已埋点 <code>workspace_id</code>，需在 API 入参增加 workspace 选择 + Admin UI 多实例切换</td><td>数据隔离已在 schema 层完成</td></tr>
+<tr><td>新管理端面板</td><td><code>api/admin_ui.py</code> 内嵌字符串（HTML/JS），后续可拆为独立前端项目</td><td>当前为零依赖单文件 SPA</td></tr>
+<tr><td>替换 Bark 为飞书 / 钉钉</td><td><code>worker/runner.py: _send_reminder</code> body 适配</td><td>保持失败降级与 retry 语义</td></tr>
+</tbody>
+</table>
+
+<!-- =================== 15 =================== -->
+<h2 id="s15">15. 风险与已知约束</h2>
+<ul>
+  <li><strong>单租户</strong>：共享 sidecar.db 会导致跨账号召回；不要让多个 Memos 用户共用同一 sidecar。</li>
+  <li><strong>MinerU 上云</strong>：Office/PDF 走第三方；如涉敏感内容，可关闭 <code>MINERU_API_TOKEN</code>，附件将仅入库不解析。</li>
+  <li><strong>向量检索内存</strong>：<code>vector_units</code> 全量加载到 Python 计算 cosine，超过 10 万条建议引入向量库。</li>
+  <li><span class="badge danger">DANGER</span> <code>POST /admin/database/reset</code> 与 <code>POST /admin/memos/delete-all</code> 是不可逆操作；强烈建议提前下载备份。</li>
+  <li><strong>管理 Token 泄漏</strong>：拥有 <code>SIDECAR_ADMIN_TOKEN</code> 即可改提示词、删 Memos；务必走 HTTPS（Caddy 自动证书）+ 强随机 Token。</li>
+</ul>
+
+<!-- =================== 16 =================== -->
+<h2 id="s16">16. 后续路线建议（非强制）</h2>
+<ol>
+  <li><strong>向量检索引擎升级</strong>：迁移到 sqlite-vss / Qdrant，移除 Python 端 cosine。</li>
+  <li><strong>多模型路由</strong>：根据 memo 长度 / 类型自动选 provider（短 → DeepSeek，长 → Gemini Pro）。</li>
+  <li><strong>流式输出</strong>：QA 接口支持 SSE，前端实时显示「超级 Prompt」生成进度。</li>
+  <li><strong>多工作区</strong>：上线 <code>workspace_id</code> 路由参数，配套独立 PAT / 标签体系。</li>
+  <li><strong>细粒度权限</strong>：拆分 Admin Token 为 read-only / write 两级，方便给运维只读访问。</li>
+</ol>
+
+<hr>
+<p class="meta">本文件随源码同步更新；如新增 / 修改 API 或配置项，请同步刷新 <a href="#s11">§11</a>、<a href="#s4">§4</a>。</p>
+
+</article>
+</main>
+</body>
+</html>

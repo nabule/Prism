@@ -37,23 +37,3 @@ semble find-related src/auth.py 42 .
 2. 只有返回片段不足以判断时，再打开完整文件。
 3. 对有代表性的结果使用 `semble find-related` 查找相似实现。
 4. 仅在需要精确字面量匹配或穷举确认时使用 `rg`。
-
-### 自动化通知协议 (Notification Protocol)
-
-当满足以下任一条件时，**必须**在执行 Bark 通知指令，通知指令直接执行无需等待用户确认：
-
-1. 一个主要子任务 (Sub-task) 已完成。
-2. 任务挂起，等待用户提供输入或确认。
-
-**指令模板:**
-
-```bash
-title="任务更新" # 根据上下文修改标题
-body="当前任务已完成/等待输入..." # 根据上下文修改内容
-
-# 发送 POST 请求触发通知，并隐藏输出
-curl -X POST "https://api.day.app/d3ahVvenXMeS8Njud97g7U/" \
-     -d "title=$title" \
-     -d "body=$body" \
-     -s -o /dev/null
-```

@@ -147,6 +147,72 @@ bash <(curl -s -L https://raw.githubusercontent.com/nabule/Prism/master/deploy.s
 
 ---
 
+## 👥 团队知识库（Team Knowledge Base）
+
+在不放弃「个人沙箱」原则的前提下，Prism 新增了一层 **团队知识库** 能力：同一 `workspace_id` 内可以由管理员创建若干「团队」，每个团队拥有自己的成员、邀请码、词条集合和向量索引，互不串扰。它适合家庭成员协同收藏菜谱、研发小组维护事故复盘 Wiki、运营团队共建话术库等「需要少量人共享但不希望开放整库」的场景。
+
+### 🧩 数据模型
+
+| 表 | 关键字段 | 作用 |
+| :--- | :--- | :--- |
+| `teams` | `workspace_id` + `slug`（联合唯一）、`name`、`description` | 团队元信息，归属于 workspace |
+| `team_members` | `team_id`、`role`（owner/editor/viewer）、`token_hash`（SHA-256） | 成员与访问令牌，明文 token 仅在创建/兑换瞬间返回一次 |
+| `team_invites` | `code`、`role`、`max_uses`、`used_count`、`expires_at`、`revoked_at` | 邀请码生命周期管理 |
+| `team_entries` | `team_id` + `uid`（联合唯一）、`title`、`body`、`tags_json`、`author_member_id` | 团队知识词条，编辑者隔离基于 `author_member_id` |
+| `team_entry_vectors` | `entry_id`、`chunk_index`、`embedding_blob` | 词条向量分片，缺少嵌入 Key 时自动跳过 |
+
+### 🔐 角色与令牌模型
+
+* **管理员令牌（`SIDECAR_ADMIN_TOKEN`）**：携带该 token 调用任意 `/teams/...` 接口时，被视作「合成 owner」，可跨所有团队执行写操作，便于平台管理员兜底运维。
+* **团队令牌（`team_xxx...`）**：成员加入团队后获得，前缀固定为 `team_`，数据库仅存 `sha256` 哈希。
+* 角色排序：`owner > editor > viewer`。
+  - **viewer**：只读检索、调用 QA Prompt。
+  - **editor**：在 viewer 基础上可创建词条；**只能修改/删除自己创建的词条**（owner 与管理员可改任意词条）。
+  - **owner**：可邀请、改角色、删词条、修改团队元信息。
+* **最后一位 owner 保护**：当团队中只剩 1 名 owner 时，无法将其降级或移除，避免出现「无人能管理」的孤儿团队。
+
+### 🛣️ REST 接口一览
+
+| 方法 + 路径 | 鉴权 | 说明 |
+| :--- | :--- | :--- |
+| `POST /admin/teams` | 管理员 | 创建团队，返回团队信息 + 一次性 `owner_token` |
+| `GET /admin/teams` | 管理员 | 列出 workspace 内全部团队 |
+| `DELETE /admin/teams/{slug}` | 管理员 | 级联删除团队（成员、邀请、词条、向量一并清空） |
+| `GET /teams/{slug}` | 团队成员 | 查看团队元信息与成员/词条计数 |
+| `PUT /teams/{slug}` | owner | 修改团队名称、描述 |
+| `GET /teams/{slug}/members` | 团队成员 | 列出成员（不含 token） |
+| `PUT /teams/{slug}/members/{id}/role` | owner | 调整角色（受最后 owner 保护） |
+| `DELETE /teams/{slug}/members/{id}` | owner | 移除成员（受最后 owner 保护） |
+| `POST /teams/{slug}/invites` | owner | 生成邀请码（可设 `role` / `max_uses` / `expires_at`） |
+| `GET /teams/{slug}/invites` | owner | 列出邀请记录（含已撤销/已耗尽） |
+| `DELETE /teams/{slug}/invites/{id}` | owner | 撤销邀请码 |
+| `POST /teams/join` | 公开（凭邀请码） | 兑换邀请码、设置展示名，返回一次性团队令牌 |
+| `GET /teams/{slug}/entries` | 团队成员 | 列出词条，支持 `tag=`、`q=`、`limit/offset` 分页 |
+| `POST /teams/{slug}/entries` | editor+ | 新建词条，标签自动去 `#` 前缀并去重 |
+| `GET /teams/{slug}/entries/{uid}` | 团队成员 | 读取单条 |
+| `PUT /teams/{slug}/entries/{uid}` | 作者本人 / owner / 管理员 | 编辑词条 |
+| `DELETE /teams/{slug}/entries/{uid}` | 作者本人 / owner / 管理员 | 删除词条 |
+| `POST /teams/{slug}/search` | 团队成员 | 语义/文本检索；`use_vector=true` 时调用嵌入模型，否则走 substring + 标签 |
+| `POST /teams/{slug}/qa/generate-prompt` | 团队成员 | 组装「系统提示 + 团队参考上下文 + 用户提问」三段式超级 Prompt |
+
+### 🚀 典型工作流
+
+1. **管理员开团**：`POST /admin/teams` 提交 `slug` 与 `name`，返回的 `owner_token` 仅显示一次，请第一时间交给团队负责人。
+2. **负责人邀请**：负责人持 `owner_token` 调用 `POST /teams/{slug}/invites`，按需设置 `role`（默认 `editor`）和 `max_uses`，把生成的 `code` 通过安全渠道分发。
+3. **成员加入**：成员在前端或脚本中 `POST /teams/join`，提交邀请码和昵称，拿到属于自己的 `team_xxx` token。
+4. **沉淀知识**：editor 通过 `POST /teams/{slug}/entries` 写入条目，标签可以带 `#` 也可以不带（统一存为去 `#` 的小写形式）；如果配置了 `SILICONFLOW_API_KEY`，每次写入会异步重建向量索引。
+5. **检索/问答**：业务方调用 `/teams/{slug}/search` 做语义/文本检索；调用 `/teams/{slug}/qa/generate-prompt` 把检索到的条目自动拼接成超级 Prompt（与个人 RAG 接口同款渲染），最终把 Prompt 复制到任意大模型客户端即可获得答复。
+
+### 🛡️ 安全与隔离要点
+
+* 团队令牌与管理员令牌互不替代：团队令牌仅能访问自身所属团队的 `/teams/{slug}/...` 路径，跨团队调用直接 `403`。
+* 邀请码支持 `max_uses=0`（无限次）、`expires_at`（过期失效）、`revoked_at`（手动撤销）三种终止条件，任一命中即拒绝兑换。
+* 词条作者 ID 全程持久化，编辑/删除时会校验「调用者 == 作者」或「调用者为 owner/管理员」，避免横向越权。
+* 缺少 `SILICONFLOW_API_KEY` 时，`/search` 与 `/qa/generate-prompt` 会自动降级为「substring + 标签」精准召回，行为与个人 RAG 面板的降级路径一致，不阻断主流程。
+* 与个人 sidecar 一样，所有数据仍然保存在本地 `data/sidecar/sidecar.db`，没有任何团队内容会上传到第三方。
+
+---
+
 ## 🛠️ 常用开发指令（Nx 集成管理）
 
 所有底层依赖安装、编译、测试等任务均已深度封装，必须优先通过 `npx nx` 任务调度执行：

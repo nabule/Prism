@@ -89,6 +89,7 @@ TEAMS_UI_HTML = """<!doctype html>
       margin-bottom: 16px;
     }
     .panel.hidden { display: none; }
+    .hidden { display: none; }
     .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
     .row.with-button { grid-template-columns: 1fr auto; align-items: end; }
     .pill {

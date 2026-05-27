@@ -124,10 +124,11 @@ bash <(curl -s -L https://raw.githubusercontent.com/nabule/Prism/master/deploy.s
 ```
 
 **`deploy.sh` 脚本将在幕后全自动为您完成以下动作**：
-1. **构建安全拓扑**：在当前目录下初始化 `config/`、`data/memos/`、`data/sidecar/`、`logs/caddy/` 等挂载文件夹。
-2. **零人工干预配置**：若检测到没有网关配置，自动释放高性能边缘反代 `gateway/Caddyfile`，并生成初始 `config/app.yaml`。
-3. **强密钥生成**：自动调用 OpenSSL 随机算法生成 **16 字节的超强随机 `SIDECAR_ADMIN_TOKEN`**，将其直接写入生成的 `.env` 文件中，默认即为最高防御状态。
-4. **拉取与热启动**：执行 `docker compose -f docker-compose.release.yml pull` 从官方 Container Registry (GHCR) 一秒拉取 prebuilt 生产级镜像并热启动，在终端输出精美的彩色健康诊断信息。
+1. **构建安全拓扑**：在当前目录下初始化 `config/`、`data/memos/`、`data/sidecar/`、`logs/caddy/`、`docs/` 等挂载文件夹。
+2. **配置文件统一来自仓库**：所有默认配置（`gateway/Caddyfile`、`config/app.yaml`、`config/models.yaml`、`config/prompts.yaml`、`config/taxonomy.yaml`、`docker-compose.release.yml`）按需从仓库释放或下载，脚本不再内嵌 heredoc，避免脚本与仓库分歧。可通过 `PRISM_REPO_RAW_BASE` / `PRISM_REF` 环境变量覆盖来源分支或镜像。
+3. **强密钥生成**：自动调用 OpenSSL 随机算法生成 **16 字节超强随机 `SIDECAR_ADMIN_TOKEN`**，直接写入新建的 `.env` 文件中，默认即为最高防御状态。
+4. **拉取与热启动**：执行 `docker compose -f docker-compose.release.yml pull` 从官方 Container Registry (GHCR) 一秒拉取 prebuilt 生产级镜像并热启动。
+5. **自动创建 Memos 管理员账号与长期 PAT**：等待 Memos 起来后，自动 `POST /api/v1/users` 创建 host 账号，登录后签发不过期的 `MEMOS_API_TOKEN`（PAT）并写回 `.env`，随后 `docker compose up -d sidecar sidecar-worker` 让其用新 PAT 重建（注意：`docker compose restart` 不会重读 `env_file`，必须 `up -d` 才会拿到新 PAT），无需手动登录 Memos 设置页。初始账号与密码会以注释形式记录在 `.env` 末尾，方便后续登录 Memos 前端。
 
 ---
 
@@ -151,7 +152,7 @@ bash <(curl -s -L https://raw.githubusercontent.com/nabule/Prism/master/deploy.s
 ### 🚀 推荐的物理隔离方案（多租户物理沙箱）
 若您需要为多人、家庭成员或团队成员部署，最安全、也是系统原生推荐的方式是**为每个账号部署物理隔离的容器栈**：
 1. **目录隔离**：为每个用户在宿主机创建独立的部署工作目录，例如 `/data/prism_userA` 和 `/data/prism_userB`，下载相同的 `deploy.sh`。
-2. **配置隔离**：在各自的 `.env` 中填写该用户专属的 `MEMOS_API_TOKEN`、`SIDECAR_ADMIN_TOKEN` 以及大模型的 API Key。
+2. **配置隔离**：在各自的 `.env` 中确认 `MEMOS_API_TOKEN`（`deploy.sh` 已自动签发；如需多人共享同一 Memos，可手动改写）、`SIDECAR_ADMIN_TOKEN` 以及大模型的 API Key。
 3. **端口隔离**：通过环境变量或 `.env` 修改各自网关对外暴露的 `GATEWAY_PORT` 端口（默认 `8085`；例如用户 A 设为 `8085`，用户 B 设为 `8086`）。
 4. **统一反代**（可选）：使用宿主机的 Nginx 或 Caddy 将不同子域名（如 `user-a.memos.example.com` 和 `user-b.memos.example.com`）分别反向代理到对应的 `GATEWAY_PORT`，即刻享受到安全、物理层完全隔离防泄露的 SaaS 级多租户个人 AI 知识库体验。
 

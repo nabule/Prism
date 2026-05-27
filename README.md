@@ -265,7 +265,7 @@ providers:
 
 ## 🌐 管理 REST API 速查表
 
-所有 `/admin/*` 接口均要求请求头 `Authorization: Bearer ${SIDECAR_ADMIN_TOKEN}`；`/webhooks/memos` 与 `/health` 公开。完整字段、入参 schema、错误码定义请参见 [`docs/详细设计.html`](./docs/详细设计.html) 的「管理 REST API 全量索引」章节。
+所有 `/admin/*` 接口均要求请求头 `Authorization: Bearer ${SIDECAR_ADMIN_TOKEN}`；`/webhooks/memos` 与 `/health` 公开。完整字段、入参 schema、错误码定义请参见 [详细设计文档](https://nabule.github.io/Prism/详细设计.html) 的「管理 REST API 全量索引」章节。
 
 | 分类 | 方法 + 路径 | 说明 |
 | :--- | :--- | :--- |
@@ -306,7 +306,7 @@ providers:
 
 ## 📄 关联项目文档
 
-* [📘 详细设计文档（本仓库 `docs/详细设计.html`）](./docs/详细设计.html) - **新增**：面向二次开发的全链路架构、模块边界、数据库 schema、任务生命周期、API 索引、扩展指引。
+* [📘 详细设计文档 🌐](https://nabule.github.io/Prism/详细设计.html) - **新增**：面向二次开发的全链路架构、模块边界、数据库 schema、任务生命周期、API 索引、扩展指引。
 * [普通用户工作流指南 🌐](https://nabule.github.io/Prism/普通用户使用手册.html) - 指引普通用户如何将 Prism 折射库无缝融入日常记录中，说明各功能用途与工作流结合。
 * [使用手册 (部署与运维) 🌐](https://nabule.github.io/Prism/使用手册.html) - 系统管理员多容器拓扑部署、极速开发热载、与 Nx 任务管理指南。
 * [配置参数说明手册 🌐](https://nabule.github.io/Prism/配置说明.html) - `app.yaml` 静态配置体系及环境变量安全秘钥管理指引。

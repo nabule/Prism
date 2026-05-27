@@ -18,6 +18,9 @@ dev = [
   "pytest-asyncio>=0.24.0",
   "semble",
 ]
+snapshots = [
+  "playwright>=1.45.0",
+]
 
 [project.scripts]
 memosima-api = "memosima.api.app:main"

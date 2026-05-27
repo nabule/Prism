@@ -353,7 +353,65 @@ TEAMS_UI_HTML = """<!doctype html>
         </div>
       </div>
       <div class="tab-panel hidden" data-tab-panel="search">
-        <p class="muted small">（检索 + QA Prompt 即将在下一步上线。）</p>
+        <div class="stack">
+          <div>
+            <h3 style="margin: 0 0 8px;">检索 / 拼装 RAG 超级 Prompt</h3>
+            <p class="muted small" style="margin: 0;">
+              语义模式需要部署侧配置了嵌入服务 (<code>SILICONFLOW_API_KEY</code>)；未配置时自动降级为
+              substring + 标签精准召回，前端无感。
+            </p>
+          </div>
+
+          <div class="row">
+            <div>
+              <label for="searchQuery">问题 / 查询</label>
+              <input id="searchQuery" type="text" placeholder="例如：Postgres 升级到 16 应该注意什么" autocomplete="off">
+            </div>
+            <div>
+              <label for="searchTag">限定标签（可选，全词后过滤）</label>
+              <input id="searchTag" type="text" placeholder="例如：db" autocomplete="off">
+            </div>
+            <div>
+              <label for="searchTopK">召回条数 (top_k)</label>
+              <input id="searchTopK" type="number" value="5" min="1" max="50">
+            </div>
+            <div style="display: flex; align-items: end;">
+              <label style="display: flex; align-items: center; gap: 6px; margin: 0;">
+                <input id="searchUseVector" type="checkbox" checked style="width: auto;">
+                <span>启用向量语义检索（未配置嵌入会自动降级）</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button type="button" class="primary" id="searchRunBtn">检索</button>
+            <button type="button" id="promptRunBtn">生成超级 Prompt</button>
+          </div>
+
+          <div>
+            <h3 style="margin: 0 0 8px;">检索结果</h3>
+            <p id="searchMeta" class="muted small" style="margin: 0 0 8px;"></p>
+            <div id="searchHitsContainer">
+              <p class="empty-hint">尚未检索</p>
+            </div>
+          </div>
+
+          <div id="promptResultWrap" class="hidden">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <h3 style="margin: 0;">拼装结果</h3>
+              <span id="promptResultMeta" class="muted small"></span>
+              <span style="flex: 1;"></span>
+              <button type="button" class="primary" id="promptCopyBtn">复制完整 Prompt</button>
+            </div>
+            <pre id="promptResultText" style="margin-top: 8px;"></pre>
+            <div style="margin-top: 6px;">
+              <details>
+                <summary class="muted small" style="cursor: pointer;">展开自定义系统提示</summary>
+                <textarea id="promptSystem" placeholder="可选：覆盖默认 system_prompt，例如：你是 SRE 助手，回答必须引用知识库 UID。" style="margin-top: 6px;"></textarea>
+              </details>
+            </div>
+          </div>
+        </div>
       </div>
       <div class="tab-panel hidden" data-tab-panel="members">
         <p class="muted small">（成员管理（owner 专属）即将上线。）</p>
@@ -729,6 +787,97 @@ TEAMS_UI_HTML = """<!doctype html>
     await loadEntries();
   }
 
+  // ---------- 检索 / QA ----------
+  function getSearchPayload(extra) {
+    const query = document.getElementById("searchQuery").value.trim();
+    if (!query) throw new Error("查询不能为空");
+    const tag = document.getElementById("searchTag").value.trim().replace(/^#+/, "");
+    const topK = Math.max(1, Math.min(50, parseInt(document.getElementById("searchTopK").value, 10) || 5));
+    const useVector = document.getElementById("searchUseVector").checked;
+    const payload = { query, top_k: topK, use_vector: useVector };
+    if (tag) payload.tag = tag;
+    return Object.assign(payload, extra || {});
+  }
+
+  async function runSearch() {
+    const active = getActiveTeam();
+    if (!active) return;
+    const payload = getSearchPayload();
+    document.getElementById("searchMeta").textContent = "检索中…";
+    document.getElementById("searchHitsContainer").innerHTML = `<p class="empty-hint">检索中…</p>`;
+    const data = await requestJson("POST", `/teams/${encodeURIComponent(active.slug)}/search`, payload);
+    const hits = (data && data.hits) || [];
+    const mode = data && data.retrieval_mode;
+    const modeLabel = mode === "vector" ? "🧠 向量语义" :
+                      mode === "text" ? "🔍 文本/标签" :
+                      mode || "—";
+    document.getElementById("searchMeta").textContent =
+      `召回 ${hits.length} 条 · 模式：${modeLabel}`;
+    if (!hits.length) {
+      document.getElementById("searchHitsContainer").innerHTML =
+        `<p class="empty-hint">未命中任何词条；试试取消「向量」勾选 或 拆解为关键词后再查</p>`;
+      return;
+    }
+    document.getElementById("searchHitsContainer").innerHTML = hits.map((hit, idx) => {
+      const e = hit.entry || {};
+      return `
+        <div class="panel" style="margin-bottom: 10px;">
+          <div style="display: flex; align-items: baseline; gap: 8px;">
+            <strong>#${idx + 1} · ${escapeHtml(e.title || "（无标题）")}</strong>
+            <span class="muted small">score=${Number(hit.score || 0).toFixed(3)}</span>
+            <span style="flex: 1;"></span>
+            <span class="muted small">${escapeHtml(e.author_display_name || "—")}</span>
+            <span class="muted small">${escapeHtml(formatDateTime(e.updated_at))}</span>
+          </div>
+          <div style="margin-top: 6px;">${renderTagPills(e.tags)}</div>
+          <div class="small muted" style="margin-top: 6px;">UID: ${escapeHtml(e.uid)}</div>
+          ${hit.snippet ? `<pre style="margin-top: 8px; max-height: 180px;">${escapeHtml(hit.snippet)}</pre>` : ""}
+        </div>`;
+    }).join("");
+  }
+
+  async function runPrompt() {
+    const active = getActiveTeam();
+    if (!active) return;
+    const system = document.getElementById("promptSystem").value.trim();
+    const payload = getSearchPayload(system ? { system_prompt: system } : {});
+    document.getElementById("promptResultWrap").classList.remove("hidden");
+    document.getElementById("promptResultText").textContent = "生成中…";
+    document.getElementById("promptResultMeta").textContent = "";
+    const data = await requestJson(
+      "POST",
+      `/teams/${encodeURIComponent(active.slug)}/qa/generate-prompt`,
+      payload,
+    );
+    const mode = data && data.retrieval_mode;
+    const modeLabel = mode === "vector" ? "🧠 向量语义" :
+                      mode === "text" ? "🔍 文本/标签" :
+                      mode || "—";
+    document.getElementById("promptResultMeta").textContent =
+      `引用 ${data && data.retrieved_count} 条 · 模式：${modeLabel}`;
+    document.getElementById("promptResultText").textContent = (data && data.assembled_prompt) || "";
+  }
+
+  async function copyPromptAction() {
+    const text = document.getElementById("promptResultText").textContent;
+    if (!text) {
+      showNotice("warn", "尚无可复制内容", 3000);
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      showNotice("ok", "已复制 Prompt 到剪贴板", 3000);
+    } catch (e) {
+      // 兜底：手动选区
+      const range = document.createRange();
+      range.selectNodeContents(document.getElementById("promptResultText"));
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+      showNotice("warn", `自动复制失败，已为你选中文本，请手动 Ctrl+C：${e.message}`, 6000);
+    }
+  }
+
   // ---------- 业务动作 ----------
   async function refreshTeamMeta(slug) {
     // GET /teams/{slug} 返回平铺 TeamView：{id, slug, name, description, member_count, ...}
@@ -938,6 +1087,27 @@ TEAMS_UI_HTML = """<!doctype html>
 
     document.getElementById("entryEditSubmit").addEventListener("click", () => {
       submitEditEntry().catch(e => showNotice("err", `保存失败：${e.message}`, 6000));
+    });
+
+    // ---------- 检索 / QA tab 事件 ----------
+    document.getElementById("searchRunBtn").addEventListener("click", () => {
+      runSearch().catch(e => showNotice("err", `检索失败：${e.message}`, 6000));
+    });
+
+    document.getElementById("promptRunBtn").addEventListener("click", () => {
+      runPrompt().catch(e => showNotice("err", `生成 Prompt 失败：${e.message}`, 6000));
+    });
+
+    document.getElementById("promptCopyBtn").addEventListener("click", () => {
+      copyPromptAction();
+    });
+
+    // 回车快捷键：在 searchQuery 上按 Enter 触发检索
+    document.getElementById("searchQuery").addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        document.getElementById("searchRunBtn").click();
+      }
     });
   });
   </script>

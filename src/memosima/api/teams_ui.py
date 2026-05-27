@@ -414,10 +414,99 @@ TEAMS_UI_HTML = """<!doctype html>
         </div>
       </div>
       <div class="tab-panel hidden" data-tab-panel="members">
-        <p class="muted small">（成员管理（owner 专属）即将上线。）</p>
+        <div class="stack">
+          <div style="display: flex; align-items: baseline; gap: 12px;">
+            <h3 style="margin: 0;">团队成员</h3>
+            <span id="memberListMeta" class="muted small"></span>
+            <span style="flex: 1;"></span>
+            <button type="button" id="memberRefreshBtn">刷新</button>
+          </div>
+          <p class="muted small" style="margin: 0;">
+            「最后 owner 保护」：当团队只剩 1 个 owner 时，无法对其降级或移除；
+            交接姿势是先升级接班人为 owner，再调整旧 owner。
+          </p>
+          <table>
+            <colgroup>
+              <col style="width: 30%;">
+              <col style="width: 18%;">
+              <col style="width: 22%;">
+              <col style="width: 22%;">
+              <col style="width: 8%;">
+            </colgroup>
+            <thead>
+              <tr>
+                <th>展示名</th>
+                <th>角色</th>
+                <th>加入时间</th>
+                <th>最近活跃</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="memberListBody">
+              <tr><td colspan="5" class="empty-hint">尚未加载</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
       <div class="tab-panel hidden" data-tab-panel="invites">
-        <p class="muted small">（邀请管理（owner 专属）即将上线。）</p>
+        <div class="stack">
+          <div>
+            <h3 style="margin: 0 0 8px;">新建邀请</h3>
+            <div class="row">
+              <div>
+                <label for="inviteNewRole">颁发角色</label>
+                <select id="inviteNewRole">
+                  <option value="viewer">viewer（只读）</option>
+                  <option value="editor" selected>editor（可读写自己的词条）</option>
+                  <option value="owner">owner（团队负责人）</option>
+                </select>
+              </div>
+              <div>
+                <label for="inviteNewMaxUses">最大使用次数（0 = 无限）</label>
+                <input id="inviteNewMaxUses" type="number" value="1" min="0" max="1000">
+              </div>
+              <div>
+                <label for="inviteNewExpiresAt">过期时间（ISO-8601，可空）</label>
+                <input id="inviteNewExpiresAt" type="text" placeholder="2026-06-30T23:59:59+08:00" autocomplete="off">
+              </div>
+              <div style="display: flex; align-items: end;">
+                <button type="button" class="primary" id="inviteCreateBtn">生成邀请码</button>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div style="display: flex; align-items: baseline; gap: 12px;">
+              <h3 style="margin: 0;">已发邀请</h3>
+              <span id="inviteListMeta" class="muted small"></span>
+              <span style="flex: 1;"></span>
+              <button type="button" id="inviteRefreshBtn">刷新</button>
+            </div>
+            <table style="margin-top: 8px;">
+              <colgroup>
+                <col style="width: 30%;">
+                <col style="width: 12%;">
+                <col style="width: 14%;">
+                <col style="width: 22%;">
+                <col style="width: 14%;">
+                <col style="width: 8%;">
+              </colgroup>
+              <thead>
+                <tr>
+                  <th>邀请码</th>
+                  <th>角色</th>
+                  <th>使用 / 上限</th>
+                  <th>过期时间</th>
+                  <th>状态</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="inviteListBody">
+                <tr><td colspan="6" class="empty-hint">尚未加载</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </section>
   </div>
@@ -462,6 +551,23 @@ TEAMS_UI_HTML = """<!doctype html>
       <div class="actions" style="justify-content: flex-end;">
         <button type="button" value="cancel" data-close-dialog="entryEditDialog">取消</button>
         <button type="button" class="primary" id="entryEditSubmit">保存</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- 新邀请码一次性展示 -->
+  <dialog id="inviteRevealDialog">
+    <form method="dialog" class="stack">
+      <h3 style="margin: 0;">邀请码已生成</h3>
+      <p class="muted small" style="margin: 0;">
+        请<strong>立刻</strong>把下面的邀请码通过<strong>安全渠道</strong>（不是公共群）
+        发给被邀请人。此邀请码不会再次显示。
+      </p>
+      <div class="secret-box" id="inviteRevealCode"></div>
+      <p id="inviteRevealMeta" class="muted small" style="margin: 0;"></p>
+      <div class="actions" style="justify-content: flex-end;">
+        <button type="button" class="primary" id="inviteRevealCopyBtn">复制邀请码</button>
+        <button type="button" value="cancel" data-close-dialog="inviteRevealDialog">关闭</button>
       </div>
     </form>
   </dialog>
@@ -636,9 +742,13 @@ TEAMS_UI_HTML = """<!doctype html>
     document.querySelectorAll("[data-tab-panel]").forEach(panel => {
       panel.classList.toggle("hidden", panel.dataset.tabPanel !== tab);
     });
-    // 切到「词条」tab 时自动 reload 一次
+    // 切到对应 tab 时按需 reload
     if (tab === "entries") {
       loadEntries().catch(e => showNotice("err", `加载词条失败：${e.message}`, 6000));
+    } else if (tab === "members") {
+      loadMembers().catch(e => showNotice("err", `加载成员失败：${e.message}`, 6000));
+    } else if (tab === "invites") {
+      loadInvites().catch(e => showNotice("err", `加载邀请失败：${e.message}`, 6000));
     }
   }
 
@@ -878,6 +988,162 @@ TEAMS_UI_HTML = """<!doctype html>
     }
   }
 
+  async function copyTextToClipboard(text, okMsg) {
+    try {
+      await navigator.clipboard.writeText(text);
+      if (okMsg) showNotice("ok", okMsg, 3000);
+      return true;
+    } catch (e) {
+      showNotice("warn", `复制失败：${e.message}`, 5000);
+      return false;
+    }
+  }
+
+  // ---------- 成员管理（owner 专属）----------
+  function rolePill(role) {
+    const cls = role === "owner" ? "role-owner" : role === "editor" ? "role-editor" : "role-viewer";
+    return `<span class="pill ${cls}">${escapeHtml(role)}</span>`;
+  }
+
+  async function loadMembers() {
+    const active = getActiveTeam();
+    if (!active) return;
+    const tbody = document.getElementById("memberListBody");
+    tbody.innerHTML = `<tr><td colspan="5" class="empty-hint">加载中…</td></tr>`;
+    const data = await requestJson("GET", `/teams/${encodeURIComponent(active.slug)}/members`);
+    const members = (data && data.members) || [];
+    document.getElementById("memberListMeta").textContent = `共 ${members.length} 名成员`;
+    if (!members.length) {
+      tbody.innerHTML = `<tr><td colspan="5" class="empty-hint">尚无成员</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = members.map(m => `
+      <tr data-member-id="${m.id}">
+        <td><strong>${escapeHtml(m.display_name || "（未命名）")}</strong>
+          <div class="muted small" style="margin-top: 2px;">ID #${m.id}</div>
+        </td>
+        <td>
+          <select data-action="change-role" data-member-id="${m.id}">
+            ${["owner","editor","viewer"].map(r =>
+              `<option value="${r}"${r === m.role ? " selected" : ""}>${r}</option>`
+            ).join("")}
+          </select>
+        </td>
+        <td class="small">${escapeHtml(formatDateTime(m.created_at))}</td>
+        <td class="small">${escapeHtml(formatDateTime(m.last_active_at))}</td>
+        <td>
+          <button type="button" class="danger" data-action="remove-member" data-member-id="${m.id}">移除</button>
+        </td>
+      </tr>
+    `).join("");
+  }
+
+  async function changeMemberRole(memberId, role, selectEl) {
+    const active = getActiveTeam();
+    if (!active) return;
+    try {
+      await requestJson("PUT", `/teams/${encodeURIComponent(active.slug)}/members/${memberId}/role`, { role });
+      showNotice("ok", `已更新成员 #${memberId} 的角色为 ${role}`, 3000);
+      await loadMembers();
+    } catch (e) {
+      showNotice("err", `角色调整失败：${e.message}`, 6000);
+      // 回滚 select 的展示值
+      if (selectEl) {
+        await loadMembers().catch(() => {});
+      }
+    }
+  }
+
+  async function removeMember(memberId) {
+    const active = getActiveTeam();
+    if (!active) return;
+    if (!confirm(`确定移除成员 #${memberId}？\\n移除后其 token 立即失效，但 ta 写过的词条不会被自动删除。`)) {
+      return;
+    }
+    try {
+      await requestJson("DELETE", `/teams/${encodeURIComponent(active.slug)}/members/${memberId}`);
+      showNotice("ok", `已移除成员 #${memberId}`, 3000);
+      await loadMembers();
+    } catch (e) {
+      showNotice("err", `移除失败：${e.message}`, 6000);
+    }
+  }
+
+  // ---------- 邀请管理（owner 专属）----------
+  function inviteStatusLabel(inv) {
+    if (inv.revoked_at) return `<span class="pill" style="color: var(--danger);">已撤销</span>`;
+    if (inv.expires_at && new Date(inv.expires_at).getTime() < Date.now()) {
+      return `<span class="pill" style="color: var(--warn);">已过期</span>`;
+    }
+    if (inv.max_uses > 0 && inv.uses >= inv.max_uses) {
+      return `<span class="pill" style="color: var(--muted);">已耗尽</span>`;
+    }
+    return `<span class="pill" style="color: var(--ok);">可用</span>`;
+  }
+
+  async function loadInvites() {
+    const active = getActiveTeam();
+    if (!active) return;
+    const tbody = document.getElementById("inviteListBody");
+    tbody.innerHTML = `<tr><td colspan="6" class="empty-hint">加载中…</td></tr>`;
+    const data = await requestJson("GET", `/teams/${encodeURIComponent(active.slug)}/invites`);
+    const invites = (data && data.invites) || [];
+    document.getElementById("inviteListMeta").textContent = `共 ${invites.length} 条邀请记录`;
+    if (!invites.length) {
+      tbody.innerHTML = `<tr><td colspan="6" class="empty-hint">尚未发出任何邀请</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = invites.map(inv => `
+      <tr data-invite-id="${inv.id}">
+        <td>
+          <code style="font-size: .85rem; word-break: break-all;">${escapeHtml(inv.code)}</code>
+          <div class="muted small" style="margin-top: 2px;">创建：${escapeHtml(formatDateTime(inv.created_at))}</div>
+        </td>
+        <td>${rolePill(inv.role)}</td>
+        <td class="small">${inv.uses} / ${inv.max_uses === 0 ? "∞" : inv.max_uses}</td>
+        <td class="small">${escapeHtml(formatDateTime(inv.expires_at))}</td>
+        <td>${inviteStatusLabel(inv)}</td>
+        <td>
+          <button type="button" class="danger" data-action="revoke-invite" data-invite-id="${inv.id}"${inv.revoked_at ? " disabled" : ""}>撤销</button>
+        </td>
+      </tr>
+    `).join("");
+  }
+
+  async function createInviteAction() {
+    const active = getActiveTeam();
+    if (!active) return;
+    const role = document.getElementById("inviteNewRole").value;
+    const maxUses = parseInt(document.getElementById("inviteNewMaxUses").value, 10);
+    const expiresAt = document.getElementById("inviteNewExpiresAt").value.trim();
+    const payload = { role, max_uses: Number.isFinite(maxUses) ? maxUses : 0 };
+    if (expiresAt) payload.expires_at = expiresAt;
+    const data = await requestJson("POST", `/teams/${encodeURIComponent(active.slug)}/invites`, payload);
+    if (!data || !data.code) throw new Error("服务端未返回邀请码");
+
+    document.getElementById("inviteRevealCode").textContent = data.code;
+    const meta = [];
+    meta.push(`角色：${data.role}`);
+    meta.push(`上限：${data.max_uses === 0 ? "无限" : data.max_uses + " 次"}`);
+    if (data.expires_at) meta.push(`过期时间：${formatDateTime(data.expires_at)}`);
+    document.getElementById("inviteRevealMeta").textContent = meta.join(" · ");
+    document.getElementById("inviteRevealDialog").showModal();
+
+    // 清空表单 + 刷新列表
+    document.getElementById("inviteNewMaxUses").value = "1";
+    document.getElementById("inviteNewExpiresAt").value = "";
+    await loadInvites();
+  }
+
+  async function revokeInviteAction(inviteId) {
+    const active = getActiveTeam();
+    if (!active) return;
+    if (!confirm(`确定撤销邀请 #${inviteId}？撤销后该邀请码立即作废。`)) return;
+    await requestJson("DELETE", `/teams/${encodeURIComponent(active.slug)}/invites/${inviteId}`);
+    showNotice("ok", `已撤销邀请 #${inviteId}`, 3000);
+    await loadInvites();
+  }
+
   // ---------- 业务动作 ----------
   async function refreshTeamMeta(slug) {
     // GET /teams/{slug} 返回平铺 TeamView：{id, slug, name, description, member_count, ...}
@@ -1108,6 +1374,47 @@ TEAMS_UI_HTML = """<!doctype html>
         e.preventDefault();
         document.getElementById("searchRunBtn").click();
       }
+    });
+
+    // ---------- 成员 tab 事件 ----------
+    document.getElementById("memberRefreshBtn").addEventListener("click", () => {
+      loadMembers().catch(e => showNotice("err", `加载成员失败：${e.message}`, 6000));
+    });
+
+    // 列表里的「角色 select / 移除」按钮：用事件委托
+    document.getElementById("memberListBody").addEventListener("change", (e) => {
+      const target = e.target.closest('[data-action="change-role"]');
+      if (!target) return;
+      const memberId = parseInt(target.dataset.memberId, 10);
+      const role = target.value;
+      changeMemberRole(memberId, role, target);
+    });
+    document.getElementById("memberListBody").addEventListener("click", (e) => {
+      const target = e.target.closest('[data-action="remove-member"]');
+      if (!target) return;
+      const memberId = parseInt(target.dataset.memberId, 10);
+      removeMember(memberId);
+    });
+
+    // ---------- 邀请 tab 事件 ----------
+    document.getElementById("inviteRefreshBtn").addEventListener("click", () => {
+      loadInvites().catch(e => showNotice("err", `加载邀请失败：${e.message}`, 6000));
+    });
+
+    document.getElementById("inviteCreateBtn").addEventListener("click", () => {
+      createInviteAction().catch(e => showNotice("err", `生成邀请失败：${e.message}`, 6000));
+    });
+
+    document.getElementById("inviteRevealCopyBtn").addEventListener("click", () => {
+      const code = document.getElementById("inviteRevealCode").textContent || "";
+      copyTextToClipboard(code, "已复制邀请码到剪贴板");
+    });
+
+    document.getElementById("inviteListBody").addEventListener("click", (e) => {
+      const target = e.target.closest('[data-action="revoke-invite"]');
+      if (!target || target.disabled) return;
+      const inviteId = parseInt(target.dataset.inviteId, 10);
+      revokeInviteAction(inviteId).catch(err => showNotice("err", `撤销失败：${err.message}`, 6000));
     });
   });
   </script>

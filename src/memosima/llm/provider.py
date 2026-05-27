@@ -46,8 +46,8 @@ class LLMTagCandidate(BaseModel):
 
 
 class LLMOrganizationDraft(BaseModel):
-    title: str = Field(min_length=1, max_length=120)
-    summary: str = Field(min_length=1, max_length=2000)
+    title: str = Field(default="", max_length=120)
+    summary: str = Field(default="", max_length=2000)
     key_points: list[str] = Field(default_factory=list, max_length=20)
     todos: list[str] = Field(default_factory=list, max_length=20)
     active_tags: list[str] = Field(default_factory=list, max_length=20)
@@ -277,9 +277,25 @@ def _parse_draft_response(response: dict[str, Any]) -> LLMOrganizationDraft:
     except ValueError as exc:
         raise LLMClientError("LLM message content is not valid JSON") from exc
     try:
-        return LLMOrganizationDraft.model_validate(raw)
+        return _normalize_draft(LLMOrganizationDraft.model_validate(raw))
     except ValidationError as exc:
         raise LLMClientError("LLM JSON does not match organization schema") from exc
+
+
+def _normalize_draft(draft: LLMOrganizationDraft) -> LLMOrganizationDraft:
+    """LLM 偶发返回空 title/summary；用对方字段或首段 key_point 兜底，避免下游空数据。"""
+    title = (draft.title or "").strip()
+    summary = (draft.summary or "").strip()
+    fallback = ""
+    if draft.key_points:
+        fallback = str(draft.key_points[0]).strip()[:120]
+    if not title:
+        title = (summary[:120] if summary else fallback) or "未命名整理"
+    if not summary:
+        summary = fallback or title
+    if title == draft.title and summary == draft.summary:
+        return draft
+    return draft.model_copy(update={"title": title[:120], "summary": summary[:2000]})
 
 
 def _parse_reminder_response(response: dict[str, Any]) -> LLMReminderExtraction:

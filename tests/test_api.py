@@ -767,6 +767,8 @@ async def test_reprocess_memo_endpoint(tmp_path, monkeypatch):
     app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
     models_path = write_yaml(tmp_path / "models.yaml", models_config_text())
     monkeypatch.setenv("SIDECAR_ADMIN_TOKEN", "admin-token")
+    monkeypatch.setenv("MEMOS_BASE_URL", "http://memos.local")
+    monkeypatch.setenv("MEMOS_API_TOKEN", "memos-token")
     
     deleted_memos = []
 
@@ -840,6 +842,8 @@ async def test_batch_reprocess_tag_endpoint(tmp_path, monkeypatch):
     app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
     models_path = write_yaml(tmp_path / "models.yaml", models_config_text())
     monkeypatch.setenv("SIDECAR_ADMIN_TOKEN", "admin-token")
+    monkeypatch.setenv("MEMOS_BASE_URL", "http://memos.local")
+    monkeypatch.setenv("MEMOS_API_TOKEN", "memos-token")
     
     deleted_memos = []
 
@@ -913,6 +917,8 @@ async def test_batch_reprocess_tags_multi_and_relation(tmp_path, monkeypatch):
     app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
     models_path = write_yaml(tmp_path / "models.yaml", models_config_text())
     monkeypatch.setenv("SIDECAR_ADMIN_TOKEN", "admin-token")
+    monkeypatch.setenv("MEMOS_BASE_URL", "http://memos.local")
+    monkeypatch.setenv("MEMOS_API_TOKEN", "memos-token")
 
     deleted_memos = []
 

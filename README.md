@@ -265,7 +265,7 @@ providers:
 
 ## 🌐 管理 REST API 速查表
 
-所有 `/admin/*` 接口均要求请求头 `Authorization: Bearer ${SIDECAR_ADMIN_TOKEN}`；`/webhooks/memos` 与 `/health` 公开。完整字段、入参 schema、错误码定义请参见 `docs/详细设计.md` 的「管理 REST API 全量索引」章节。
+所有 `/admin/*` 接口均要求请求头 `Authorization: Bearer ${SIDECAR_ADMIN_TOKEN}`；`/webhooks/memos` 与 `/health` 公开。完整字段、入参 schema、错误码定义请参见 [`docs/详细设计.html`](./docs/详细设计.html) 的「管理 REST API 全量索引」章节。
 
 | 分类 | 方法 + 路径 | 说明 |
 | :--- | :--- | :--- |

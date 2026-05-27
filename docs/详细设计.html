@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Prism (Memosima) 详细设计文档</title>
-<style>:root{color-scheme:light dark;--bg:#f7f8fa;--fg:#1f2937;--muted:#667085;--panel:#fff;--border:#d0d5dd;--accent:#2563eb;--code:#101828;--codebg:#eef2f6;--warn:#b45309;--danger:#b91c1c}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{max-width:1080px;margin:0 auto;padding:40px 24px 72px}article{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:32px;box-shadow:0 1px 2px rgba(16,24,40,.05)}h1,h2,h3,h4{line-height:1.25;margin:1.4em 0 .6em}h1{margin-top:0;font-size:2rem}h2{border-top:1px solid var(--border);padding-top:1.1em;font-size:1.5rem}h3{font-size:1.18rem;color:var(--accent)}h4{font-size:1.02rem;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}a{color:var(--accent)}table{border-collapse:collapse;width:100%;margin:1rem 0;display:block;overflow-x:auto}th,td{border:1px solid var(--border);padding:.55rem .7rem;text-align:left;vertical-align:top}th{background:#f2f4f7}pre{background:var(--codebg);color:var(--code);padding:1rem;border-radius:8px;overflow-x:auto;font-size:.88rem;line-height:1.5}code{background:var(--codebg);color:var(--code);padding:.12rem .28rem;border-radius:4px;font-size:.92em}pre code{background:transparent;padding:0;font-size:1em}blockquote{border-left:4px solid var(--accent);margin:1rem 0;padding:.4rem 1rem;color:var(--muted);background:#f3f6fb}.meta{color:var(--muted);font-size:.92rem;margin-bottom:1.5rem}.toc{background:#f9fafb;border:1px solid var(--border);border-radius:8px;padding:1rem 1.2rem;margin:1rem 0 2rem;font-size:.94rem}.toc h2{border:0;padding:0;margin:0 0 .6rem;font-size:1.1rem;color:var(--fg)}.toc ol{margin:0;padding-left:1.4rem}.toc li{margin:.18rem 0}.toc a{text-decoration:none}.toc a:hover{text-decoration:underline}.badge{display:inline-block;padding:.05rem .45rem;border-radius:999px;font-size:.78rem;border:1px solid var(--border);background:#f2f4f7;color:var(--muted);margin-left:.4rem;vertical-align:middle}.badge.warn{border-color:#fbbf24;background:#fef3c7;color:var(--warn)}.badge.danger{border-color:#fca5a5;background:#fee2e2;color:var(--danger)}.method{display:inline-block;min-width:48px;padding:.05rem .4rem;border-radius:4px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.78rem;text-align:center;font-weight:600}.m-get{background:#dbeafe;color:#1d4ed8}.m-post{background:#dcfce7;color:#15803d}.m-put{background:#fef3c7;color:#a16207}.m-del{background:#fee2e2;color:#b91c1c}.callout{border-left:4px solid var(--warn);background:#fef3c7;color:#7c2d12;padding:.75rem 1rem;margin:1rem 0;border-radius:0 6px 6px 0}.callout.danger{border-color:var(--danger);background:#fee2e2;color:#7f1d1d}@media (prefers-color-scheme:dark){:root{--bg:#0b1220;--fg:#e5e7eb;--muted:#9ca3af;--panel:#111827;--border:#374151;--accent:#60a5fa;--code:#e5e7eb;--codebg:#1f2937}th{background:#1f2937}.toc,blockquote{background:#111827}.callout{background:#3f2d0d;color:#fde68a}.callout.danger{background:#3f1212;color:#fecaca}.badge{background:#1f2937;color:#d1d5db}.badge.warn{background:#3f2d0d;color:#fde68a}.badge.danger{background:#3f1212;color:#fecaca}}</style>
+<style>:root{color-scheme:light dark;--bg:#f7f8fa;--fg:#1f2937;--muted:#667085;--panel:#fff;--border:#d0d5dd;--accent:#2563eb;--code:#101828;--codebg:#eef2f6;--warn:#b45309;--danger:#b91c1c}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{max-width:1080px;margin:0 auto;padding:40px 24px 72px}article{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:32px;box-shadow:0 1px 2px rgba(16,24,40,.05)}h1,h2,h3,h4{line-height:1.25;margin:1.4em 0 .6em}h1{margin-top:0;font-size:2rem}h2{border-top:1px solid var(--border);padding-top:1.1em;font-size:1.5rem}h3{font-size:1.18rem;color:var(--accent)}h4{font-size:1.02rem;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}a{color:var(--accent)}table{border-collapse:collapse;width:100%;margin:1rem 0;display:block;overflow-x:auto}th,td{border:1px solid var(--border);padding:.55rem .7rem;text-align:left;vertical-align:top}th{background:#f2f4f7}pre{background:var(--codebg);color:var(--code);padding:1rem;border-radius:8px;overflow-x:auto;font-size:.88rem;line-height:1.5}code{background:var(--codebg);color:var(--code);padding:.12rem .28rem;border-radius:4px;font-size:.92em}pre code{background:transparent;padding:0;font-size:1em}blockquote{border-left:4px solid var(--accent);margin:1rem 0;padding:.4rem 1rem;color:var(--muted);background:#f3f6fb}.meta{color:var(--muted);font-size:.92rem;margin-bottom:1.5rem}.toc{background:#f9fafb;border:1px solid var(--border);border-radius:8px;padding:1rem 1.2rem;margin:1rem 0 2rem;font-size:.94rem}.toc h2{border:0;padding:0;margin:0 0 .6rem;font-size:1.1rem;color:var(--fg)}.toc ol{margin:0;padding-left:1.4rem}.toc li{margin:.18rem 0}.toc a{text-decoration:none}.toc a:hover{text-decoration:underline}.badge{display:inline-block;padding:.05rem .45rem;border-radius:999px;font-size:.78rem;border:1px solid var(--border);background:#f2f4f7;color:var(--muted);margin-left:.4rem;vertical-align:middle}.badge.warn{border-color:#fbbf24;background:#fef3c7;color:var(--warn)}.badge.danger{border-color:#fca5a5;background:#fee2e2;color:var(--danger)}.method{display:inline-block;min-width:48px;padding:.05rem .4rem;border-radius:4px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.78rem;text-align:center;font-weight:600}.m-get{background:#dbeafe;color:#1d4ed8}.m-post{background:#dcfce7;color:#15803d}.m-put{background:#fef3c7;color:#a16207}.m-del{background:#fee2e2;color:#b91c1c}.callout{border-left:4px solid var(--warn);background:#fef3c7;color:#7c2d12;padding:.75rem 1rem;margin:1rem 0;border-radius:0 6px 6px 0}.callout.danger{border-color:var(--danger);background:#fee2e2;color:#7f1d1d}.diagram{background:#fff;border:1px solid var(--border);border-radius:10px;padding:18px 14px;margin:1.2rem 0;overflow-x:auto;box-shadow:0 1px 2px rgba(16,24,40,.04)}.diagram svg{display:block;width:100%;height:auto;min-width:680px;max-width:980px;margin:0 auto;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}.diagram-caption{text-align:center;color:var(--muted);font-size:.86rem;margin-top:.4rem}@media (prefers-color-scheme:dark){:root{--bg:#0b1220;--fg:#e5e7eb;--muted:#9ca3af;--panel:#111827;--border:#374151;--accent:#60a5fa;--code:#e5e7eb;--codebg:#1f2937}th{background:#1f2937}.toc,blockquote{background:#111827}.callout{background:#3f2d0d;color:#fde68a}.callout.danger{background:#3f1212;color:#fecaca}.badge{background:#1f2937;color:#d1d5db}.badge.warn{background:#3f2d0d;color:#fde68a}.badge.danger{background:#3f1212;color:#fecaca}}</style>
 </head>
 <body>
 <main>
@@ -61,36 +61,138 @@
 <!-- =================== 2 =================== -->
 <h2 id="s2">2. 顶层架构</h2>
 
-<pre><code>┌─────────────────────────────────────────────────────────────────────┐
-│                       Caddy Gateway (8085)                          │
-│   /docs/* /admin/* /health /webhooks/*  →  sidecar (FastAPI)        │
-│              其余                         →  memos:5230              │
-└─────────────────────────────────────────────────────────────────────┘
-                ▲                                  ▲
-                │ HTTP                             │ HTTP
-                ▼                                  ▼
-        ┌──────────────────┐                ┌───────────────────┐
-        │  memosima-api    │   shared SQLite│ memosima-worker   │
-        │  FastAPI/Uvicorn │ ◀─────────────▶│ asyncio loop      │
-        │  · Admin UI      │  data/sidecar/ │ · poll memos      │
-        │  · Webhook 入口  │  sidecar.db    │ · process jobs    │
-        │  · QA / RAG      │     (WAL)      │ · send reminders  │
-        └──────────────────┘                └───────────────────┘
-                ▲                                  ▲
-                │ REST API                         │ REST API
-                ▼                                  ▼
-        ┌──────────────────────────────────────────────────────┐
-        │             neosmemo/memos (主站, :5230)              │
-        │  · memos / comments / relations / resources / pat     │
-        └──────────────────────────────────────────────────────┘
-                ▲
-                │ HTTPS（按需）
-                ▼
-   ┌──────────────────────┬─────────────────────────┬─────────────────┐
-   │ DeepSeek / OpenRouter│  SiliconFlow embeddings │   MinerU OCR    │
-   │     / OpenAI         │   (BAAI/bge-m3)         │   Bark 推送      │
-   └──────────────────────┴─────────────────────────┴─────────────────┘
-</code></pre>
+<div class="diagram">
+<svg viewBox="0 0 940 660" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Prism 顶层架构图">
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#475569"/>
+    </marker>
+    <marker id="ar-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/>
+    </marker>
+    <marker id="ar-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#dc2626"/>
+    </marker>
+    <marker id="ar-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#16a34a"/>
+    </marker>
+    <filter id="shd" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-opacity="0.12"/>
+    </filter>
+    <style>
+      .t-title{font:600 14px system-ui,sans-serif;fill:#0f172a}
+      .t-sub  {font:11.5px system-ui,sans-serif;fill:#475569}
+      .t-anno {font:11px system-ui,sans-serif;fill:#64748b}
+      .t-tag  {font:600 10.5px ui-monospace,Menlo,monospace;fill:#1e3a8a}
+      .ln     {stroke:#475569;stroke-width:1.5;fill:none}
+      .ln-blue{stroke:#2563eb;stroke-width:1.6;fill:none}
+      .ln-red {stroke:#dc2626;stroke-width:1.4;fill:none;stroke-dasharray:5 3}
+      .ln-green{stroke:#16a34a;stroke-width:1.4;fill:none}
+    </style>
+  </defs>
+
+  <!-- ===== Gateway ===== -->
+  <g filter="url(#shd)">
+    <rect x="320" y="20" width="300" height="74" rx="12" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.6"/>
+  </g>
+  <text class="t-title" x="470" y="50" text-anchor="middle">Caddy Gateway</text>
+  <text class="t-sub"   x="470" y="70" text-anchor="middle">边缘反代 · 静态文档 · GATEWAY_PORT=8085 → :80</text>
+
+  <!-- Branches from gateway -->
+  <path class="ln" d="M395,94 C395,130 230,130 215,168" marker-end="url(#ar)"/>
+  <path class="ln" d="M545,94 C545,130 720,130 735,168" marker-end="url(#ar)"/>
+  <rect x="262" y="115" width="178" height="36" rx="6" fill="#fffbeb" stroke="#fbbf24"/>
+  <text class="t-tag" x="351" y="130" text-anchor="middle">/admin/*  /health</text>
+  <text class="t-tag" x="351" y="145" text-anchor="middle">/webhooks/*  /docs/*</text>
+  <rect x="600" y="115" width="160" height="36" rx="6" fill="#fffbeb" stroke="#fbbf24"/>
+  <text class="t-tag" x="680" y="138" text-anchor="middle">其余全部路径</text>
+
+  <!-- ===== sidecar-api ===== -->
+  <g filter="url(#shd)">
+    <rect x="80" y="170" width="270" height="100" rx="12" fill="#dbeafe" stroke="#2563eb" stroke-width="1.6"/>
+  </g>
+  <text class="t-title" x="215" y="198" text-anchor="middle">sidecar-api</text>
+  <text class="t-sub"   x="215" y="218" text-anchor="middle">FastAPI · Uvicorn (--factory --reload)</text>
+  <text class="t-sub"   x="215" y="236" text-anchor="middle">Admin UI · Webhook 入口 · QA / RAG</text>
+  <text class="t-sub"   x="215" y="254" text-anchor="middle">36+ REST 路由 · Bearer 鉴权</text>
+
+  <!-- ===== memos ===== -->
+  <g filter="url(#shd)">
+    <rect x="600" y="170" width="270" height="100" rx="12" fill="#dcfce7" stroke="#16a34a" stroke-width="1.6"/>
+  </g>
+  <text class="t-title" x="735" y="198" text-anchor="middle">memos (主站 :5230)</text>
+  <text class="t-sub"   x="735" y="218" text-anchor="middle">neosmemo/memos:stable</text>
+  <text class="t-sub"   x="735" y="236" text-anchor="middle">memos · comments · relations</text>
+  <text class="t-sub"   x="735" y="254" text-anchor="middle">resources · PAT · webhooks</text>
+
+  <!-- ===== sidecar.db cylinder ===== -->
+  <g transform="translate(80,300)" filter="url(#shd)">
+    <path d="M0,18 a135,18 0 0,1 270,0 v60 a135,18 0 0,1 -270,0 z" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.6"/>
+    <path d="M0,18 a135,18 0 0,0 270,0" fill="none" stroke="#7c3aed" stroke-width="1.6"/>
+  </g>
+  <text class="t-title" x="215" y="346" text-anchor="middle">sidecar.db (SQLite · WAL)</text>
+  <text class="t-sub" x="215" y="364" text-anchor="middle">jobs · memos · tag_candidates</text>
+  <text class="t-sub" x="215" y="380" text-anchor="middle">artifacts · reminders · vector_units · logs</text>
+
+  <!-- ===== sidecar-worker ===== -->
+  <g filter="url(#shd)">
+    <rect x="80" y="420" width="270" height="100" rx="12" fill="#dbeafe" stroke="#2563eb" stroke-width="1.6"/>
+  </g>
+  <text class="t-title" x="215" y="448" text-anchor="middle">sidecar-worker</text>
+  <text class="t-sub"   x="215" y="468" text-anchor="middle">asyncio 主循环 · poll_interval 2s</text>
+  <text class="t-sub"   x="215" y="486" text-anchor="middle">poll memos · process jobs</text>
+  <text class="t-sub"   x="215" y="504" text-anchor="middle">send reminders · embed chunks</text>
+
+  <!-- ===== external services ===== -->
+  <g filter="url(#shd)">
+    <rect x="500" y="380" width="400" height="180" rx="12" fill="#fee2e2" stroke="#dc2626" stroke-width="1.6"/>
+  </g>
+  <text class="t-title" x="700" y="408" text-anchor="middle">外部服务（按需调用 · 全部支持降级）</text>
+  <line x1="520" y1="420" x2="880" y2="420" stroke="#fca5a5" stroke-dasharray="3 3"/>
+  <!-- LLM -->
+  <circle cx="540" cy="446" r="6" fill="#dc2626"/>
+  <text class="t-sub" x="556" y="450" font-weight="600" fill="#7f1d1d">LLM 推理</text>
+  <text class="t-sub" x="556" y="466">DeepSeek · OpenRouter · OpenAI（默认 DeepSeek v4-flash）</text>
+  <!-- Embedding -->
+  <circle cx="540" cy="488" r="6" fill="#dc2626"/>
+  <text class="t-sub" x="556" y="492" font-weight="600" fill="#7f1d1d">Embedding</text>
+  <text class="t-sub" x="556" y="508">SiliconFlow · BAAI/bge-m3 (vector_search.enabled=true)</text>
+  <!-- MinerU -->
+  <circle cx="540" cy="528" r="6" fill="#dc2626"/>
+  <text class="t-sub" x="556" y="532" font-weight="600" fill="#7f1d1d">解析 / 推送</text>
+  <text class="t-sub" x="556" y="548">MinerU (Office/PDF) · Bark Webhook (提醒)</text>
+
+  <!-- ===== arrows: api <-> db ===== -->
+  <path class="ln" d="M215,270 L215,302" marker-end="url(#ar)" marker-start="url(#ar)"/>
+  <text class="t-anno" x="225" y="290">读写</text>
+
+  <!-- db <-> worker -->
+  <path class="ln" d="M215,396 L215,420" marker-end="url(#ar)" marker-start="url(#ar)"/>
+  <text class="t-anno" x="225" y="412">claim_next_job</text>
+
+  <!-- worker -> memos (REST API) -->
+  <path class="ln-green" d="M350,455 C500,455 580,360 600,270" marker-end="url(#ar-green)"/>
+  <text class="t-anno" x="430" y="380" fill="#15803d">Memos REST API · 创建 AI 整理 memo + REFERENCE</text>
+
+  <!-- worker -> external -->
+  <path class="ln-red" d="M350,490 L500,478" marker-end="url(#ar-red)"/>
+
+  <!-- api -> external (dashed, for QA panel) -->
+  <path class="ln-red" d="M350,238 C420,238 470,290 500,400" marker-end="url(#ar-red)"/>
+  <text class="t-anno" x="370" y="305" fill="#b91c1c">QA 面板</text>
+
+  <!-- legend -->
+  <g transform="translate(80,600)">
+    <rect x="0" y="0" width="780" height="38" rx="8" fill="#f9fafb" stroke="#cbd5e1"/>
+    <line x1="20" y1="19" x2="50" y2="19" class="ln"/><text class="t-anno" x="58" y="23">内部数据/控制</text>
+    <line x1="180" y1="19" x2="210" y2="19" class="ln-green"/><text class="t-anno" x="218" y="23">Memos REST</text>
+    <line x1="320" y1="19" x2="350" y2="19" class="ln-red"/><text class="t-anno" x="358" y="23">外部 HTTPS（可降级）</text>
+    <rect x="510" y="9" width="20" height="20" rx="4" fill="#dbeafe" stroke="#2563eb"/><text class="t-anno" x="536" y="23">Sidecar 进程</text>
+    <rect x="630" y="9" width="20" height="20" rx="4" fill="#dcfce7" stroke="#16a34a"/><text class="t-anno" x="656" y="23">Memos 主站</text>
+  </g>
+</svg>
+<div class="diagram-caption">图 2-1：Prism 顶层架构 — 双 sidecar 容器共享 SQLite，所有外部依赖均可降级</div>
+</div>
 
 <h3>2.1 进程拓扑</h3>
 <table>
@@ -243,35 +345,140 @@ async def run_once() -&gt; bool:
 <p>外层以 <code>worker.poll_interval_seconds</code>（默认 2s）作为节流；任何一步处理过工作就立即重入下一轮，避免拥塞。</p>
 
 <h3>5.2 memo → AI 整理 端到端时序</h3>
-<pre><code>[Memos]
-   │  ① 用户保存新 memo
-   ▼
-[Sidecar API: POST /webhooks/memos]      ┐
-   │  解析 memo_uid                       ├─ poll 模式：worker._poll_memos_once 拉取
-   │  build_idempotency_key()             │  并直接调用 enqueue
-   │  store.enqueue_job("organize_memo")  ┘
-   ▼
-[jobs.status = pending]
-   ▼
-[Worker._process_job]
-   ├─ 拉取 memo 全文 + relations + resources
-   ├─ 下载附件 → core.attachments.parse_resource()
-   │     ├─ .drawio/.drawio.svg → zlib 解压 → XML mxCell value
-   │     ├─ Mind Elixir JSON   → 递归 DFS → Markdown 大纲
-   │     └─ Office/PDF         → document_parsers.MinerU
-   ├─ 写入 artifacts 表（去重 memo_uid+resource_uid+kind）
-   ├─ 构造 organization_plan：taxonomy.local_plan + active_tags + content
-   ├─ llm.organize_memo()  →  JSON{title, summary, key_points, todos,
-   │                              active_tags, candidate_tags, ...}
-   ├─ tag 合并：active_tags ∩ taxonomy.active；其余进 tag_candidates
-   │           （去重 + 拼音模糊归一）
-   ├─ summary.build_summary_memo_content() → AI 整理 memo 正文
-   ├─ memos.client 创建/更新 AI memo + REFERENCE relation
-   ├─ 若 reminders.enabled 且正文含 trigger_tag →
-   │     llm.extract_reminders → reminders 表
-   ├─ 若 vector_search.enabled → 切块 500 字 → embeddings → vector_units
-   └─ jobs.status = completed；memos.status = linked
-</code></pre>
+
+<div class="diagram">
+<svg viewBox="0 0 940 760" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="memo 到 AI 整理 端到端时序图">
+  <defs>
+    <marker id="sq" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#475569"/>
+    </marker>
+    <marker id="sq-g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#16a34a"/>
+    </marker>
+    <marker id="sq-b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/>
+    </marker>
+    <marker id="sq-r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#dc2626"/>
+    </marker>
+    <filter id="shd2" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-opacity="0.12"/>
+    </filter>
+    <style>
+      .sq-title{font:600 14px system-ui,sans-serif;fill:#0f172a}
+      .sq-sub  {font:11.5px system-ui,sans-serif;fill:#475569}
+      .sq-step {font:600 11.5px system-ui,sans-serif;fill:#0f172a}
+      .sq-lab  {font:11px system-ui,sans-serif;fill:#1f2937}
+      .sq-anno {font:10.5px system-ui,sans-serif;fill:#64748b;font-style:italic}
+      .sq-ln   {stroke:#475569;stroke-width:1.4;fill:none}
+      .sq-ln-g {stroke:#16a34a;stroke-width:1.4;fill:none}
+      .sq-ln-b {stroke:#2563eb;stroke-width:1.4;fill:none}
+      .sq-ln-r {stroke:#dc2626;stroke-width:1.4;fill:none;stroke-dasharray:5 3}
+      .sq-life {stroke:#cbd5e1;stroke-width:1;stroke-dasharray:4 4;fill:none}
+      .step-no {font:700 11px system-ui,sans-serif;fill:#fff}
+    </style>
+  </defs>
+
+  <!-- ===== Lane headers ===== -->
+  <g filter="url(#shd2)">
+    <rect x="40"  y="20" width="180" height="50" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="1.6"/>
+    <rect x="260" y="20" width="200" height="50" rx="8" fill="#dbeafe" stroke="#2563eb" stroke-width="1.6"/>
+    <rect x="500" y="20" width="200" height="50" rx="8" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.6"/>
+    <rect x="740" y="20" width="180" height="50" rx="8" fill="#fee2e2" stroke="#dc2626" stroke-width="1.6"/>
+  </g>
+  <text class="sq-title" x="130" y="44" text-anchor="middle">Memos (主站)</text>
+  <text class="sq-sub"   x="130" y="60" text-anchor="middle">REST API · Webhook</text>
+  <text class="sq-title" x="360" y="44" text-anchor="middle">sidecar-api</text>
+  <text class="sq-sub"   x="360" y="60" text-anchor="middle">FastAPI · Webhook 入口</text>
+  <text class="sq-title" x="600" y="44" text-anchor="middle">sidecar-worker</text>
+  <text class="sq-sub"   x="600" y="60" text-anchor="middle">asyncio · 整理流水线</text>
+  <text class="sq-title" x="830" y="44" text-anchor="middle">外部服务</text>
+  <text class="sq-sub"   x="830" y="60" text-anchor="middle">LLM · MinerU · Embed</text>
+
+  <!-- ===== Lifelines ===== -->
+  <line class="sq-life" x1="130" y1="70" x2="130" y2="720"/>
+  <line class="sq-life" x1="360" y1="70" x2="360" y2="720"/>
+  <line class="sq-life" x1="600" y1="70" x2="600" y2="720"/>
+  <line class="sq-life" x1="830" y1="70" x2="830" y2="720"/>
+
+  <!-- ===== Step 1: Memos -> API (webhook) ===== -->
+  <circle cx="60" cy="105" r="10" fill="#16a34a"/><text class="step-no" x="60" y="109" text-anchor="middle">1</text>
+  <path class="sq-ln-g" d="M130,105 L355,105" marker-end="url(#sq-g)"/>
+  <text class="sq-lab" x="240" y="98" text-anchor="middle" font-weight="600">POST /webhooks/memos</text>
+  <text class="sq-anno" x="240" y="120" text-anchor="middle">memo.created / updated</text>
+
+  <!-- Step 2: API enqueue (self) -->
+  <circle cx="290" cy="160" r="10" fill="#2563eb"/><text class="step-no" x="290" y="164" text-anchor="middle">2</text>
+  <path class="sq-ln-b" d="M360,150 C400,150 410,180 360,180" marker-end="url(#sq-b)"/>
+  <text class="sq-lab" x="430" y="158" font-weight="600">build_idempotency_key()</text>
+  <text class="sq-anno" x="430" y="175">store.enqueue_job("organize_memo")</text>
+  <text class="sq-anno" x="430" y="190">→ jobs.status = pending</text>
+
+  <!-- Step 3: Worker claims job (self) -->
+  <circle cx="525" cy="225" r="10" fill="#7c3aed"/><text class="step-no" x="525" y="229" text-anchor="middle">3</text>
+  <path class="sq-ln" d="M600,215 C640,215 650,245 600,245" marker-end="url(#sq)"/>
+  <text class="sq-lab" x="685" y="225" font-weight="600">store.claim_next_job()</text>
+  <text class="sq-anno" x="685" y="241">原子 UPDATE WHERE status='pending'</text>
+
+  <!-- Step 4: Worker -> Memos (fetch full memo) -->
+  <circle cx="60" cy="290" r="10" fill="#16a34a"/><text class="step-no" x="60" y="294" text-anchor="middle">4</text>
+  <path class="sq-ln-g" d="M600,290 L135,290" marker-end="url(#sq-g)"/>
+  <text class="sq-lab" x="365" y="283" text-anchor="middle" font-weight="600">GET memo + relations + resources</text>
+  <path class="sq-ln-g" d="M130,310 L595,310" marker-end="url(#sq-g)" stroke-dasharray="3 3"/>
+  <text class="sq-anno" x="365" y="325" text-anchor="middle">附件二进制流</text>
+
+  <!-- Step 5: Local attachment parse (worker self) -->
+  <circle cx="525" cy="370" r="10" fill="#7c3aed"/><text class="step-no" x="525" y="374" text-anchor="middle">5</text>
+  <path class="sq-ln" d="M600,360 C640,360 650,390 600,390" marker-end="url(#sq)"/>
+  <text class="sq-lab" x="685" y="370" font-weight="600">本地解析 .drawio / Mind Elixir</text>
+  <text class="sq-anno" x="685" y="386">zlib + base64 + XML · DFS → Markdown</text>
+
+  <!-- Step 6: Worker -> External (MinerU for Office/PDF) -->
+  <circle cx="760" cy="425" r="10" fill="#dc2626"/><text class="step-no" x="760" y="429" text-anchor="middle">6</text>
+  <path class="sq-ln-r" d="M600,425 L825,425" marker-end="url(#sq-r)"/>
+  <text class="sq-lab" x="710" y="418" text-anchor="middle" font-weight="600">MinerU /file-urls/batch</text>
+  <text class="sq-anno" x="710" y="442" text-anchor="middle">Office/PDF → Markdown（缺 Key 时跳过）</text>
+
+  <!-- Step 7: Worker -> External (LLM organize) -->
+  <circle cx="760" cy="490" r="10" fill="#dc2626"/><text class="step-no" x="760" y="494" text-anchor="middle">7</text>
+  <path class="sq-ln-r" d="M600,490 L825,490" marker-end="url(#sq-r)"/>
+  <text class="sq-lab" x="710" y="483" text-anchor="middle" font-weight="600">LLM organize_memo()</text>
+  <text class="sq-anno" x="710" y="507" text-anchor="middle">返回 JSON: title/summary/tags/todos</text>
+
+  <!-- Step 8: Worker self - merge tags + build summary -->
+  <circle cx="525" cy="552" r="10" fill="#7c3aed"/><text class="step-no" x="525" y="556" text-anchor="middle">8</text>
+  <path class="sq-ln" d="M600,542 C640,542 650,572 600,572" marker-end="url(#sq)"/>
+  <text class="sq-lab" x="685" y="552" font-weight="600">合并标签 · 拼音归一 · 候选入队</text>
+  <text class="sq-anno" x="685" y="568">summary.build_summary_memo_content()</text>
+
+  <!-- Step 9: Worker -> Memos (create AI summary + relation) -->
+  <circle cx="60" cy="612" r="10" fill="#16a34a"/><text class="step-no" x="60" y="616" text-anchor="middle">9</text>
+  <path class="sq-ln-g" d="M600,612 L135,612" marker-end="url(#sq-g)"/>
+  <text class="sq-lab" x="365" y="605" text-anchor="middle" font-weight="600">POST /memos + POST /relations (REFERENCE)</text>
+  <text class="sq-anno" x="365" y="627" text-anchor="middle">原文 ↔ AI 整理 memo 原生双向锚定</text>
+
+  <!-- Step 10: Worker -> External (reminders + embeddings) -->
+  <circle cx="760" cy="667" r="10" fill="#dc2626"/><text class="step-no" x="760" y="671" text-anchor="middle">10</text>
+  <path class="sq-ln-r" d="M600,667 L825,667" marker-end="url(#sq-r)"/>
+  <text class="sq-lab" x="710" y="660" text-anchor="middle" font-weight="600">extract_reminders + embed chunks</text>
+  <text class="sq-anno" x="710" y="684" text-anchor="middle">仅当含 #提醒 / vector_search.enabled=true</text>
+
+  <!-- Step 11: Worker self - finalize -->
+  <circle cx="525" cy="712" r="10" fill="#7c3aed"/><text class="step-no" x="525" y="716" text-anchor="middle">11</text>
+  <text class="sq-lab" x="615" y="710" font-weight="600">jobs.completed · memos.linked</text>
+  <text class="sq-anno" x="615" y="726">失败 → status=failed, retry_count++ (max 3)</text>
+
+  <!-- Legend -->
+  <g transform="translate(40,735)">
+    <text class="sq-anno" x="0" y="10" font-style="normal">线型：</text>
+    <line x1="46" y1="6" x2="78" y2="6" class="sq-ln-g"/><text class="sq-anno" x="84" y="10" font-style="normal">Memos REST</text>
+    <line x1="180" y1="6" x2="212" y2="6" class="sq-ln-b"/><text class="sq-anno" x="218" y="10" font-style="normal">入队 / 自调用</text>
+    <line x1="320" y1="6" x2="352" y2="6" class="sq-ln-r"/><text class="sq-anno" x="358" y="10" font-style="normal">外部 HTTPS（可降级）</text>
+    <line x1="500" y1="6" x2="532" y2="6" class="sq-ln"/><text class="sq-anno" x="538" y="10" font-style="normal">DB / 内部操作</text>
+  </g>
+</svg>
+<div class="diagram-caption">图 5-1：单条 memo 从写入到 AI 整理完成的完整时序（11 步，所有外部调用支持降级）</div>
+</div>
 
 <h3>5.3 错误与重试</h3>
 <ul>

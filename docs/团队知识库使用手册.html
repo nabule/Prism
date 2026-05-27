@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Prism (棱镜) · 团队知识库使用手册</title>
+  <style>
+    :root { color-scheme: light dark; --bg:#f7f8fa; --fg:#1f2937; --muted:#667085; --panel:#fff; --border:#d0d5dd; --accent:#2563eb; --code:#101828; --codebg:#eef2f6; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.65 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    main { max-width: 1040px; margin: 0 auto; padding: 40px 24px 72px; }
+    article { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 32px; box-shadow: 0 1px 2px rgba(16,24,40,.05); }
+    h1, h2, h3, h4 { line-height: 1.25; margin: 1.4em 0 .6em; }
+    h1 { margin-top: 0; font-size: 2rem; }
+    h2 { border-top: 1px solid var(--border); padding-top: 1.1em; font-size: 1.4rem; }
+    h3 { font-size: 1.15rem; }
+    a { color: var(--accent); }
+    table { border-collapse: collapse; width: 100%; margin: 1rem 0; display: block; overflow-x: auto; }
+    th, td { border: 1px solid var(--border); padding: .55rem .7rem; text-align: left; vertical-align: top; }
+    th { background: #f2f4f7; }
+    pre { background: var(--codebg); color: var(--code); padding: 1rem; border-radius: 8px; overflow-x: auto; }
+    code { background: var(--codebg); color: var(--code); padding: .12rem .28rem; border-radius: 4px; }
+    pre code { background: transparent; padding: 0; }
+    blockquote { border-left: 4px solid var(--accent); margin: 1rem 0; padding: .6rem 1rem; background: var(--codebg); color: var(--muted); border-radius: 0 6px 6px 0; }
+    blockquote p { margin: .3rem 0; }
+    .note { background: #f9fafb; border: 1px solid var(--border); border-radius: 8px; padding: 1rem; color: var(--muted); }
+    .warn { background: #fff7ed; border: 1px solid #fdba74; border-radius: 8px; padding: 1rem; color: #9a3412; }
+    ul, ol { padding-left: 1.6rem; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg:#0b1220; --fg:#e5e7eb; --muted:#9ca3af; --panel:#111827; --border:#374151; --accent:#60a5fa; --code:#e5e7eb; --codebg:#1f2937; }
+      th, .note { background: #1f2937; }
+      .warn { background: #3b2210; border-color: #b45309; color: #fde68a; }
+    }
+  </style>
+</head>
+<body>
+<main>
+<article>
+  <div style="text-align: center; margin-bottom: 2rem;">
+    <img src="../Prism.png" alt="Prism Logo" style="width: 200px; height: auto;" />
+    <h1 style="margin-top: 1rem;">团队知识库使用手册</h1>
+    <p style="font-style: italic; color: var(--muted); max-width: 700px; margin: 0 auto; text-align: left; padding: 12px; border-left: 4px solid var(--accent); background: var(--codebg);">
+      👥 <strong>团队知识库 (Team Knowledge Base)</strong><br>
+      在保留「个人沙箱」原则的前提下，让小团队在同一个 workspace 内共享一份带角色管控、邀请码与向量检索的知识集合。
+    </p>
+  </div>
+
+  <p class="note">
+    适用版本：Prism / Memosima <code>feature/team-knowledge-base</code> 分支及之后。<br>
+    本手册覆盖：开团 → 邀请 → 加入 → 写词条 → 检索 → 生成 RAG Prompt 的全流程，以及治理、错误码与运维提示。
+  </p>
+
+<!-- ============================================================ -->
+  <h2>0. 准备工作</h2>
+
+  <h3>0.1 启动 Sidecar</h3>
+  <pre><code># 最小环境
+export SIDECAR_ADMIN_TOKEN=admin-token          # 必填：管理员令牌
+export MEMOS_BASE_URL=http://localhost:5230     # Memos 主站
+export MEMOS_API_TOKEN=your-memos-pat
+export DEEPSEEK_API_KEY=sk-...                  # 任意一个推理 provider
+
+# 可选：开启向量检索（团队检索能从「文本」升级到「语义」）
+export SILICONFLOW_API_KEY=sk-...
+
+uv run uvicorn memosima.api.app:create_app --factory --host 0.0.0.0 --port 8080</code></pre>
+
+  <blockquote>
+    <p>不配置 <code>SILICONFLOW_API_KEY</code> 也能用，团队检索会自动降级为 substring + 标签精准召回，不阻断主流程。</p>
+  </blockquote>
+
+  <h3>0.2 三类令牌</h3>
+  <table>
+    <thead>
+      <tr><th>令牌</th><th>来源</th><th>用途</th><th>安全级别</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>SIDECAR_ADMIN_TOKEN</code></td><td>部署时手工配置</td><td>创建/删除团队、跨团队兜底运维</td><td>最高</td></tr>
+      <tr><td><code>owner_token</code>（<code>team_xxx</code>）</td><td>创建团队时返回<strong>一次</strong></td><td>团队负责人日常管理</td><td>高</td></tr>
+      <tr><td>成员 <code>token</code>（<code>team_xxx</code>）</td><td>兑换邀请码时返回<strong>一次</strong></td><td>普通成员读写词条</td><td>中</td></tr>
+    </tbody>
+  </table>
+  <p>所有 token 通过 <code>Authorization: Bearer &lt;token&gt;</code> 头传递。<strong>plaintext 在数据库里只存 sha256 哈希</strong>，丢了只能撤销重发，无法找回。</p>
+
+<!-- ============================================================ -->
+  <h2>1. 全流程：从开团到问答（curl 走查）</h2>
+
+  <h3>1.1 管理员开团</h3>
+  <pre><code>curl -X POST http://localhost:8080/admin/teams \
+  -H "Authorization: Bearer admin-token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "slug": "platform",
+    "name": "Platform 团队",
+    "description": "基础架构与 SRE",
+    "owner_display_name": "张三"
+  }'</code></pre>
+
+  <p>返回：</p>
+  <pre><code>{
+  "team": {
+    "id": 1,
+    "slug": "platform",
+    "name": "Platform 团队",
+    "description": "基础架构与 SRE",
+    "member_count": 1,
+    "entry_count": 0,
+    "created_at": "2026-05-27T10:00:00+08:00",
+    "updated_at": "2026-05-27T10:00:00+08:00"
+  },
+  "owner_member_id": 1,
+  "owner_token": "team_8f3a9b...c7d1"
+}</code></pre>
+
+  <div class="warn">
+    ⚠️ <code>owner_token</code> 只显示这一次，立即用安全渠道（不是 IM 群）交给团队负责人。<br>
+    <strong>slug 规则</strong>：3-40 字符，小写字母/数字/连字符，不能首尾是连字符（正则 <code>^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$</code>）。
+  </div>
+
+  <h3>1.2 负责人生成邀请码</h3>
+  <pre><code>curl -X POST http://localhost:8080/teams/platform/invites \
+  -H "Authorization: Bearer team_8f3a9b...c7d1" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "role": "editor",
+    "max_uses": 5,
+    "expires_at": "2026-06-30T23:59:59+08:00"
+  }'</code></pre>
+
+  <p>返回：</p>
+  <pre><code>{
+  "id": 1,
+  "code": "inv_4d2e7a...",
+  "role": "editor",
+  "max_uses": 5,
+  "uses": 0,
+  "expires_at": "2026-06-30T23:59:59+08:00",
+  "revoked_at": null,
+  "created_at": "2026-05-27T10:05:00+08:00"
+}</code></pre>
+
+  <p>可选参数：</p>
+  <table>
+    <thead><tr><th>字段</th><th>默认</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td><code>role</code></td><td><code>editor</code></td><td>颁发的角色：<code>owner</code> / <code>editor</code> / <code>viewer</code></td></tr>
+      <tr><td><code>max_uses</code></td><td><code>0</code></td><td><code>0</code> = 无限次；<code>&gt;0</code> 用完即失效（编辑器请慎用无限）</td></tr>
+      <tr><td><code>expires_at</code></td><td><code>null</code></td><td>ISO-8601 字符串；过期后兑换返回 400</td></tr>
+    </tbody>
+  </table>
+  <p>撤销邀请：<code>DELETE /teams/platform/invites/{id}</code>（已撤销/已耗尽的邀请会从 <code>list_invites</code> 中被标注，便于审计）。</p>
+
+  <h3>1.3 成员兑换邀请码</h3>
+  <p>成员<strong>不需要任何 token</strong> 就能兑换，只需要邀请码：</p>
+  <pre><code>curl -X POST http://localhost:8080/teams/join \
+  -H "Content-Type: application/json" \
+  -d '{
+    "code": "inv_4d2e7a...",
+    "display_name": "李四"
+  }'</code></pre>
+
+  <p>返回：</p>
+  <pre><code>{
+  "team": { "...": "..." },
+  "member": {
+    "id": 2,
+    "display_name": "李四",
+    "role": "editor",
+    "created_at": "...",
+    "updated_at": "...",
+    "last_active_at": null
+  },
+  "token": "team_a1b2c3...d4e5"
+}</code></pre>
+
+  <div class="warn">
+    ⚠️ 这个 <code>token</code> 同样只显示一次。<code>display_name</code> 之后会作为词条的 <code>author_display_name</code> 出现在搜索结果里。
+  </div>
+
+  <h3>1.4 写知识词条</h3>
+  <pre><code>curl -X POST http://localhost:8080/teams/platform/entries \
+  -H "Authorization: Bearer team_a1b2c3...d4e5" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "数据库迁移手册",
+    "body": "1. 备份 → 2. 双写 → 3. 切流 → 4. 回收旧库\n注意：PostgreSQL 16 不再支持 hash 索引 WAL 重放，需要 REINDEX。",
+    "tags": ["#postgres", "#runbook", "#db"]
+  }'</code></pre>
+
+  <p>注意几个关键行为：</p>
+  <ul>
+    <li>标签自动 <strong>去 <code>#</code> 前缀 + 转小写 + 去重</strong>；查询时带不带 <code>#</code> 都行。</li>
+    <li><code>body</code> 最长 50000 字符；超过返回 422。</li>
+    <li>创建成功后<strong>异步重建向量</strong>：若 <code>SILICONFLOW_API_KEY</code> 已配置，嵌入在响应返回前完成；否则跳过，不报错。</li>
+  </ul>
+
+  <h3>1.5 列出 / 过滤词条</h3>
+  <pre><code># 列全部（分页）
+curl -H "Authorization: Bearer team_a1b2c3...d4e5" \
+  "http://localhost:8080/teams/platform/entries?limit=20&amp;offset=0"
+
+# 按标签精确过滤（去 # 后做全词匹配）
+curl -H "Authorization: Bearer team_a1b2c3...d4e5" \
+  "http://localhost:8080/teams/platform/entries?tag=postgres"
+
+# 关键字 substring 过滤
+curl -H "Authorization: Bearer team_a1b2c3...d4e5" \
+  "http://localhost:8080/teams/platform/entries?query=REINDEX"</code></pre>
+  <p>返回中 <code>total</code> 是不带分页的命中总数，方便前端做分页器。</p>
+
+  <h3>1.6 改 / 删词条（编辑者隔离）</h3>
+  <pre><code>curl -X PUT http://localhost:8080/teams/platform/entries/e_2026052710... \
+  -H "Authorization: Bearer team_a1b2c3...d4e5" \
+  -H "Content-Type: application/json" \
+  -d '{ "title": "数据库迁移手册 v2" }'
+
+curl -X DELETE http://localhost:8080/teams/platform/entries/e_2026052710... \
+  -H "Authorization: Bearer team_a1b2c3...d4e5"</code></pre>
+
+  <p>权限矩阵：</p>
+  <table>
+    <thead><tr><th>操作者</th><th>别人写的词条</th><th>自己写的词条</th></tr></thead>
+    <tbody>
+      <tr><td>viewer</td><td>❌ 403</td><td>❌ 403（编辑/删除接口要 editor+）</td></tr>
+      <tr><td>editor</td><td>❌ 403</td><td>✅</td></tr>
+      <tr><td>owner</td><td>✅</td><td>✅</td></tr>
+      <tr><td>admin token</td><td>✅</td><td>✅</td></tr>
+    </tbody>
+  </table>
+  <p><code>PUT</code> 是「部分更新」：只传想改的字段，传 <code>null</code> 等价于不传。传 <code>tags: []</code> 会清空标签。</p>
+
+  <h3>1.7 语义检索</h3>
+  <pre><code>curl -X POST http://localhost:8080/teams/platform/search \
+  -H "Authorization: Bearer team_a1b2c3...d4e5" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "Postgres 升级到 16 应该注意什么？",
+    "top_k": 5,
+    "use_vector": true,
+    "tag": "db"
+  }'</code></pre>
+
+  <p>行为细节：</p>
+  <ul>
+    <li><code>use_vector=true</code> + 嵌入 Key 可用 + 命中向量 → <code>retrieval_mode: "vector"</code>，score 是 cosine 相似度。</li>
+    <li>任一条件不满足 → 自动落到 <code>text</code> 模式，score 由 title 命中(+1.0)、body 命中(+0.5)、tag 命中(+0.3) 累加。</li>
+    <li><code>tag</code> 是后置过滤：先按向量召回 <code>top_k*2</code> 候选，再用全词 tag 过滤截到 <code>top_k</code>。</li>
+    <li><strong>文本模式是 substring 匹配</strong>，长句中文查询命中率有限；前端建议把用户原始问题拆为关键词后再调用。</li>
+  </ul>
+
+  <h3>1.8 一键生成超级 Prompt</h3>
+  <pre><code>curl -X POST http://localhost:8080/teams/platform/qa/generate-prompt \
+  -H "Authorization: Bearer team_a1b2c3...d4e5" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "Postgres 升级到 16 的注意事项",
+    "system_prompt": "你是 SRE 助手，回答必须引用知识库 UID。",
+    "top_k": 3,
+    "use_vector": true
+  }'</code></pre>
+  <p>返回的 <code>assembled_prompt</code> 可直接复制到任意大模型客户端使用。如果检索为空，Prompt 中会显示 <code>（未在团队知识库内找到符合条件的条目）</code>，避免大模型「凭空编造」。</p>
+
+<!-- ============================================================ -->
+  <h2>2. 团队治理（owner 的进阶操作）</h2>
+
+  <h3>2.1 列出成员</h3>
+  <pre><code>curl -H "Authorization: Bearer team_8f3a9b...c7d1" \
+  http://localhost:8080/teams/platform/members</code></pre>
+  <p>响应里<strong>没有 token</strong>，token 只在创建/兑换时各返回一次。</p>
+
+  <h3>2.2 调整角色</h3>
+  <pre><code>curl -X PUT http://localhost:8080/teams/platform/members/2/role \
+  -H "Authorization: Bearer team_8f3a9b...c7d1" \
+  -H "Content-Type: application/json" \
+  -d '{ "role": "owner" }'</code></pre>
+
+  <p><strong>最后 owner 保护</strong>：当团队只剩 1 个 owner 时：</p>
+  <ul>
+    <li>把这个 owner 降级 → <code>409 Conflict: Cannot demote the last remaining owner</code></li>
+    <li>把这个 owner 删除 → <code>409 Conflict: Cannot remove the last remaining owner</code></li>
+  </ul>
+  <p>正确的「交接」姿势：先把接班人升为 owner（团队此时有 2 个 owner），再把旧 owner 降级或移除。</p>
+
+  <h3>2.3 移除成员</h3>
+  <pre><code>curl -X DELETE http://localhost:8080/teams/platform/members/2 \
+  -H "Authorization: Bearer team_8f3a9b...c7d1"</code></pre>
+  <p>移除后该成员的 token 立即失效，但<strong>他写过的词条不会被自动删除</strong>，<code>author_display_name</code> 仍是当时的展示名（历史快照）。</p>
+
+  <h3>2.4 撤销邀请</h3>
+  <pre><code>curl -H "Authorization: Bearer team_8f3a9b...c7d1" \
+  http://localhost:8080/teams/platform/invites
+
+curl -X DELETE http://localhost:8080/teams/platform/invites/1 \
+  -H "Authorization: Bearer team_8f3a9b...c7d1"</code></pre>
+  <p>撤销立即生效，后续任何带这个 code 的 <code>POST /teams/join</code> 都会 400。</p>
+
+  <h3>2.5 修改团队元信息</h3>
+  <pre><code>curl -X PUT http://localhost:8080/teams/platform \
+  -H "Authorization: Bearer team_8f3a9b...c7d1" \
+  -H "Content-Type: application/json" \
+  -d '{ "name": "Platform &amp; SRE", "description": "扩编后的名字" }'</code></pre>
+  <p>slug 不可改（改 slug 等于重建团队，所有 token 都要失效）。</p>
+
+<!-- ============================================================ -->
+  <h2>3. 管理员的总控操作</h2>
+
+  <h3>3.1 列出所有团队</h3>
+  <pre><code>curl -H "Authorization: Bearer admin-token" \
+  http://localhost:8080/admin/teams</code></pre>
+
+  <h3>3.2 跨团队兜底操作</h3>
+  <p>管理员 token 可以直接调用任意 <code>/teams/{slug}/...</code> 路径，效果等同于该团队的 owner：</p>
+  <pre><code>curl -X PUT http://localhost:8080/teams/platform/entries/e_xxx \
+  -H "Authorization: Bearer admin-token" \
+  -d '{ "title": "（管理员修正）xxx" }'</code></pre>
+  <p>适用场景：成员把 owner token 弄丢了 / 团队跑路了 / 需要平台运营介入。</p>
+
+  <h3>3.3 删除团队（不可逆）</h3>
+  <pre><code>curl -X DELETE http://localhost:8080/admin/teams/platform \
+  -H "Authorization: Bearer admin-token"</code></pre>
+  <p><strong>级联删除</strong>：所有成员、邀请、词条、向量索引一并清空。已发出的成员 token 同步失效。删除前请先 <code>GET /admin/teams</code> 或导出词条。</p>
+
+<!-- ============================================================ -->
+  <h2>4. Python 客户端最小示例</h2>
+  <pre><code>import httpx
+
+BASE = "http://localhost:8080"
+ADMIN = "admin-token"
+
+# 1) 开团
+r = httpx.post(
+    f"{BASE}/admin/teams",
+    headers={"Authorization": f"Bearer {ADMIN}"},
+    json={"slug": "growth", "name": "增长团队"},
+).json()
+owner_token = r["owner_token"]
+
+# 2) 发邀请
+invite = httpx.post(
+    f"{BASE}/teams/growth/invites",
+    headers={"Authorization": f"Bearer {owner_token}"},
+    json={"role": "editor", "max_uses": 3},
+).json()
+
+# 3) 成员加入
+joined = httpx.post(
+    f"{BASE}/teams/join",
+    json={"code": invite["code"], "display_name": "Alice"},
+).json()
+member_token = joined["token"]
+
+# 4) 写词条
+entry = httpx.post(
+    f"{BASE}/teams/growth/entries",
+    headers={"Authorization": f"Bearer {member_token}"},
+    json={
+        "title": "AARRR 漏斗速查",
+        "body": "Acquisition / Activation / Retention / Revenue / Referral",
+        "tags": ["growth", "framework"],
+    },
+).json()
+
+# 5) 检索
+hits = httpx.post(
+    f"{BASE}/teams/growth/search",
+    headers={"Authorization": f"Bearer {member_token}"},
+    json={"query": "AARRR", "use_vector": False},
+).json()
+print(hits["retrieval_mode"], hits["hits"][0]["entry"]["title"])
+
+# 6) 拼 Prompt 给大模型
+prompt = httpx.post(
+    f"{BASE}/teams/growth/qa/generate-prompt",
+    headers={"Authorization": f"Bearer {member_token}"},
+    json={"query": "Retention 怎么提升？", "use_vector": False},
+).json()
+print(prompt["assembled_prompt"])</code></pre>
+
+<!-- ============================================================ -->
+  <h2>5. 错误码 &amp; 排查表</h2>
+  <table>
+    <thead><tr><th>状态</th><th>含义</th><th>典型原因 / 处理</th></tr></thead>
+    <tbody>
+      <tr><td><code>400 Team slug must be 3-40 chars...</code></td><td>slug 不合规</td><td>改成 <code>[a-z0-9-]</code>，首尾不能是 <code>-</code></td></tr>
+      <tr><td><code>400 Invite ... not valid</code></td><td>邀请失效</td><td>已撤销 / 已耗尽 / 已过期；重新生成</td></tr>
+      <tr><td><code>401 Missing Authorization bearer token</code></td><td>没带 token</td><td>加上 <code>Authorization: Bearer ...</code> 头</td></tr>
+      <tr><td><code>401 Invalid team token</code></td><td>token 不存在</td><td>可能已被撤销 / 团队已删除；找 owner 重新发邀请</td></tr>
+      <tr><td><code>403 Token does not belong to this team</code></td><td>跨团队调用</td><td>检查路径 <code>slug</code> 与 token 所属是否一致</td></tr>
+      <tr><td><code>403 This action requires at least the 'owner' role</code></td><td>角色不够</td><td>找 owner 升级，或换管理员 token 兜底</td></tr>
+      <tr><td><code>403 Editors can only modify entries they authored</code></td><td>编辑者越权</td><td>让作者本人改，或请 owner 改</td></tr>
+      <tr><td><code>404 Team not found</code></td><td>slug 拼错 / 团队已删</td><td><code>GET /admin/teams</code> 核对</td></tr>
+      <tr><td><code>409 Team slug already exists</code></td><td>slug 重复</td><td>同 workspace 内 slug 全局唯一</td></tr>
+      <tr><td><code>409 Cannot demote the last remaining owner</code></td><td>触发最后 owner 保护</td><td>先把别人升为 owner，再降级旧 owner</td></tr>
+    </tbody>
+  </table>
+
+<!-- ============================================================ -->
+  <h2>6. 安全 &amp; 运维提示</h2>
+  <ol>
+    <li><strong>token 是 bearer</strong>：任何人拿到都能调用，<strong>禁止</strong>把 token 提交到 Git、写到日志、发到 IM 公共群。</li>
+    <li><strong>定期轮换 owner token</strong>：建议每季度撤销旧 owner 邀请的成员、给 owner 重新发一个 <code>role=owner, max_uses=1</code> 的邀请，由 owner 本人兑换换一个新 token。</li>
+    <li><strong>数据备份</strong>：团队数据存在 <code>data/sidecar/sidecar.db</code>，已被原生的 <code>bash backup.sh</code> 一并打包，无需额外操作。</li>
+    <li><strong>向量索引一致性</strong>：如果你切换了嵌入模型（如从 <code>bge-m3</code> 换到别的），旧的向量会失效。临时方案：对每条词条 <code>PUT</code> 一次（哪怕 body 不变），会自动重算向量。</li>
+    <li><strong>多租户</strong>：团队功能本质还是 <code>workspace_id</code> 内的子模块。如果你需要真正的多公司隔离，仍然推荐 README 中描述的「物理隔离方案」——每家公司一个 sidecar 容器，再在内部用 teams 区分小组。</li>
+  </ol>
+
+<!-- ============================================================ -->
+  <h2>7. 参考</h2>
+  <ul>
+    <li>实现源码：<code>src/memosima/api/teams.py</code>、<code>src/memosima/api/team_security.py</code>、<code>src/memosima/db/store.py</code></li>
+    <li>端到端示例：<code>tests/test_teams.py</code>（13 个 case，可直接 <code>uv run pytest tests/test_teams.py</code> 运行验证）</li>
+    <li>README 简版索引：<code>README.md</code> 第 150 行起「👥 团队知识库（Team Knowledge Base）」章节</li>
+  </ul>
+
+<!-- ============================================================ -->
+  <h2>更多文档</h2>
+  <ul>
+    <li><a href="使用手册.html">使用手册</a> — 部署与运维总览</li>
+    <li><a href="普通用户使用手册.html">普通用户使用手册</a> — 日常记录工作流</li>
+    <li><a href="配置说明.html">配置说明</a> — 全部配置项详细参考</li>
+    <li><a href="开发运行说明.html">开发运行说明</a> — 二次开发指南</li>
+    <li><a href="详细设计.html">详细设计</a> — 全链路架构与数据库 schema</li>
+  </ul>
+</article>
+</main>
+</body>
+</html>

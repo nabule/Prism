@@ -64,16 +64,16 @@
 <div class="diagram">
 <svg viewBox="0 0 940 660" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Prism 顶层架构图">
   <defs>
-    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M0,0 L10,5 L0,10 z" fill="#475569"/>
     </marker>
-    <marker id="ar-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+    <marker id="ar-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/>
     </marker>
-    <marker id="ar-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+    <marker id="ar-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M0,0 L10,5 L0,10 z" fill="#dc2626"/>
     </marker>
-    <marker id="ar-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+    <marker id="ar-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M0,0 L10,5 L0,10 z" fill="#16a34a"/>
     </marker>
     <filter id="shd" x="-10%" y="-10%" width="120%" height="120%">
@@ -112,9 +112,9 @@
     <rect x="80" y="170" width="270" height="100" rx="12" fill="#dbeafe" stroke="#2563eb" stroke-width="1.6"/>
   </g>
   <text class="t-title" x="215" y="198" text-anchor="middle">sidecar-api</text>
-  <text class="t-sub"   x="215" y="218" text-anchor="middle">FastAPI · Uvicorn (--factory --reload)</text>
+  <text class="t-sub"   x="215" y="218" text-anchor="middle">FastAPI · Uvicorn (--factory，开发态加 --reload)</text>
   <text class="t-sub"   x="215" y="236" text-anchor="middle">Admin UI · Webhook 入口 · QA / RAG</text>
-  <text class="t-sub"   x="215" y="254" text-anchor="middle">36+ REST 路由 · Bearer 鉴权</text>
+  <text class="t-sub"   x="215" y="254" text-anchor="middle">36 REST 路由 · Bearer 鉴权（/admin/ui 例外）</text>
 
   <!-- ===== memos ===== -->
   <g filter="url(#shd)">
@@ -213,7 +213,7 @@
 <pre><code>src/memosima/
 ├── __init__.py              # 包版本：importlib.metadata.version("memosima")
 ├── api/                     # FastAPI 应用层
-│   ├── app.py               # create_app() 工厂，36+ 路由
+│   ├── app.py               # create_app() 工厂，36 路由
 │   ├── admin_ui.py          # 管理后台 SPA（HTML/JS 内嵌字符串）
 │   ├── security.py          # require_admin Bearer 校验
 │   └── webhooks.py          # extract_memo_uid / build_idempotency_key
@@ -246,21 +246,22 @@
 </ul>
 
 <h3>3.2 关键数据类（<code>db/store.py</code>）</h3>
+<p>下列字段为 Python dataclass 暴露给上层的属性名（不带 SQL 列的 <code>_json</code> 后缀；JSON 列在 store 内部已统一序列化/反序列化为 <code>dict</code> / <code>list</code>）。</p>
 <ul>
-  <li><code>Job(id, type, status, idempotency_key, payload_json, result_json, error, retry_count, ...)</code></li>
-  <li><code>MemoRecord(memos_uid, type, source_memo_uid, content_hash, status, ...)</code></li>
-  <li><code>TagCandidateRecord(path, parent_path, status, reason, source_memo_uid, similar_tags_json, confidence, reviewer_note, ...)</code></li>
-  <li><code>BusinessTagRecord(path, status, source, ...)</code></li>
-  <li><code>ArtifactRecord(memo_uid, resource_uid, kind, content_markdown, metadata_json, ...)</code></li>
-  <li><code>ReminderRecord(source_memo_uid, title, body, due_at, timezone, status, confidence, raw_text, sent_at, error, ...)</code></li>
-  <li><code>VectorUnitRecord(memo_uid, chunk_text, embedding_json, ...)</code></li>
-  <li><code>SystemLogRecord(timestamp, level, component, message)</code></li>
+  <li><code>Job(id, workspace_id, type, status, idempotency_key, payload: dict, result: dict | None, error, retry_count, created_at, updated_at)</code></li>
+  <li><code>MemoRecord(id, workspace_id, memos_uid, type, source_memo_uid, content_hash, status, created_at, updated_at)</code></li>
+  <li><code>TagCandidateRecord(id, workspace_id, path, parent_path, status, reason, source_memo_uid, similar_tags: list[str], confidence, reviewer_note, created_at, updated_at)</code></li>
+  <li><code>BusinessTagRecord(id, workspace_id, path, status, source, created_at, updated_at)</code></li>
+  <li><code>ArtifactRecord(id, workspace_id, memo_uid, resource_uid, kind, content_markdown, metadata: dict, created_at)</code></li>
+  <li><code>ReminderRecord(workspace_id, source_memo_uid, title, body, due_at, timezone, status, confidence, raw_text, sent_at, error, created_at, updated_at, ...)</code></li>
+  <li><code>VectorUnitRecord(workspace_id, memo_uid, chunk_text, embedding: list[float], created_at, ...)</code></li>
+  <li><code>SystemLogRecord(timestamp, level, component, message, ...)</code></li>
 </ul>
 
 <!-- =================== 4 =================== -->
 <h2 id="s4">4. 数据库 Schema</h2>
 
-<p>数据库文件：<code>data/sidecar/sidecar.db</code>（默认）；统一携带 <code>workspace_id</code>，未来可演进多工作区。</p>
+<p>数据库文件：<code>data/sidecar/sidecar.db</code>（默认）；统一携带 <code>workspace_id</code>，未来可演进多工作区。下面列出的是 <strong>SQLite 列名</strong>（带 <code>_json</code> 后缀的列由 store 内部统一负责 JSON 序列化）；上层调用方应只看 §3.2 中的 dataclass 字段，无需感知列后缀。</p>
 
 <pre><code>-- 工作区（当前固定 default）
 workspaces(id PK, name, created_at, updated_at)
@@ -313,10 +314,10 @@ INDEX idx_system_logs_timestamp(timestamp)
 <table>
 <thead><tr><th>实体</th><th>取值</th><th>转移触发</th></tr></thead>
 <tbody>
-<tr><td><code>jobs.status</code></td><td><code>pending</code> → <code>in_progress</code> → <code>completed</code> / <code>failed</code></td><td><code>claim_next_job()</code> / <code>process()</code> / <code>retry</code> 路由</td></tr>
+<tr><td><code>jobs.status</code></td><td><code>pending</code> → <code>running</code> → <code>succeeded</code> / <code>failed</code> / <code>waiting_user</code></td><td><code>claim_next_job()</code> / <code>process()</code> / <code>retry</code> 路由；<code>waiting_user</code> 表示需要人工补充信息后再继续</td></tr>
 <tr><td><code>memos.status</code></td><td><code>pending</code> / <code>linked</code> / <code>ignored</code></td><td>在整理结束后由 worker 写回</td></tr>
 <tr><td><code>tag_candidates.status</code></td><td><code>pending</code> / <code>approved</code> / <code>rejected</code></td><td>Admin 审核接口</td></tr>
-<tr><td><code>reminders.status</code></td><td><code>pending</code> / <code>sent</code> / <code>failed</code> / <code>canceled</code></td><td>Worker <code>_send_due_reminders_once()</code></td></tr>
+<tr><td><code>reminders.status</code></td><td><code>pending</code> / <code>sent</code> / <code>failed</code> / <code>cancelled</code></td><td>Worker <code>_send_due_reminders_once()</code>（注意：<code>cancelled</code> 双 L 拼写）</td></tr>
 </tbody>
 </table>
 
@@ -411,7 +412,7 @@ async def run_once() -&gt; bool:
   <circle cx="290" cy="160" r="10" fill="#2563eb"/><text class="step-no" x="290" y="164" text-anchor="middle">2</text>
   <path class="sq-ln-b" d="M360,150 C400,150 410,180 360,180" marker-end="url(#sq-b)"/>
   <text class="sq-lab" x="430" y="158" font-weight="600">build_idempotency_key()</text>
-  <text class="sq-anno" x="430" y="175">store.enqueue_job("organize_memo")</text>
+  <text class="sq-anno" x="430" y="175">store.create_job("organize_memo", ...)</text>
   <text class="sq-anno" x="430" y="190">→ jobs.status = pending</text>
 
   <!-- Step 3: Worker claims job (self) -->
@@ -624,32 +625,38 @@ async def run_once() -&gt; bool:
 <h2 id="s10">10. 备份 / 恢复</h2>
 
 <h3>10.1 格式</h3>
-<p>ZIP 包，根目录布局：</p>
-<pre><code>manifest.json            { "version": "0.6.6", "exported_at": "...", "workspace_id": "default" }
-config/app.yaml
+<p>ZIP 包，根目录布局（实际由 <code>_create_backup_archive</code> / <code>_backup_config_files</code> 生成）：</p>
+<pre><code>manifest.json            { "kind": "memosima-sidecar-backup",
+                           "version": 1,                       # 整数版本号，便于校验
+                           "created_at": "2026-05-27T...",
+                           "workspace_id": "default",
+                           "database_path": "data/sidecar/sidecar.db",
+                           "config_files": ["config/app.yaml", ...],
+                           "restore_behavior": "database_only" }
+database/sidecar.db      # 通过 SQLite Online Backup API 拷贝
+config/app.yaml          # 备份只包含 4 份 yaml 配置，便于查阅 / 二次手工恢复
 config/models.yaml
 config/prompts.yaml
 config/taxonomy.yaml
-config/.env.local        # 仅限有权限的运维下载
-database/sidecar.db      # 通过 SQLite Online Backup API 拷贝
 </code></pre>
+<div class="callout"><strong>⚠ 备份不包含 <code>config/.env.local</code></strong>：所有 API Key、Webhook 密钥等敏感凭据均不会进入 ZIP，避免备份文件泄露密钥；恢复后请在新环境单独配置环境变量或重新通过 Admin UI 写入 Key。</div>
 
 <h3>10.2 端点</h3>
 <ul>
   <li><span class="method m-get">GET</span> <code>/admin/backups/download</code> → 流式 ZIP，要求 Admin Bearer。</li>
-  <li><span class="method m-post">POST</span> <code>/admin/backups/restore</code>（<code>multipart/form-data, file=...</code>）→ 覆盖现有配置 + 数据库；建议先停 worker 容器，恢复后再启。</li>
+  <li><span class="method m-post">POST</span> <code>/admin/backups/restore</code>（<code>multipart/form-data, file=...</code>）→ <strong>仅覆盖 sidecar.db</strong>，返回体 <code>restored_configs=false</code>，ZIP 内 config/*.yaml 不会被写回磁盘；如需替换配置请人工解压后手动放置。建议先 <code>docker compose stop sidecar-worker</code>，恢复完成后再启。</li>
 </ul>
 
 <h3>10.3 <code>backup.sh</code> / <code>restore.sh</code></h3>
 <ul>
-  <li>宿主机脚本：<code>docker compose stop</code> → <code>tar</code> 整个挂载目录（含 Memos 主站资源）→ 远端 <code>scp</code>。</li>
-  <li>与 Admin API 提供的逻辑备份 <strong>互补</strong>：Admin API 只覆盖 sidecar 配置 + DB，宿主脚本覆盖 Memos 原始库。</li>
+  <li>宿主机脚本：<code>docker compose stop</code> → <code>tar</code> 整个挂载目录（含 Memos 主站资源、<code>.env</code>、<code>config/.env.local</code>）→ 远端 <code>scp</code>。</li>
+  <li>与 Admin API 提供的逻辑备份 <strong>互补</strong>：Admin API 只覆盖 sidecar 数据库（配置仅作快照查阅）；宿主脚本覆盖 Memos 原始库与全部密钥文件，是真正的「整机搬家」方案。</li>
 </ul>
 
 <!-- =================== 11 =================== -->
 <h2 id="s11">11. 管理 REST API 全量索引</h2>
 
-<blockquote>所有 <code>/admin/*</code> 均要求 <code>Authorization: Bearer ${SIDECAR_ADMIN_TOKEN}</code>，校验逻辑在 <code>api/security.py: require_admin</code>。<br><code>/health</code>、<code>/admin/ui</code>、<code>/webhooks/memos</code> 公开。字段细节以 <code>src/memosima/api/app.py</code> 中对应路由的 Pydantic 模型为准。</blockquote>
+<blockquote>所有 <code>/admin/*</code> 接口默认要求 <code>Authorization: Bearer ${SIDECAR_ADMIN_TOKEN}</code>，校验逻辑在 <code>api/security.py: require_admin</code>。<br><strong>例外</strong>：<code>/admin/ui</code>（管理后台 SPA 单页 HTML 本身）以及 <code>/health</code>、<code>/webhooks/memos</code> 公开免鉴权——SPA 加载后调用的所有 admin API 仍需在浏览器侧带 Bearer，未鉴权访问 UI 只能看到静态壳。如需更高隔离请在网关层为 <code>/admin/ui</code> 单独加 Basic Auth 或 IP 白名单。<br>字段细节以 <code>src/memosima/api/app.py</code> 中对应路由的 Pydantic 模型为准。</blockquote>
 
 <h3>11.1 健康与入口</h3>
 <table>
@@ -665,10 +672,10 @@ database/sidecar.db      # 通过 SQLite Online Backup API 拷贝
 <table>
 <thead><tr><th>方法</th><th>路径</th><th>说明</th></tr></thead>
 <tbody>
-<tr><td><span class="method m-get">GET</span></td><td><code>/admin/jobs</code></td><td>分页 + 过滤 (status/type)</td></tr>
-<tr><td><span class="method m-post">POST</span></td><td><code>/admin/jobs/{job_id}/retry</code></td><td>强制将单个 failed/completed Job 重置为 pending</td></tr>
-<tr><td><span class="method m-post">POST</span></td><td><code>/admin/jobs/reprocess-memo</code></td><td>body 含 <code>memo_uid</code>，强制再次整理</td></tr>
-<tr><td><span class="method m-post">POST</span></td><td><code>/admin/jobs/batch-reprocess-tag</code></td><td>body 含 <code>tag_path</code>，按业务标签批量重排</td></tr>
+<tr><td><span class="method m-get">GET</span></td><td><code>/admin/jobs</code></td><td>分页 + 过滤 (status/type)；status 取值 <code>pending</code> / <code>running</code> / <code>succeeded</code> / <code>failed</code> / <code>waiting_user</code></td></tr>
+<tr><td><span class="method m-post">POST</span></td><td><code>/admin/jobs/{job_id}/retry</code></td><td>强制将单个 <code>failed</code> / <code>waiting_user</code> Job 重置为 <code>pending</code>；可选 body <code>{prompt_override: {system, user}}</code> 覆盖本次 LLM 提示词</td></tr>
+<tr><td><span class="method m-post">POST</span></td><td><code>/admin/jobs/reprocess-memo</code></td><td>body 必填 <code>memo_url_or_uid</code>（支持完整 Memos URL 或裸 UID），可选 <code>model_provider</code> / <code>model_name</code> / <code>prompt_override</code>，强制重新整理指定 memo</td></tr>
+<tr><td><span class="method m-post">POST</span></td><td><code>/admin/jobs/batch-reprocess-tag</code></td><td>body 字段 <code>tag</code>（单标签）或 <code>tags</code>（标签数组）+ <code>relation</code>（<code>AND</code>/<code>OR</code>，默认 <code>OR</code>），可选 <code>model_provider</code> / <code>model_name</code> / <code>prompt_override</code>；按业务标签批量重排</td></tr>
 </tbody>
 </table>
 
@@ -700,7 +707,7 @@ database/sidecar.db      # 通过 SQLite Online Backup API 拷贝
 <tr><td><span class="method m-post">POST</span></td><td><code>/admin/tag-candidates/{id}/approve</code></td><td>升级为正式业务标签</td></tr>
 <tr><td><span class="method m-post">POST</span></td><td><code>/admin/tag-candidates/{id}/reject</code></td><td>拒绝并记录原因</td></tr>
 <tr><td><span class="method m-get">GET</span></td><td><code>/admin/tags/business</code></td><td>列出全部正式业务标签</td></tr>
-<tr><td><span class="method m-post">POST</span></td><td><code>/admin/tag-summaries</code></td><td>触发标签总结 Job（body 含 <code>tag_path</code>、可选 <code>prompt_override</code>）</td></tr>
+<tr><td><span class="method m-post">POST</span></td><td><code>/admin/tag-summaries</code></td><td>触发标签总结 Job；body 字段 <code>tag</code>（单标签）或 <code>tags</code>（数组）+ <code>relation</code>（<code>AND</code>/<code>OR</code>，默认 <code>OR</code>），<code>limit</code> 默认 50（1-200）；可选 <code>system_prompt_override</code> / <code>user_prompt_override</code>（注意是两个独立字段，<strong>不是</strong> <code>prompt_override</code>）</td></tr>
 </tbody>
 </table>
 
@@ -737,7 +744,7 @@ database/sidecar.db      # 通过 SQLite Online Backup API 拷贝
 <thead><tr><th>方法</th><th>路径</th><th>说明</th></tr></thead>
 <tbody>
 <tr><td><span class="method m-get">GET</span> / <span class="method m-put">PUT</span></td><td><code>/admin/memos/config</code></td><td>base_url / PAT / 入口模式 / 可见性</td></tr>
-<tr><td><span class="method m-post">POST</span></td><td><code>/admin/memos/delete-all</code> <span class="badge danger">DANGER</span></td><td>清空 Memos 主站 memo（需二次确认 header）</td></tr>
+<tr><td><span class="method m-post">POST</span></td><td><code>/admin/memos/delete-all</code> <span class="badge danger">DANGER</span></td><td>清空 Memos 主站全部 memo；仅校验 Admin Bearer，<strong>无额外确认 header</strong>。请在调用前自行二次确认，建议先调用 <code>/admin/backups/download</code> 留底</td></tr>
 </tbody>
 </table>
 
@@ -771,7 +778,9 @@ bash &lt;(curl -s -L https://raw.githubusercontent.com/nabule/Prism/master/deplo
 <h3>12.2 镜像</h3>
 <ul>
   <li><code>ghcr.io/nabule/prism:${PRISM_VERSION:-latest}</code>，由 GitHub Actions 在 tag push 时构建。</li>
-  <li><code>Dockerfile</code> 基于 <code>python:3.11-slim</code>，使用 <code>uv pip install --system</code> 装依赖；运行入口：<code>uvicorn memosima.api.app:create_app --factory --reload-dir /app/src</code>（开发态启用 <code>--reload</code>）。</li>
+  <li><code>Dockerfile</code> 基于 <code>ghcr.io/astral-sh/uv:python3.12-bookworm-slim</code>，使用 <code>uv sync --frozen --no-dev</code> 装依赖（两阶段：先 <code>--no-install-project</code> 预热 venv，再 COPY src 后再次 sync 装入本项目）。</li>
+  <li>生产 CMD：<code>uvicorn memosima.api.app:create_app --factory --host 0.0.0.0 --port 8080</code>（<strong>不含 <code>--reload</code></strong>）。</li>
+  <li>开发态热重载由 <code>docker-compose.yml</code> 通过 <code>command:</code> 覆盖追加 <code>--reload --reload-dir /app/src</code> 实现，并把宿主 <code>./src</code> bind-mount 到 <code>/app/src</code>。</li>
 </ul>
 
 <h3>12.3 端口</h3>

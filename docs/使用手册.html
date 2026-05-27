@@ -25,6 +25,18 @@
       :root { --bg:#0b1220; --fg:#e5e7eb; --muted:#9ca3af; --panel:#111827; --border:#374151; --accent:#60a5fa; --code:#e5e7eb; --codebg:#1f2937; }
       th, .note { background: #1f2937; }
     }
+    /* 截图样式：与 docs/团队知识库使用手册.html 保持一致 */
+    figure.shot { margin: 1.2rem auto; max-width: 960px; text-align: center; }
+    figure.shot img {
+      max-width: 100%; height: auto; border: 1px solid var(--border);
+      border-radius: 8px; box-shadow: 0 4px 14px rgba(16,24,40,.08);
+    }
+    figure.shot figcaption { color: var(--muted); font-size: 0.9rem; margin-top: 0.5rem; }
+    .shot-grid {
+      display: grid; gap: 16px; margin: 1.2rem 0;
+      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+    }
+    .shot-grid figure.shot { margin: 0; }
   </style>
 </head>
 <body>
@@ -155,6 +167,11 @@ npx nx up sidecar</code></pre>
   <p>访问 <code>http://localhost:8080/admin/ui</code>，输入 <code>SIDECAR_ADMIN_TOKEN</code> 登录。</p>
   <p>管理页面支持锚点直达：<code>#overview</code>、<code>#jobs</code>、<code>#tag-candidates</code>、<code>#tag-summary</code>、<code>#prompts</code>、<code>#models</code>、<code>#reminders</code>、<code>#qa</code>。</p>
 
+  <figure class="shot">
+    <img src="images/teams-ui/admin-overview.png" alt="管理后台首页，含健康卡片、常用入口、备份快捷入口和 4 大功能 tab 组 + TEAMS 团队 tab 组。">
+    <figcaption>图 2-1：管理后台首页（<code>#overview</code>）—— 顶部导航把全部能力分为 DATA / CORE / AI / SYSTEM / TEAMS 5 组；右上角 Admin Token 已被浏览器自动按 password 字段掩码。</figcaption>
+  </figure>
+
   <h3>2. AI 智能整理</h3>
   <p><strong>用法</strong>：在 Memos 中正常记录笔记。Sidecar 自动发现新 memo 并创建整理任务。</p>
   <p><strong>效果</strong>：</p>
@@ -170,6 +187,11 @@ npx nx up sidecar</code></pre>
   <pre><code>curl -X POST -H "Authorization: Bearer $SIDECAR_ADMIN_TOKEN" \
   "http://localhost:8080/admin/jobs/1/retry"</code></pre>
   <p><strong>待澄清</strong>：当 AI 认为内容不明确时，会在原 memo 下写澄清评论，任务进入 <code>waiting_user</code> 状态。</p>
+
+  <figure class="shot">
+    <img src="images/teams-ui/admin-jobs.png" alt="任务面板：按状态过滤、查看任务列表、单条重试。">
+    <figcaption>图 2-2：任务面板（<code>#jobs</code>）—— 顶部按状态/数量过滤；右侧 aside 复用为「详情」展示区（与标签/提醒等模块共享）。</figcaption>
+  </figure>
   <p><strong>附件解析</strong>：</p>
   <ul>
     <li><code>.txt</code> / <code>.md</code>：本地直接解析</li>
@@ -183,6 +205,11 @@ npx nx up sidecar</code></pre>
   <p><strong>按标签生成总结</strong>：在管理页面 <code>#tag-summary</code> 选择标签，生成该标签下所有 memo 的整体总结。</p>
   <p>业务标签按最后一级名称唯一。例如已有 <code>#项目/数管</code>，不会出现 <code>#数管</code> 或 <code>#其他/数管</code>。</p>
 
+  <figure class="shot">
+    <img src="images/teams-ui/admin-tags.png" alt="标签面板：上方为「按标签生成总结」表单，下方为候选标签审核队列。">
+    <figcaption>图 2-3：标签面板（<code>#tags</code>）—— 上方 tag-summary 支持多标签药丸输入 + 拼音模糊补全 + 临时提示词覆盖；下方候选标签队列支持「通过 / 拒绝」一键审核。</figcaption>
+  </figure>
+
   <h3>4. 离线问答</h3>
   <p>管理页面 <code>#qa</code> 提供隐私安全的本地问答面板：</p>
   <ul>
@@ -192,9 +219,30 @@ npx nx up sidecar</code></pre>
     <li>粘贴到任意大模型网页中使用，Sidecar 不托管模型</li>
   </ul>
 
+  <figure class="shot">
+    <img src="images/teams-ui/admin-qa.png" alt="QA 离线问答面板：标签药丸 + 关键字 + 向量开关 + 一键生成超级 Prompt。">
+    <figcaption>图 2-4：QA 离线问答面板（<code>#qa</code>）—— 勾选「从向量库里取」即可在向量服务可用时切换为语义检索；未配置嵌入 key 时自动降级为「标签 + 正文模糊」双通道。</figcaption>
+  </figure>
+
   <h3>5. 提醒通知</h3>
   <p>在 memo 中使用 <code>#提醒</code> 标签并写明时间，Sidecar 自动提取并通过 Webhook 推送。</p>
   <p>示例：<code>#提醒 明天上午 10:00 提交周报</code></p>
+
+  <figure class="shot">
+    <img src="images/teams-ui/admin-reminders.png" alt="提醒面板：左侧提醒列表 + 状态过滤，右侧提醒配置（触发标签、置信度、Webhook URL）。">
+    <figcaption>图 2-5：提醒面板（<code>#reminders</code>）—— 右侧配置中的 Webhook URL 输入框留空表示「保持已有值不变」；保存后真实 URL 写入 <code>config/.env.local</code>，不会出现在备份或 Git 中。</figcaption>
+  </figure>
+
+  <div class="shot-grid">
+    <figure class="shot">
+      <img src="images/teams-ui/admin-backup.png" alt="备份恢复面板：下载备份 ZIP + 上传恢复入口。">
+      <figcaption>图 2-6：备份面板（<code>#backup</code>）—— 备份 ZIP 仅包含 SQLite 与非机密 YAML，不含 <code>config/.env.local</code>。</figcaption>
+    </figure>
+    <figure class="shot">
+      <img src="images/teams-ui/admin-logs.png" alt="系统日志面板：结构化日志表格，支持级别/模块过滤。">
+      <figcaption>图 2-7：系统日志面板（<code>#logs</code>）—— 排障首选入口，可按级别/模块/时间过滤。</figcaption>
+    </figure>
+  </div>
 
   <h3>6. 开发验证</h3>
   <pre><code>npx nx test sidecar          # 运行测试

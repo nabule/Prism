@@ -97,6 +97,19 @@
     }
     .badge.ok { background: var(--ok-bg); color: var(--ok); }
     .badge.warn { background: var(--warn-bg); color: var(--warn); }
+
+    /* 截图样式：与 docs/团队知识库使用手册.html 一致 */
+    figure.shot { margin: 1.4rem auto; max-width: 900px; text-align: center; }
+    figure.shot img {
+      max-width: 100%; height: auto; border: 1px solid var(--border);
+      border-radius: 10px; box-shadow: 0 6px 18px rgba(15,23,42,.08);
+    }
+    figure.shot figcaption { color: var(--muted); font-size: 0.92rem; margin-top: 0.55rem; }
+    .shot-grid {
+      display: grid; gap: 18px; margin: 1.4rem 0;
+      grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+    }
+    .shot-grid figure.shot { margin: 0; }
     
     @media (prefers-color-scheme: dark) {
       :root {
@@ -218,6 +231,11 @@
     </ol>
   </div>
 
+  <figure class="shot">
+    <img src="images/teams-ui/admin-tags.png" alt="管理后台「标签」面板：上方按标签生成总结，下方候选标签队列。">
+    <figcaption>图 2-1：管理后台 <code>#tags</code> 面板。每周扫一眼下方「候选标签」队列，对 AI 新提议的标签按「通过 / 拒绝」就能保持知识树永远干净。</figcaption>
+  </figure>
+
   ---
 
   <h2>3. 💻 流程图与思维脑图本地离线解析</h2>
@@ -258,6 +276,11 @@
     </ol>
   </div>
 
+  <figure class="shot">
+    <img src="images/teams-ui/admin-qa.png" alt="QA 离线问答面板：标签药丸 + 关键字 + 向量开关 + 一键生成超级 Prompt。">
+    <figcaption>图 4-1：管理后台 <code>#qa</code> 面板。勾选「从向量库里取」即可启用语义检索（需要 <code>SILICONFLOW_API_KEY</code>）；未配置时自动降级为「标签 + 正文模糊」双通道，不会卡住。</figcaption>
+  </figure>
+
   ---
 
   <h2>5. ⏰ 时间智能提醒系统</h2>
@@ -280,17 +303,50 @@
     </ol>
   </div>
 
+  <figure class="shot">
+    <img src="images/teams-ui/admin-reminders.png" alt="管理后台「提醒」面板：左侧提醒列表 + 状态过滤，右侧提醒配置（触发标签、置信度、Webhook URL）。">
+    <figcaption>图 5-1：管理后台 <code>#reminders</code> 面板。<strong>左侧</strong>看自己历史提醒（pending / sent / failed / cancelled 可过滤）；<strong>右侧</strong>「提醒通知推送 Webhook URL」留空 = 保持现状，输入新值后会以加密方式自动保存到 <code>config/.env.local</code>，不会进 Git。</figcaption>
+  </figure>
+
   ---
 
-  <h2>6. 🔒 隐私与 SaaS 多租户隔离提示</h2>
+  <h2>6. 👥 团队协作（家庭 / 小组共享知识）</h2>
+  <h3>📌 功能用途</h3>
+  <p>如果您和家庭成员、研发小组、运营搭子需要<strong>共享一小块知识</strong>（菜谱、事故复盘、话术模板），但又不想把整个个人库公开 —— Prism 提供一层「团队知识库」：管理员开团 → 生成邀请码 → 成员到 <code>/teams/ui</code> 自助加入，全程<strong>无需任何命令行</strong>。</p>
+
+  <div class="problem-solved">
+    <strong>💡 解决的痛点</strong>：以前要么把整个 Memos 共享出去（牺牲隐私），要么再独立部署一套（运维翻倍）；现在用同一个 Sidecar 即可按团队物理隔离词条、向量、邀请、角色，一份运维多份用。
+  </div>
+
+  <div class="shot-grid">
+    <figure class="shot">
+      <img src="images/teams-ui/teams-onboard.png" alt="/teams/ui 首次访问的 onboarding 面板：邀请码加入 / 已有令牌直连 两种入口。">
+      <figcaption>图 6-1：成员首次访问 <code>/teams/ui</code>—— 用拿到的邀请码 + 一个展示名即可加入，无需任何 token 录入。</figcaption>
+    </figure>
+    <figure class="shot">
+      <img src="images/teams-ui/teams-search-qa.png" alt="成员视角的「检索 / QA」tab：双通道召回 + 一键生成超级 Prompt。">
+      <figcaption>图 6-2：成员的「检索 / QA」体验—— 与个人侧 <code>#qa</code> 一致的双通道召回 + 一键生成超级 Prompt，但语料只来自本团队。</figcaption>
+    </figure>
+  </div>
+
+  <p>详细的开团/邀请/角色/最后 owner 保护等高级用法请参考 <a href="团队知识库使用手册.html">团队知识库使用手册</a>。</p>
+
+  ---
+
+  <h2>7. 🔒 隐私与 SaaS 多租户隔离提示</h2>
   <p class="warn">警示：本系统在单实例下绑定单一 API 密钥，且全量知识解析存于同一个 SQLite 数据库中。请勿与他人共享使用同一个 Sidecar 实例，否则会发生跨用户的知识数据检索与泄露。</p>
   <p><strong>最佳 SaaS 部署方案</strong>：如果家庭成员或团队中有多人记录需求，管理员应在宿主机上使用独立文件夹为每位成员运行一套物理隔离的容器栈，并在各自的 <code>.env</code> 中指定不同的 <code>GATEWAY_PORT</code> 端口启动，以物理级别的沙箱隔离方式保障大家的数据主权。</p>
 
   ---
 
-  <h2>7. 💾 一键搬家与备份</h2>
+  <h2>8. 💾 一键搬家与备份</h2>
   <p>当您更换了新服务器、升级系统或者需要物理归档时，管理员可以在 Prism 控制台的 <strong>“备份恢复”</strong> 标签页中一键下载整站的 Sidecar 快照 ZIP 备份。</p>
   <p>配合生产端提供的 [deploy.sh](file:///home/abc/code/memosima/deploy.sh) 脚本，您可以在新的机器上解压后一键热启动，秒级完成无缝异地完美搬家！</p>
+
+  <figure class="shot">
+    <img src="images/teams-ui/admin-backup.png" alt="管理后台「备份」面板：下载备份 ZIP + 上传恢复入口。">
+    <figcaption>图 8-1：备份面板（<code>#backup</code>）—— 一键下载就是全量 SQLite + 非机密 YAML 配置，<strong>真实 key</strong>（如 DeepSeek / MinerU / SiliconFlow / Bark）<strong>不会被打包</strong>，搬家后需重新填写一次即可。</figcaption>
+  </figure>
 </article>
 </main>
 </body>

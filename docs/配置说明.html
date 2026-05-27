@@ -4,13 +4,21 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>配置说明</title>
-<style>:root{color-scheme:light dark;--bg:#f7f8fa;--fg:#1f2937;--muted:#667085;--panel:#fff;--border:#d0d5dd;--accent:#2563eb;--code:#101828;--codebg:#eef2f6}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{max-width:1040px;margin:0 auto;padding:40px 24px 72px}article{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:32px;box-shadow:0 1px 2px rgba(16,24,40,.05)}h1,h2,h3{line-height:1.25;margin:1.4em 0 .6em}h1{margin-top:0;font-size:2rem}h2{border-top:1px solid var(--border);padding-top:1.1em}a{color:var(--accent)}table{border-collapse:collapse;width:100%;margin:1rem 0;display:block;overflow-x:auto}th,td{border:1px solid var(--border);padding:.55rem .7rem;text-align:left;vertical-align:top}th{background:#f2f4f7}pre{background:var(--codebg);color:var(--code);padding:1rem;border-radius:8px;overflow-x:auto}code{background:var(--codebg);color:var(--code);padding:.12rem .28rem;border-radius:4px}pre code{background:transparent;padding:0}blockquote{border-left:4px solid var(--border);margin:1rem 0;padding:.2rem 1rem;color:var(--muted)}.meta{color:var(--muted);font-size:.92rem;margin-bottom:1.5rem}.toc{background:#f9fafb;border:1px solid var(--border);border-radius:8px;padding:1rem;margin:1rem 0 1.5rem}.toc a{display:inline-block;margin:.15rem .6rem .15rem 0}@media (prefers-color-scheme:dark){:root{--bg:#0b1220;--fg:#e5e7eb;--muted:#9ca3af;--panel:#111827;--border:#374151;--accent:#60a5fa;--code:#e5e7eb;--codebg:#1f2937}th{background:#1f2937}.toc{background:#111827}}</style>
+<style>:root{color-scheme:light dark;--bg:#f7f8fa;--fg:#1f2937;--muted:#667085;--panel:#fff;--border:#d0d5dd;--accent:#2563eb;--code:#101828;--codebg:#eef2f6}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{max-width:1040px;margin:0 auto;padding:40px 24px 72px}article{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:32px;box-shadow:0 1px 2px rgba(16,24,40,.05)}h1,h2,h3{line-height:1.25;margin:1.4em 0 .6em}h1{margin-top:0;font-size:2rem}h2{border-top:1px solid var(--border);padding-top:1.1em}a{color:var(--accent)}table{border-collapse:collapse;width:100%;margin:1rem 0;display:block;overflow-x:auto}th,td{border:1px solid var(--border);padding:.55rem .7rem;text-align:left;vertical-align:top}th{background:#f2f4f7}pre{background:var(--codebg);color:var(--code);padding:1rem;border-radius:8px;overflow-x:auto}code{background:var(--codebg);color:var(--code);padding:.12rem .28rem;border-radius:4px}pre code{background:transparent;padding:0}blockquote{border-left:4px solid var(--border);margin:1rem 0;padding:.2rem 1rem;color:var(--muted)}.meta{color:var(--muted);font-size:.92rem;margin-bottom:1.5rem}.toc{background:#f9fafb;border:1px solid var(--border);border-radius:8px;padding:1rem;margin:1rem 0 1.5rem}.toc a{display:inline-block;margin:.15rem .6rem .15rem 0}figure.shot{margin:1.2rem auto;max-width:960px;text-align:center}figure.shot img{max-width:100%;height:auto;border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 14px rgba(16,24,40,.08)}figure.shot figcaption{color:var(--muted);font-size:.9rem;margin-top:.5rem}@media (prefers-color-scheme:dark){:root{--bg:#0b1220;--fg:#e5e7eb;--muted:#9ca3af;--panel:#111827;--border:#374151;--accent:#60a5fa;--code:#e5e7eb;--codebg:#1f2937}th{background:#1f2937}.toc{background:#111827}}</style>
 </head>
 <body>
 <main>
 <article>
 <div class="meta">来源：docs/配置说明.html</div>
 <h1>配置说明</h1>
+
+<p>本文按文件/章节展开，每一节都对应到 <code>/admin/ui</code> 中的一个面板 —— 几乎所有运行期可改的参数都不必直接编辑 YAML，打开管理后台对应 tab 就能在线保存并增量写回 <code>config/*.yaml</code> 与 <code>config/.env.local</code>。</p>
+
+<figure class="shot">
+  <img src="images/teams-ui/admin-overview.png" alt="管理后台首页：4 大功能 tab 组 + TEAMS 团队 tab 组的总览。">
+  <figcaption>图 0：管理后台 <code>/admin/ui</code> 总览。顶部分组导航对应本文各章节：DATA / CORE / AI / SYSTEM / TEAMS。</figcaption>
+</figure>
+
 <h2>环境变量</h2>
 <p>复制示例文件：</p>
 <pre><code class="language-bash">cp .env.example .env
@@ -82,6 +90,12 @@
 <p>本地部署推荐使用 <code>poll</code> 模式，不需要暴露公网地址。Memos <code>0.28.0</code> 会拒绝 webhook URL 指向本机、Docker 内网或其他保留/私有 IP；只有在需要 webhook 模式时，才需要配置公网可达 URL 或公网隧道。</p>
 <p>默认 Docker Compose 包含 <code>gateway</code>、<code>memos</code>、<code>sidecar</code> 和 <code>sidecar-worker</code> 四个服务。<code>gateway</code> 使用 Caddy 按路径分流：<code>/admin/*</code>、<code>/health</code>、<code>/webhooks/*</code> 到 Sidecar，其余路径到 Memos。默认只暴露 <code>http://localhost:8080</code> 一个宿主机入口；Memos 的 <code>5230</code> 和 Sidecar 容器内部 <code>8080</code> 不直接暴露。可以通过 <code>GATEWAY_PORT</code> 修改宿主机端口。</p>
 <p>管理入口 memo 和 AI 整理 memo 中的管理链接由 <code>app.public_base_url</code> 生成；如果用户从其他设备访问 Memos，应把该值配置为浏览器可访问的统一网关地址，例如 <code>http://192.168.1.10:8080</code> 或反向代理域名。管理页面按「概览、任务、标签、AI 配置、模型、提醒、备份」聚合功能，并支持 <code>#overview</code>、<code>#jobs</code>、<code>#tag-candidates</code>、<code>#tag-summary</code>、<code>#prompts</code>、<code>#models</code>、<code>#reminders</code> 和 <code>#backup</code> 锚点直达。</p>
+
+<figure class="shot">
+  <img src="images/teams-ui/admin-memos.png" alt="Memos 同步配置面板：Base URL、PAT、入口模式、可见性等。">
+  <figcaption>图 app-1：<code>/admin/ui#memos</code> 面板 —— 上述 <code>memos.*</code> 字段全部支持在线编辑保存；真实 PAT 写入 <code>config/.env.local</code>，不会进入备份或 Git。</figcaption>
+</figure>
+
 <h2>reminders</h2>
 <p><code>reminders</code> 控制 <code>#提醒</code> 时间识别和定时通知：</p>
 <pre><code class="language-yaml">reminders:
@@ -95,6 +109,12 @@
 <p>worker 只处理包含 <code>trigger_tag</code> 的 memo。命中后会调用 <code>config/prompts.yaml</code> 中 <code>reminder_extraction.provider</code> 指定的 OpenAI-compatible provider；该字段为空时回退到 <code>config/models.yaml</code> 的默认 provider。模型会抽取 <code>title</code>、<code>body</code>、<code>due_at</code>、<code>timezone</code>、<code>confidence</code> 和 <code>raw_text</code>，并把明确、未来且置信度不低于阈值的结果写入 SQLite <code>reminders</code> 表。同一 <code>workspace_id</code>、来源 memo、到期时间和标题是幂等键，避免重复创建。</p>
 <p>到期扫描在 worker 空闲循环中执行，状态为 <code>pending</code> 或 <code>failed</code> 且 <code>due_at</code> 已到的提醒会发送到 <code>REMINDER_WEBHOOK_URL</code>。成功后状态变为 <code>sent</code>，失败会记录脱敏错误并保留为 <code>failed</code> 以便重试。发送内容不会把 webhook token 写入日志或 job result。</p>
 <p>如果模型 key 未配置、抽取失败或时间不明确，提醒流程会记录跳过原因；时间模糊、低置信或已过期时会在原 memo 下评论要求补充，但普通 AI 整理流程仍会继续。</p>
+
+<figure class="shot">
+  <img src="images/teams-ui/admin-reminders.png" alt="提醒面板：左侧提醒列表，右侧 reminders 配置（触发标签、置信度、Webhook URL）。">
+  <figcaption>图 reminders-1：<code>/admin/ui#reminders</code> 面板。右侧的「触发标签 / 置信度阈值 / 超时 / Webhook URL」就是上方 YAML 字段的可视化映射；URL 输入框留空表示「保持已有值不变」，新输入的 URL/Bark Key 以加密方式增量写入 <code>config/.env.local</code>。</figcaption>
+</figure>
+
 <h2>models.yaml</h2>
 <p>当前默认模型配置使用 DeepSeek 的 <code>deepseek-v4-flash</code>，并保留 OpenRouter、OpenAI 等常用 OpenAI-compatible provider 模板：</p>
 <pre><code class="language-yaml">default_provider: deepseek
@@ -128,6 +148,12 @@ providers:
 </code></pre>
 <p><code>config/models.yaml</code> 只定义可用 provider 及其连接参数。实际调用时，<code>organize_memo</code>、<code>tag_summary</code>、<code>reminder_extraction</code> 会优先使用各自在 <code>config/prompts.yaml</code> 中配置的 <code>provider</code>；该字段为空或缺失时才使用 <code>default_provider</code>。DeepSeek 官方 OpenAI-compatible 入口使用 <code>https://api.deepseek.com</code> 作为 <code>base_url</code>，当前模板默认模型为 <code>deepseek-v4-flash</code>。<code>base_url</code>、<code>default_model</code>、<code>temperature</code>、<code>max_tokens</code>、<code>response_format</code> 和 <code>extra_body</code> 都从 <code>config/models.yaml</code> 读取。DeepSeek V4 默认开启 thinking mode，Sidecar 模板在 <code>extra_body.thinking.type</code> 中显式设为 <code>disabled</code>，用于摘要和标签总结这类只需要最终内容的单轮任务。<code>max_tokens</code> 留空时不会向模型请求发送输出 token 限制；Sidecar 也不会主动截断输入正文。<code>extra_body</code> 会原样合并到请求 JSON，适合配置厂商扩展参数。</p>
 <p>管理页面 <code>/admin/ui#models</code> 可直接选择 provider、修改 <code>base_url</code>、模型名、响应格式、扩展 JSON 和 key。保存后，非机密参数写回 <code>config/models.yaml</code>；真实 key 写入已忽略的 <code>config/.env.local</code>，并由 API 与 worker 在后续加载模型配置时读取。备份 ZIP 不包含 <code>config/.env.local</code>。</p>
+
+<figure class="shot">
+  <img src="images/teams-ui/admin-models.png" alt="大模型 provider 配置面板：provider 下拉、Base URL、模型名、Key 环境变量、API Key 留空提示等。">
+  <figcaption>图 models-1：<code>/admin/ui#models</code> 面板。API Key 字段为 password 输入框，留空 = 不修改已保存 key（图中显示「Key 未配置」是 demo 截图的干净状态）。</figcaption>
+</figure>
+
 <h2>memos</h2>
 <p>AI 整理 memo 不再写入任何业务 <code>#tag</code>。它只保留 <code>#系统/AI整理</code>、<code>#系统/标签待审核</code> 等系统标签，业务标签会在“标签”区域以普通文本显示，避免 AI 生成内容进入 Memos 原生业务标签筛选。<code>memos.show_candidate_tags</code> 保留为兼容配置，但当前生成逻辑不会用它把候选业务标签写成 Memos 原生标签。</p>
 <p>只有用户原始 memo 没有任何业务标签时，Sidecar 才会接收 LLM 返回的 <code>active_tags</code> 和 <code>candidate_tags</code>。<code>active_tags</code> 只能使用已有正式标签；如果模型把未知标签放入 <code>active_tags</code>，Sidecar 会把它降级为候选标签。<code>candidate_tags</code> 用于 AI 从无标签正文提出的新标签建议，每项包含 <code>path</code>、<code>reason</code> 和 <code>confidence</code>。用户已经手写业务标签时，AI 标签建议会被忽略，只保留用户标签解析结果。新标签不会自动激活，必须通过候选标签审核。业务标签还要求最后一级名称全局唯一：已有 <code>#项目/数管</code> 时，<code>#数管</code> 和 <code>#其他/数管</code> 都不能再作为新的业务标签。</p>
@@ -153,9 +179,21 @@ providers:
 <li><code>{content}</code>：原始 memo 正文和附件解析内容。</li>
 </ul>
 <p>管理页面 <code>/admin/ui</code> 的“AI 调用配置”区域会写回 <code>config/prompts.yaml</code>；每个调用点都能单独选择模型配置并编辑中文提示词说明。任务重试时选择临时修改，只会写入该任务 payload 的 <code>llm_prompt_override</code>，不会临时改变该任务使用的 provider。Compose 已将 <code>./config</code> 以可写方式挂载到 Sidecar 容器，便于从管理页面保存默认提示词。</p>
+
+<figure class="shot">
+  <img src="images/teams-ui/admin-prompts.png" alt="AI 配置面板：organize_memo / tag_summary / reminder_extraction 三类提示词的编辑器。">
+  <figcaption>图 prompts-1：<code>/admin/ui#prompts</code> 面板。3 类调用点（organize_memo / tag_summary / reminder_extraction）各自维护 provider + system + user 三段，保存即写回 <code>config/prompts.yaml</code>。</figcaption>
+</figure>
+
 <h2>备份恢复</h2>
 <p>管理接口 <code>/admin/backups/download</code> 会生成 Sidecar 备份 ZIP，内容包括 SQLite 快照 <code>database/sidecar.db</code>、<code>manifest.json</code>，以及 <code>config/app.yaml</code>、<code>config/models.yaml</code>、<code>config/prompts.yaml</code>、<code>config/taxonomy.yaml</code> 等非机密配置文件。真实密钥仍只通过环境变量或 <code>config/.env.local</code> 提供，不会写入备份包。</p>
 <p><code>/admin/backups/restore</code> 接收备份 ZIP 原始 body，并只恢复 Sidecar SQLite 数据库。备份包里的配置文件不会被自动应用，避免上传包覆盖运行配置或引入密钥风险。恢复范围不包含 Memos 主库、Memos 附件文件或外部对象存储。</p>
+
+<figure class="shot">
+  <img src="images/teams-ui/admin-backup.png" alt="备份恢复面板：下载 ZIP / 上传恢复入口。">
+  <figcaption>图 backup-1：<code>/admin/ui#backup</code> 面板。备份 ZIP 不包含 <code>config/.env.local</code> 与 Memos 主库；如需整体迁移，请同时使用仓库根目录的 <code>backup.sh</code>。</figcaption>
+</figure>
+
 <h2>taxonomy.yaml</h2>
 <p><code>config/taxonomy.yaml</code> 保存系统标签、初始业务标签、别名和禁用标签。路径由 <code>config/app.yaml</code> 中的 <code>taxonomy.path</code> 指定。</p>
 <p>当前 P2 本地整理草案会读取该配置：</p>
@@ -169,6 +207,12 @@ providers:
 <p>worker 会把解析结果写入 job <code>result.ai_plan</code>。内容明确时会用 <code>system_tags.ai_summary</code> 创建 AI 整理 memo；内容过短时会用 <code>system_tags.pending_clarification</code> 标记草案，在原 memo 下写澄清评论，并把任务置为 <code>waiting_user</code>。问号、URL 参数等特殊字符不会单独触发待澄清。</p>
 <p>候选标签持久化后会进入 Sidecar SQLite 的 <code>tag_candidates</code> 表，可通过 <code>/admin/tag-candidates</code> 查询，并通过 <code>/admin/tag-candidates/{id}/approve</code> 或 <code>/admin/tag-candidates/{id}/reject</code> 审核。审核通过后会同步写入 <code>business_tags</code> 表并标记为 <code>active</code>，worker 后续会把这些标签与 <code>config/taxonomy.yaml</code> 中的 active 标签合并使用。当前审核结果不会自动改写 <code>config/taxonomy.yaml</code>。</p>
 <p>也可以打开 <code>http://localhost:8080/admin/ui</code> 使用调试管理页面审核候选标签。该页面要求手动输入 <code>SIDECAR_ADMIN_TOKEN</code>，token 只保存在当前浏览器，不会由服务端注入页面。</p>
+
+<figure class="shot">
+  <img src="images/teams-ui/admin-tags.png" alt="标签面板：tag-summary 多标签药丸 + 临时提示词覆盖，下方候选标签审核队列。">
+  <figcaption>图 taxonomy-1：<code>/admin/ui#tags</code> 面板。上方按标签生成总结支持 OR / AND 多标签组合 + 临时提示词覆盖；下方候选标签队列即 <code>tag_candidates</code> 表的可视化审核入口。</figcaption>
+</figure>
+
 <h2>document_parser</h2>
 <p><code>document_parser</code> 用于配置 Office/PDF 附件转 Markdown 的解析 provider。当前默认 provider 为 <code>mineru</code>，真实 token 从 <code>MINERU_API_TOKEN</code> 环境变量读取，只放在本地 <code>.env</code> 或部署密钥中，不提交到 git。</p>
 <pre><code>document_parser:
@@ -186,6 +230,27 @@ providers:
 </code></pre>
 <p>worker 会先从 Memos 下载附件。<code>.txt</code> 和 <code>.md</code> 在本地安全解码；<code>.doc</code>、<code>.docx</code>、<code>.xls</code>、<code>.xlsx</code>、<code>.ppt</code>、<code>.pptx</code> 和 <code>.pdf</code> 会调用文档解析 provider 转成 Markdown。Markdown 会写入 <code>artifacts</code> 表，并在调用 LLM 前拼接进原 memo 正文，后续 AI 整理和自动标签流程保持不变。provider 设计为可替换，后续可以接入本地 LibreOffice、unstructured 或其他在线解析服务。</p>
 <p>如果原 memo 正文为空且至少一个附件成功进入解析结果，LLM 返回标题后，worker 会调用 Memos 内容更新接口把该标题回写到原 memo。job 结果中会记录 <code>original_memo_title_updated</code> 和 <code>original_memo_title</code>，便于在管理页或 API 中排查。</p>
+
+<figure class="shot">
+  <img src="images/teams-ui/admin-docparser.png" alt="文档解析（MinerU）面板：provider / Base URL / Token 环境变量名 / API Key / 模型版本 / 语言 / 超时 / 表格 / 公式 / OCR 等。">
+  <figcaption>图 docparser-1：<code>/admin/ui#docparser</code> 面板。所有 <code>document_parser.*</code> 字段都可视化编辑保存；API Key 字段为「留空 = 不修改」语义，写入 <code>config/.env.local</code>。</figcaption>
+</figure>
+
+<h2>vector_search</h2>
+<p><code>vector_search</code> 控制 Sidecar 是否把原 memo / AI 整理摘要 / 团队词条切分为 chunk 入库到向量表，以及 <code>/admin/qa/generate-prompt</code>、<code>/teams/{slug}/search</code> 等接口在勾选「从向量库里取」时使用的嵌入服务：</p>
+<pre><code class="language-yaml">vector_search:
+  enabled: true
+  model: BAAI/bge-m3
+  base_url: https://api.siliconflow.cn/v1
+  api_key_env: SILICONFLOW_API_KEY
+</code></pre>
+<p>未配置 <code>SILICONFLOW_API_KEY</code> 时，Worker 跳过入库，QA / 团队检索自动降级为「标签 + 正文模糊」双通道，行为与个人 RAG 面板一致，不阻断主流程。</p>
+
+<figure class="shot">
+  <img src="images/teams-ui/admin-vector-search.png" alt="向量库（Vector Search）配置面板：启用开关、Embedding 模型、Base URL、API Key 输入框。">
+  <figcaption>图 vector-1：<code>/admin/ui#vector-search</code> 面板。API Key 字段同样是「留空保持不变」；保存后 <code>config/app.yaml</code> 写回非机密配置、key 写 <code>config/.env.local</code>，下次 worker 重启即生效。</figcaption>
+</figure>
+
 <h2>limits</h2>
 <p><code>limits.max_attachment_mb</code> 控制单个附件解析大小上限。<code>limits.allowed_parse_extensions</code> 控制允许进入解析流程的扩展名。<code>limits.max_ai_active_tags</code> 控制单条无标签 memo 最多接收多少个 AI 补充的正式标签，默认 <code>5</code>；<code>limits.max_ai_candidate_tags</code> 控制单条无标签 memo 最多接收多少个 AI 新候选标签，默认 <code>2</code>。用户在正文里手动写出的标签不会因为该限制被吞掉。</p>
 <p>当前已实现 <code>.txt</code>、<code>.md</code>、Word、Excel、PPT 和 PDF 解析。<code>.drawio</code>、<code>.drawio.svg</code> 和 <code>.json</code> 仍保留在配置中，后续接入专用解析器前会被跳过，不会主动执行未知格式内容。</p>

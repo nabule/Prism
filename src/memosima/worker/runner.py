@@ -75,14 +75,26 @@ class Worker:
             return True
 
     async def run_forever(self) -> None:
+        consecutive_failures = 0
         while True:
-            self.config = AppConfig.load(self.config_path)
-            if self.models_config is not None:
-                self.models_config = ModelsConfig.load(self.models_path)
-                
-            processed = await self.run_once()
-            if not processed:
-                await asyncio.sleep(self.config.worker_poll_interval_seconds)
+            try:
+                self.config = AppConfig.load(self.config_path)
+                if self.models_config is not None:
+                    self.models_config = ModelsConfig.load(self.models_path)
+
+                processed = await self.run_once()
+                consecutive_failures = 0
+                if not processed:
+                    await asyncio.sleep(self.config.worker_poll_interval_seconds)
+            except Exception as exc:  # noqa: BLE001
+                consecutive_failures += 1
+                # 指数退避，最多 60 秒；避免启动期 memos/网络未就绪时进程秒退导致 Docker 重启循环
+                backoff = min(60.0, max(2.0, self.config.worker_poll_interval_seconds) * (2 ** min(consecutive_failures - 1, 5)))
+                LOGGER.warning(
+                    "Worker loop failed (attempt %d), retrying in %.1fs: %s",
+                    consecutive_failures, backoff, exc,
+                )
+                await asyncio.sleep(backoff)
 
     async def _poll_memos_once(self) -> bool:
         if self.config.memos_ingestion_mode not in {"poll", "both"}:

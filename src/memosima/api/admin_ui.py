@@ -383,6 +383,17 @@ ADMIN_UI_HTML = """<!doctype html>
         <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="backup">备份</button>
       </div>
     </div>
+
+    <!-- 团队知识库 (TEAMS) -->
+    <div class="tab-group">
+      <span class="tab-group-title">团队 TEAMS</span>
+      <div class="tab-group-buttons">
+        <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="team-list">团队</button>
+        <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="team-members">成员</button>
+        <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="team-invites">邀请</button>
+        <button class="tab" type="button" role="tab" aria-selected="false" data-tab-target="team-entries">词条</button>
+      </div>
+    </div>
   </nav>
 
   <section class="tab-panel active" data-panel="overview">
@@ -1059,9 +1070,250 @@ ADMIN_UI_HTML = """<!doctype html>
           <button id="logNextPage" type="button" disabled>下一页</button>
         </div>
       </div>
+  <section class="tab-panel" data-panel="team-list">
+    <div class="workspace">
+      <div class="panel">
+        <h2>团队列表</h2>
+        <div class="hint">在当前 workspace 下创建/删除团队。创建后生成的 <code>owner_token</code> 只显示一次，请立即妥善保管。普通成员可通过 <a href="/teams/ui" target="_blank">/teams/ui</a> 自助加入。</div>
+        <div class="toolbar" style="margin-top: 12px;">
+          <button id="refreshTeamsButton" type="button">刷新</button>
+          <span class="muted" id="teamListSummary"></span>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 18%;">Slug</th>
+              <th style="width: 22%;">名称</th>
+              <th style="width: 25%;">描述</th>
+              <th style="width: 8%;">成员</th>
+              <th style="width: 8%;">词条</th>
+              <th style="width: 19%;">操作</th>
+            </tr>
+          </thead>
+          <tbody id="teamListBody"><tr><td colspan="6" class="muted">未加载</td></tr></tbody>
+        </table>
+      </div>
+
+      <aside class="panel">
+        <h2>新建团队</h2>
+        <div class="hint">slug 仅可包含小写字母/数字/连字符，3-40 字符，不能首尾是 <code>-</code>。</div>
+        <div class="field" style="margin-top: 10px;">
+          <label for="newTeamSlug">slug</label>
+          <input id="newTeamSlug" type="text" placeholder="如 platform">
+        </div>
+        <div class="field">
+          <label for="newTeamName">名称</label>
+          <input id="newTeamName" type="text" placeholder="如 Platform 团队">
+        </div>
+        <div class="field">
+          <label for="newTeamDescription">描述（可选）</label>
+          <textarea id="newTeamDescription" placeholder="一句话说明团队职责"></textarea>
+        </div>
+        <div class="field">
+          <label for="newTeamOwnerName">owner 展示名</label>
+          <input id="newTeamOwnerName" type="text" placeholder="如 张三（默认：管理员）">
+        </div>
+        <div class="actions" style="margin-top: 10px;">
+          <button id="createTeamButton" class="primary" type="button">创建团队</button>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <section class="tab-panel" data-panel="team-members">
+    <div class="panel stack">
+      <h2>成员管理</h2>
+      <div class="toolbar">
+        <div class="field" style="margin: 0; min-width: 240px;">
+          <label for="memberTeamSelect">选择团队</label>
+          <select id="memberTeamSelect"><option value="">— 请选择团队 —</option></select>
+        </div>
+        <button id="refreshMembersButton" type="button" style="height: 38px;">刷新</button>
+        <span class="muted" id="memberSummary"></span>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 8%;">ID</th>
+            <th style="width: 22%;">展示名</th>
+            <th style="width: 14%;">角色</th>
+            <th style="width: 24%;">创建时间</th>
+            <th style="width: 16%;">最后活跃</th>
+            <th style="width: 16%;">操作</th>
+          </tr>
+        </thead>
+        <tbody id="memberListBody"><tr><td colspan="6" class="muted">请先选择团队</td></tr></tbody>
+      </table>
+      <div class="hint">最后一个 owner 无法降级或移除——交接时请先把别的成员升为 owner。</div>
+    </div>
+  </section>
+
+  <section class="tab-panel" data-panel="team-invites">
+    <div class="workspace">
+      <div class="panel stack">
+        <h2>邀请列表</h2>
+        <div class="toolbar">
+          <div class="field" style="margin: 0; min-width: 240px;">
+            <label for="inviteTeamSelect">选择团队</label>
+            <select id="inviteTeamSelect"><option value="">— 请选择团队 —</option></select>
+          </div>
+          <button id="refreshInvitesButton" type="button" style="height: 38px;">刷新</button>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 30%;">code</th>
+              <th style="width: 12%;">角色</th>
+              <th style="width: 12%;">用量</th>
+              <th style="width: 20%;">过期</th>
+              <th style="width: 12%;">状态</th>
+              <th style="width: 14%;">操作</th>
+            </tr>
+          </thead>
+          <tbody id="inviteListBody"><tr><td colspan="6" class="muted">请先选择团队</td></tr></tbody>
+        </table>
+      </div>
+
+      <aside class="panel">
+        <h2>新建邀请</h2>
+        <div class="hint">邀请码通过安全渠道分发给成员，对方在 <a href="/teams/ui" target="_blank">/teams/ui</a> 输入即可加入。</div>
+        <div class="field" style="margin-top: 10px;">
+          <label for="newInviteRole">颁发角色</label>
+          <select id="newInviteRole">
+            <option value="editor">editor（可写自己的词条）</option>
+            <option value="viewer">viewer（只读）</option>
+            <option value="owner">owner（团队管理员）</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="newInviteMaxUses">最大使用次数</label>
+          <input id="newInviteMaxUses" type="number" min="0" max="1000" value="0">
+          <span class="muted" style="font-size: .78rem;">0 = 不限次</span>
+        </div>
+        <div class="field">
+          <label for="newInviteExpires">过期时间（可选，ISO-8601）</label>
+          <input id="newInviteExpires" type="text" placeholder="如 2026-06-30T23:59:59+08:00">
+        </div>
+        <div class="actions" style="margin-top: 10px;">
+          <button id="createInviteButton" class="primary" type="button">生成邀请码</button>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <section class="tab-panel" data-panel="team-entries">
+    <div class="workspace">
+      <div class="panel stack">
+        <h2>词条列表</h2>
+        <div class="toolbar">
+          <div class="field" style="margin: 0; min-width: 220px;">
+            <label for="entryTeamSelect">选择团队</label>
+            <select id="entryTeamSelect"><option value="">— 请选择团队 —</option></select>
+          </div>
+          <div class="field" style="margin: 0; width: 160px;">
+            <label for="entryFilterTag">标签</label>
+            <input id="entryFilterTag" type="text" placeholder="如 postgres">
+          </div>
+          <div class="field" style="margin: 0; flex: 1; min-width: 180px;">
+            <label for="entryFilterQuery">关键字</label>
+            <input id="entryFilterQuery" type="text" placeholder="子串匹配 title/body/tag">
+          </div>
+          <button id="refreshEntriesButton" type="button" style="height: 38px;">刷新</button>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 22%;">标题</th>
+              <th style="width: 36%;">内容预览</th>
+              <th style="width: 16%;">标签</th>
+              <th style="width: 12%;">作者</th>
+              <th style="width: 14%;">操作</th>
+            </tr>
+          </thead>
+          <tbody id="entryListBody"><tr><td colspan="5" class="muted">请先选择团队</td></tr></tbody>
+        </table>
+        <div class="muted" id="entrySummary" style="font-size: .82rem;"></div>
+      </div>
+
+      <aside class="panel">
+        <h2>新建词条</h2>
+        <div class="hint">使用管理员令牌写入时，作者将记为 <code>admin</code>。</div>
+        <div class="field" style="margin-top: 10px;">
+          <label for="newEntryTitle">标题</label>
+          <input id="newEntryTitle" type="text" placeholder="如 数据库迁移手册">
+        </div>
+        <div class="field">
+          <label for="newEntryBody">正文 *</label>
+          <textarea id="newEntryBody" style="min-height: 140px;" placeholder="支持 Markdown / 纯文本"></textarea>
+        </div>
+        <div class="field">
+          <label for="newEntryTags">标签（空格或逗号分隔）</label>
+          <input id="newEntryTags" type="text" placeholder="如 #postgres runbook db">
+        </div>
+        <div class="actions" style="margin-top: 10px;">
+          <button id="createEntryButton" class="primary" type="button">创建词条</button>
+        </div>
+      </aside>
     </div>
   </section>
 </main>
+
+<dialog id="ownerTokenDialog">
+  <form method="dialog">
+    <h2>团队创建成功 · 一次性 owner_token</h2>
+    <div class="hint">此 token 只显示这一次。**关闭对话框后将无法找回**，请立即复制并通过安全渠道交给团队负责人。</div>
+    <div class="field" style="margin-top: 12px;">
+      <label>团队</label>
+      <input id="ownerTokenTeam" type="text" readonly>
+    </div>
+    <div class="field">
+      <label>owner_token</label>
+      <input id="ownerTokenValue" type="text" readonly style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9rem;">
+    </div>
+    <div class="actions" style="justify-content: flex-end; margin-top: 14px; gap: 8px;">
+      <button id="copyOwnerTokenButton" type="button">复制 token</button>
+      <button class="primary" type="submit" value="ok">我已保存</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="inviteCodeDialog">
+  <form method="dialog">
+    <h2>邀请码生成成功</h2>
+    <div class="hint">把邀请码发给成员，对方访问 <a href="/teams/ui" target="_blank">/teams/ui</a> 输入即可加入团队。</div>
+    <div class="field" style="margin-top: 12px;">
+      <label>邀请码 code</label>
+      <input id="inviteCodeValue" type="text" readonly style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9rem;">
+    </div>
+    <div class="actions" style="justify-content: flex-end; margin-top: 14px; gap: 8px;">
+      <button id="copyInviteCodeButton" type="button">复制邀请码</button>
+      <button class="primary" type="submit" value="ok">知道了</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="editEntryDialog">
+  <form method="dialog">
+    <h2>编辑词条</h2>
+    <input id="editEntryUid" type="hidden">
+    <div class="field">
+      <label for="editEntryTitle">标题</label>
+      <input id="editEntryTitle" type="text">
+    </div>
+    <div class="field">
+      <label for="editEntryBody">正文</label>
+      <textarea id="editEntryBody" style="min-height: 200px;"></textarea>
+    </div>
+    <div class="field">
+      <label for="editEntryTags">标签（空格或逗号分隔）</label>
+      <input id="editEntryTags" type="text">
+    </div>
+    <div class="actions" style="justify-content: flex-end; margin-top: 14px; gap: 8px;">
+      <button type="submit" value="cancel">取消</button>
+      <button class="primary" type="submit" value="confirm">保存</button>
+    </div>
+  </form>
+</dialog>
 
 <dialog id="promptDialog">
   <form method="dialog">
@@ -1162,7 +1414,11 @@ const hashPanelMap = {
   "vector-search": { panel: "vector-search" },
   qa: { panel: "qa" },
   reprocess: { panel: "reprocess" },
-  logs: { panel: "logs" }
+  logs: { panel: "logs" },
+  "team-list": { panel: "team-list" },
+  "team-members": { panel: "team-members" },
+  "team-invites": { panel: "team-invites" },
+  "team-entries": { panel: "team-entries" }
 };
 
 function setNotice(message, kind = "") {
@@ -1230,6 +1486,14 @@ async function requestJson(path, options = {}) {
     const adminToken = token();
     if (!adminToken) {
       throw new Error("缺少 Admin Token");
+    }
+    headers.set("Authorization", `Bearer ${adminToken}`);
+  }
+  if (path.startsWith("/teams/")) {
+    // 管理端复用 admin token —— 后端会把 admin token 当作合成 owner，可跨任意团队。
+    const adminToken = token();
+    if (!adminToken) {
+      throw new Error("缺少 Admin Token（团队管理需要管理员令牌）");
     }
     headers.set("Authorization", `Bearer ${adminToken}`);
   }
@@ -2716,6 +2980,493 @@ btnJumpToJobs.addEventListener("click", () => {
   window.location.hash = "jobs";
 });
 
+// ============================================================
+// 团队知识库 (TEAMS)
+// ============================================================
+const teamListBody = document.getElementById("teamListBody");
+const teamListSummary = document.getElementById("teamListSummary");
+const memberListBody = document.getElementById("memberListBody");
+const memberSummary = document.getElementById("memberSummary");
+const inviteListBody = document.getElementById("inviteListBody");
+const entryListBody = document.getElementById("entryListBody");
+const entrySummary = document.getElementById("entrySummary");
+const memberTeamSelect = document.getElementById("memberTeamSelect");
+const inviteTeamSelect = document.getElementById("inviteTeamSelect");
+const entryTeamSelect = document.getElementById("entryTeamSelect");
+const ownerTokenDialog = document.getElementById("ownerTokenDialog");
+const ownerTokenTeam = document.getElementById("ownerTokenTeam");
+const ownerTokenValue = document.getElementById("ownerTokenValue");
+const inviteCodeDialog = document.getElementById("inviteCodeDialog");
+const inviteCodeValue = document.getElementById("inviteCodeValue");
+const editEntryDialog = document.getElementById("editEntryDialog");
+const editEntryUid = document.getElementById("editEntryUid");
+const editEntryTitle = document.getElementById("editEntryTitle");
+const editEntryBody = document.getElementById("editEntryBody");
+const editEntryTags = document.getElementById("editEntryTags");
+
+let cachedTeams = [];
+let editEntryResolve = null;
+
+function teamSlugInputs() {
+  return [memberTeamSelect, inviteTeamSelect, entryTeamSelect];
+}
+
+function refreshTeamSelectors() {
+  const previousValues = teamSlugInputs().map((sel) => sel.value);
+  for (const sel of teamSlugInputs()) {
+    const current = sel.value;
+    sel.innerHTML = "";
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = "— 请选择团队 —";
+    sel.appendChild(placeholder);
+    for (const team of cachedTeams) {
+      const opt = document.createElement("option");
+      opt.value = team.slug;
+      opt.textContent = `${team.name} (${team.slug})`;
+      sel.appendChild(opt);
+    }
+    if (current && cachedTeams.some((t) => t.slug === current)) {
+      sel.value = current;
+    }
+  }
+}
+
+function parseTags(input) {
+  if (!input) return [];
+  return input
+    .split(/[\\s,，、]+/)
+    .map((t) => t.trim())
+    .filter(Boolean);
+}
+
+function escapeHtml(text) {
+  return String(text == null ? "" : text)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function truncate(text, max) {
+  const flat = String(text || "").replace(/\\s+/g, " ").trim();
+  if (flat.length <= max) return flat;
+  return flat.slice(0, max - 1) + "…";
+}
+
+async function copyToClipboard(text, successMsg) {
+  try {
+    await navigator.clipboard.writeText(text);
+    setNotice(successMsg || "已复制到剪贴板", "ok");
+  } catch {
+    setNotice("复制失败，请手动选取文本", "warn");
+  }
+}
+
+async function loadTeams() {
+  if (!token()) return;
+  try {
+    const data = await requestJson("/admin/teams");
+    cachedTeams = data.teams || [];
+    teamListSummary.textContent = `共 ${cachedTeams.length} 个团队`;
+    if (cachedTeams.length === 0) {
+      teamListBody.innerHTML = '<tr><td colspan="6" class="muted">还没有任何团队，在右侧创建第一个。</td></tr>';
+    } else {
+      teamListBody.innerHTML = cachedTeams.map((team) => `
+        <tr>
+          <td><code>${escapeHtml(team.slug)}</code></td>
+          <td>${escapeHtml(team.name)}</td>
+          <td class="muted">${escapeHtml(team.description || "")}</td>
+          <td>${team.member_count}</td>
+          <td>${team.entry_count}</td>
+          <td>
+            <button type="button" data-team-action="members" data-slug="${escapeHtml(team.slug)}">成员</button>
+            <button type="button" data-team-action="invites" data-slug="${escapeHtml(team.slug)}">邀请</button>
+            <button type="button" data-team-action="entries" data-slug="${escapeHtml(team.slug)}">词条</button>
+            <button type="button" class="danger" data-team-action="delete" data-slug="${escapeHtml(team.slug)}">删除</button>
+          </td>
+        </tr>
+      `).join("");
+    }
+    refreshTeamSelectors();
+  } catch (err) {
+    teamListBody.innerHTML = `<tr><td colspan="6" class="danger">${escapeHtml(err.message)}</td></tr>`;
+  }
+}
+
+async function createTeamUI() {
+  const slug = document.getElementById("newTeamSlug").value.trim();
+  const name = document.getElementById("newTeamName").value.trim();
+  const description = document.getElementById("newTeamDescription").value.trim();
+  const ownerName = document.getElementById("newTeamOwnerName").value.trim();
+  if (!slug || !name) {
+    setNotice("slug 和名称都不能为空", "warn");
+    return;
+  }
+  try {
+    const payload = { slug, name, description };
+    if (ownerName) payload.owner_display_name = ownerName;
+    const data = await requestJson("/admin/teams", { method: "POST", body: JSON.stringify(payload) });
+    ownerTokenTeam.value = `${data.team.name} (${data.team.slug})`;
+    ownerTokenValue.value = data.owner_token;
+    ownerTokenDialog.showModal();
+    document.getElementById("newTeamSlug").value = "";
+    document.getElementById("newTeamName").value = "";
+    document.getElementById("newTeamDescription").value = "";
+    document.getElementById("newTeamOwnerName").value = "";
+    setNotice(`团队 ${data.team.slug} 创建成功`, "ok");
+    await loadTeams();
+  } catch (err) {
+    setNotice(`创建失败：${err.message}`, "warn");
+  }
+}
+
+async function deleteTeamUI(slug) {
+  if (!confirm(`确认删除团队 ${slug}？此操作不可逆，会级联删除所有成员、邀请、词条与向量索引。`)) {
+    return;
+  }
+  try {
+    await requestJson(`/admin/teams/${encodeURIComponent(slug)}`, { method: "DELETE" });
+    setNotice(`团队 ${slug} 已删除`, "ok");
+    await loadTeams();
+    if (memberTeamSelect.value === slug) { memberTeamSelect.value = ""; loadTeamMembers(); }
+    if (inviteTeamSelect.value === slug) { inviteTeamSelect.value = ""; loadTeamInvites(); }
+    if (entryTeamSelect.value === slug) { entryTeamSelect.value = ""; loadTeamEntries(); }
+  } catch (err) {
+    setNotice(`删除失败：${err.message}`, "warn");
+  }
+}
+
+async function loadTeamMembers() {
+  const slug = memberTeamSelect.value;
+  if (!slug) {
+    memberListBody.innerHTML = '<tr><td colspan="6" class="muted">请先选择团队</td></tr>';
+    memberSummary.textContent = "";
+    return;
+  }
+  try {
+    const data = await requestJson(`/teams/${encodeURIComponent(slug)}/members`);
+    const members = data.members || [];
+    memberSummary.textContent = `团队 ${slug} 共 ${members.length} 名成员`;
+    if (members.length === 0) {
+      memberListBody.innerHTML = '<tr><td colspan="6" class="muted">暂无成员</td></tr>';
+      return;
+    }
+    memberListBody.innerHTML = members.map((m) => `
+      <tr>
+        <td>${m.id}</td>
+        <td>${escapeHtml(m.display_name)}</td>
+        <td>
+          <select data-member-id="${m.id}" class="member-role-select">
+            <option value="viewer"${m.role === "viewer" ? " selected" : ""}>viewer</option>
+            <option value="editor"${m.role === "editor" ? " selected" : ""}>editor</option>
+            <option value="owner"${m.role === "owner" ? " selected" : ""}>owner</option>
+          </select>
+        </td>
+        <td class="muted">${escapeHtml(m.created_at)}</td>
+        <td class="muted">${escapeHtml(m.last_active_at || "—")}</td>
+        <td>
+          <button type="button" class="danger" data-member-remove="${m.id}" data-member-name="${escapeHtml(m.display_name)}">移除</button>
+        </td>
+      </tr>
+    `).join("");
+  } catch (err) {
+    memberListBody.innerHTML = `<tr><td colspan="6" class="danger">${escapeHtml(err.message)}</td></tr>`;
+  }
+}
+
+async function changeMemberRole(memberId, newRole) {
+  const slug = memberTeamSelect.value;
+  if (!slug) return;
+  try {
+    await requestJson(`/teams/${encodeURIComponent(slug)}/members/${memberId}/role`, {
+      method: "PUT",
+      body: JSON.stringify({ role: newRole })
+    });
+    setNotice(`成员角色已更新为 ${newRole}`, "ok");
+    await loadTeamMembers();
+    await loadTeams();
+  } catch (err) {
+    setNotice(`改角色失败：${err.message}`, "warn");
+    await loadTeamMembers();  // 还原下拉
+  }
+}
+
+async function removeMemberUI(memberId, name) {
+  const slug = memberTeamSelect.value;
+  if (!slug) return;
+  if (!confirm(`确认从团队 ${slug} 移除成员 ${name}（ID ${memberId}）？该成员的 token 将立即失效。`)) {
+    return;
+  }
+  try {
+    await requestJson(`/teams/${encodeURIComponent(slug)}/members/${memberId}`, { method: "DELETE" });
+    setNotice(`已移除成员 ${name}`, "ok");
+    await loadTeamMembers();
+    await loadTeams();
+  } catch (err) {
+    setNotice(`移除失败：${err.message}`, "warn");
+  }
+}
+
+async function loadTeamInvites() {
+  const slug = inviteTeamSelect.value;
+  if (!slug) {
+    inviteListBody.innerHTML = '<tr><td colspan="6" class="muted">请先选择团队</td></tr>';
+    return;
+  }
+  try {
+    const data = await requestJson(`/teams/${encodeURIComponent(slug)}/invites`);
+    const invites = data.invites || [];
+    if (invites.length === 0) {
+      inviteListBody.innerHTML = '<tr><td colspan="6" class="muted">暂无邀请记录，在右侧创建第一个。</td></tr>';
+      return;
+    }
+    inviteListBody.innerHTML = invites.map((inv) => {
+      let status = "可用";
+      let statusClass = "ok";
+      if (inv.revoked_at) { status = "已撤销"; statusClass = "muted"; }
+      else if (inv.max_uses > 0 && inv.uses >= inv.max_uses) { status = "已耗尽"; statusClass = "muted"; }
+      else if (inv.expires_at && new Date(inv.expires_at) < new Date()) { status = "已过期"; statusClass = "muted"; }
+      const usesText = inv.max_uses === 0 ? `${inv.uses} / ∞` : `${inv.uses} / ${inv.max_uses}`;
+      const canRevoke = !inv.revoked_at;
+      return `
+        <tr>
+          <td><code style="font-size: .78rem; word-break: break-all;">${escapeHtml(inv.code)}</code></td>
+          <td>${escapeHtml(inv.role)}</td>
+          <td>${usesText}</td>
+          <td class="muted">${escapeHtml(inv.expires_at || "—")}</td>
+          <td class="${statusClass}">${status}</td>
+          <td>
+            <button type="button" data-invite-copy="${escapeHtml(inv.code)}">复制</button>
+            ${canRevoke ? `<button type="button" class="danger" data-invite-revoke="${inv.id}">撤销</button>` : ""}
+          </td>
+        </tr>
+      `;
+    }).join("");
+  } catch (err) {
+    inviteListBody.innerHTML = `<tr><td colspan="6" class="danger">${escapeHtml(err.message)}</td></tr>`;
+  }
+}
+
+async function createInviteUI() {
+  const slug = inviteTeamSelect.value;
+  if (!slug) {
+    setNotice("请先在左侧选择团队", "warn");
+    return;
+  }
+  const payload = {
+    role: document.getElementById("newInviteRole").value,
+    max_uses: parseInt(document.getElementById("newInviteMaxUses").value || "0", 10) || 0
+  };
+  const expires = document.getElementById("newInviteExpires").value.trim();
+  if (expires) payload.expires_at = expires;
+  try {
+    const inv = await requestJson(`/teams/${encodeURIComponent(slug)}/invites`, {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+    inviteCodeValue.value = inv.code;
+    inviteCodeDialog.showModal();
+    document.getElementById("newInviteExpires").value = "";
+    setNotice("邀请码已生成", "ok");
+    await loadTeamInvites();
+  } catch (err) {
+    setNotice(`生成失败：${err.message}`, "warn");
+  }
+}
+
+async function revokeInviteUI(inviteId) {
+  const slug = inviteTeamSelect.value;
+  if (!slug) return;
+  if (!confirm("确认撤销该邀请码？后续将无法用它加入团队。")) return;
+  try {
+    await requestJson(`/teams/${encodeURIComponent(slug)}/invites/${inviteId}`, { method: "DELETE" });
+    setNotice("邀请已撤销", "ok");
+    await loadTeamInvites();
+  } catch (err) {
+    setNotice(`撤销失败：${err.message}`, "warn");
+  }
+}
+
+async function loadTeamEntries() {
+  const slug = entryTeamSelect.value;
+  if (!slug) {
+    entryListBody.innerHTML = '<tr><td colspan="5" class="muted">请先选择团队</td></tr>';
+    entrySummary.textContent = "";
+    return;
+  }
+  const params = new URLSearchParams({ limit: "100" });
+  const tagFilter = document.getElementById("entryFilterTag").value.trim();
+  const queryFilter = document.getElementById("entryFilterQuery").value.trim();
+  if (tagFilter) params.set("tag", tagFilter);
+  if (queryFilter) params.set("query", queryFilter);
+  try {
+    const data = await requestJson(`/teams/${encodeURIComponent(slug)}/entries?${params.toString()}`);
+    const entries = data.entries || [];
+    entrySummary.textContent = `命中 ${data.total ?? entries.length} 条（展示前 ${entries.length} 条）`;
+    if (entries.length === 0) {
+      entryListBody.innerHTML = '<tr><td colspan="5" class="muted">没有匹配的词条。</td></tr>';
+      return;
+    }
+    entryListBody.innerHTML = entries.map((e) => {
+      const tags = (e.tags || []).map((t) => `<code style="font-size: .72rem;">#${escapeHtml(t)}</code>`).join(" ");
+      return `
+        <tr>
+          <td>${escapeHtml(e.title || "(无标题)")}</td>
+          <td class="muted" style="word-break: break-word;">${escapeHtml(truncate(e.body, 140))}</td>
+          <td>${tags}</td>
+          <td class="muted">${escapeHtml(e.author_display_name || "—")}</td>
+          <td>
+            <button type="button" data-entry-edit="${escapeHtml(e.uid)}">编辑</button>
+            <button type="button" class="danger" data-entry-delete="${escapeHtml(e.uid)}">删除</button>
+          </td>
+        </tr>
+      `;
+    }).join("");
+  } catch (err) {
+    entryListBody.innerHTML = `<tr><td colspan="5" class="danger">${escapeHtml(err.message)}</td></tr>`;
+  }
+}
+
+async function createEntryUI() {
+  const slug = entryTeamSelect.value;
+  if (!slug) {
+    setNotice("请先在左侧选择团队", "warn");
+    return;
+  }
+  const title = document.getElementById("newEntryTitle").value.trim();
+  const body = document.getElementById("newEntryBody").value.trim();
+  const tags = parseTags(document.getElementById("newEntryTags").value);
+  if (!body) {
+    setNotice("正文不能为空", "warn");
+    return;
+  }
+  try {
+    await requestJson(`/teams/${encodeURIComponent(slug)}/entries`, {
+      method: "POST",
+      body: JSON.stringify({ title, body, tags })
+    });
+    setNotice("词条已创建", "ok");
+    document.getElementById("newEntryTitle").value = "";
+    document.getElementById("newEntryBody").value = "";
+    document.getElementById("newEntryTags").value = "";
+    await loadTeamEntries();
+    await loadTeams();
+  } catch (err) {
+    setNotice(`创建失败：${err.message}`, "warn");
+  }
+}
+
+async function openEditEntry(uid) {
+  const slug = entryTeamSelect.value;
+  if (!slug) return;
+  try {
+    const entry = await requestJson(`/teams/${encodeURIComponent(slug)}/entries/${encodeURIComponent(uid)}`);
+    editEntryUid.value = entry.uid;
+    editEntryTitle.value = entry.title || "";
+    editEntryBody.value = entry.body || "";
+    editEntryTags.value = (entry.tags || []).join(" ");
+    editEntryDialog.showModal();
+    const result = await new Promise((resolve) => { editEntryResolve = resolve; });
+    if (result !== "confirm") return;
+    await requestJson(`/teams/${encodeURIComponent(slug)}/entries/${encodeURIComponent(uid)}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        title: editEntryTitle.value,
+        body: editEntryBody.value,
+        tags: parseTags(editEntryTags.value)
+      })
+    });
+    setNotice("词条已更新", "ok");
+    await loadTeamEntries();
+  } catch (err) {
+    setNotice(`编辑失败：${err.message}`, "warn");
+  }
+}
+
+async function deleteEntryUI(uid) {
+  const slug = entryTeamSelect.value;
+  if (!slug) return;
+  if (!confirm(`确认删除词条 ${uid}？该操作不可逆。`)) return;
+  try {
+    await requestJson(`/teams/${encodeURIComponent(slug)}/entries/${encodeURIComponent(uid)}`, { method: "DELETE" });
+    setNotice("词条已删除", "ok");
+    await loadTeamEntries();
+    await loadTeams();
+  } catch (err) {
+    setNotice(`删除失败：${err.message}`, "warn");
+  }
+}
+
+// --- 团队 UI 事件挂载 ---
+document.getElementById("refreshTeamsButton").addEventListener("click", loadTeams);
+document.getElementById("createTeamButton").addEventListener("click", createTeamUI);
+document.getElementById("refreshMembersButton").addEventListener("click", loadTeamMembers);
+document.getElementById("refreshInvitesButton").addEventListener("click", loadTeamInvites);
+document.getElementById("createInviteButton").addEventListener("click", createInviteUI);
+document.getElementById("refreshEntriesButton").addEventListener("click", loadTeamEntries);
+document.getElementById("createEntryButton").addEventListener("click", createEntryUI);
+memberTeamSelect.addEventListener("change", loadTeamMembers);
+inviteTeamSelect.addEventListener("change", loadTeamInvites);
+entryTeamSelect.addEventListener("change", loadTeamEntries);
+document.getElementById("entryFilterTag").addEventListener("change", loadTeamEntries);
+document.getElementById("entryFilterQuery").addEventListener("change", loadTeamEntries);
+
+// 团队列表行内操作（事件委托）
+teamListBody.addEventListener("click", (ev) => {
+  const btn = ev.target.closest("[data-team-action]");
+  if (!btn) return;
+  const action = btn.dataset.teamAction;
+  const slug = btn.dataset.slug;
+  if (action === "delete") { deleteTeamUI(slug); return; }
+  const selectorMap = { members: memberTeamSelect, invites: inviteTeamSelect, entries: entryTeamSelect };
+  const sel = selectorMap[action];
+  if (sel) {
+    sel.value = slug;
+    sel.dispatchEvent(new Event("change"));
+    window.location.hash = `team-${action}`;
+  }
+});
+
+memberListBody.addEventListener("change", (ev) => {
+  const sel = ev.target.closest(".member-role-select");
+  if (!sel) return;
+  changeMemberRole(parseInt(sel.dataset.memberId, 10), sel.value);
+});
+memberListBody.addEventListener("click", (ev) => {
+  const btn = ev.target.closest("[data-member-remove]");
+  if (!btn) return;
+  removeMemberUI(parseInt(btn.dataset.memberRemove, 10), btn.dataset.memberName);
+});
+
+inviteListBody.addEventListener("click", (ev) => {
+  const copyBtn = ev.target.closest("[data-invite-copy]");
+  if (copyBtn) { copyToClipboard(copyBtn.dataset.inviteCopy, "邀请码已复制"); return; }
+  const revBtn = ev.target.closest("[data-invite-revoke]");
+  if (revBtn) { revokeInviteUI(parseInt(revBtn.dataset.inviteRevoke, 10)); }
+});
+
+entryListBody.addEventListener("click", (ev) => {
+  const editBtn = ev.target.closest("[data-entry-edit]");
+  if (editBtn) { openEditEntry(editBtn.dataset.entryEdit); return; }
+  const delBtn = ev.target.closest("[data-entry-delete]");
+  if (delBtn) { deleteEntryUI(delBtn.dataset.entryDelete); }
+});
+
+document.getElementById("copyOwnerTokenButton").addEventListener("click", () => {
+  copyToClipboard(ownerTokenValue.value, "owner_token 已复制");
+});
+document.getElementById("copyInviteCodeButton").addEventListener("click", () => {
+  copyToClipboard(inviteCodeValue.value, "邀请码已复制");
+});
+
+editEntryDialog.addEventListener("close", () => {
+  if (!editEntryResolve) return;
+  editEntryResolve(editEntryDialog.returnValue);
+  editEntryResolve = null;
+});
+
 tokenInput.value = localStorage.getItem(storageKey) || "";
 loadHealth();
 if (token()) {
@@ -2733,6 +3484,7 @@ if (token()) {
   renderTagSummaryPills();
   loadMemosConfig();
   loadLogs();
+  loadTeams();
 }
 
 for (const tab of panelTriggers) {

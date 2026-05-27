@@ -1070,6 +1070,9 @@ ADMIN_UI_HTML = """<!doctype html>
           <button id="logNextPage" type="button" disabled>下一页</button>
         </div>
       </div>
+    </div>
+  </section>
+
   <section class="tab-panel" data-panel="team-list">
     <div class="workspace">
       <div class="panel">

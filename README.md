@@ -59,6 +59,16 @@
 | ⏰ **时间智能提醒** | 识别正文中自然语言，提取到期时间写入 SQLite，Bark (Webhook) 定时通知。 | 随手记下的待办事项，缺乏通知提醒导致遗忘。 | 写下 `#提醒 明天上午 10:00 提交周报`，时间一到，您的手机（iOS Bark）即刻弹出消息推送。 |
 | 💾 **一键跨容器备份** | Memos 数据库 + 物理附件 + Sidecar 数据库 + 向量索引 + 配置文件一键全局热备份与恢复。 | 容器化部署在异地迁移、版本升级或多卷映射下备份极其繁琐。 | 执行 `backup.sh` 生成自包含压缩包，在别处解压运行 `restore.sh` 瞬间秒级异地完美搬家。 |
 
+### 🎛️ 管理后台一图速览
+
+部署完成后访问 `http://localhost:8080/admin/ui`，输入 `SIDECAR_ADMIN_TOKEN` 即可进入下面这个总览界面 —— 顶部分组导航把上述全部能力收拢成 4 大类（DATA / CORE / AI / SYSTEM）+ 团队（TEAMS）：
+
+<p align="center">
+  <img src="./docs/images/teams-ui/admin-overview.png" alt="Prism 管理后台首页：左侧实时健康卡片，中间常用入口，右侧备份快捷入口，顶部 4 大功能 tab 组 + TEAMS 团队 tab 组" width="880" />
+</p>
+
+> 截图中的 Admin Token 字段已经在浏览器侧以 password 类型掩码，截图前脚本会再做一次「凡是看起来像 token / 邀请码的内容统一替换为 `••••••` 占位」处理，确保所有手册截图不含任何真实机密。
+
 ---
 
 
@@ -151,6 +161,17 @@ bash <(curl -s -L https://raw.githubusercontent.com/nabule/Prism/master/deploy.s
 
 在不放弃「个人沙箱」原则的前提下，Prism 新增了一层 **团队知识库** 能力：同一 `workspace_id` 内可以由管理员创建若干「团队」，每个团队拥有自己的成员、邀请码、词条集合和向量索引，互不串扰。它适合家庭成员协同收藏菜谱、研发小组维护事故复盘 Wiki、运营团队共建话术库等「需要少量人共享但不希望开放整库」的场景。
 
+<table>
+  <tr>
+    <td align="center"><strong>管理员 <code>/admin/ui</code> · 团队 TEAMS</strong></td>
+    <td align="center"><strong>普通成员 <code>/teams/ui</code> · 词条/检索</strong></td>
+  </tr>
+  <tr>
+    <td><img src="./docs/images/teams-ui/admin-team-list.png" alt="管理员视角的团队列表 + 新建团队表单"></td>
+    <td><img src="./docs/images/teams-ui/teams-entries.png" alt="成员视角下的团队词条列表 + 标签筛选 + 新增/编辑入口"></td>
+  </tr>
+</table>
+
 ### 🧩 数据模型
 
 | 表 | 关键字段 | 作用 |
@@ -206,6 +227,12 @@ bash <(curl -s -L https://raw.githubusercontent.com/nabule/Prism/master/deploy.s
 3. **成员加入**：成员打开 `/teams/ui` 填入邀请码 + 展示名（也可调 `POST /teams/join`），浏览器自动保存 `team_xxx` token 并写入本地多团队池子，下次回访直接下拉切换。
 4. **沉淀知识**：editor 在 `/teams/ui` →「词条」直接写入条目（或 `POST /teams/{slug}/entries`），标签可以带 `#` 也可以不带（统一存为去 `#` 的小写形式）；如果配置了 `SILICONFLOW_API_KEY`，每次写入会异步重建向量索引。
 5. **检索/问答**：成员在 `/teams/ui` →「检索 / QA」勾选「启用向量语义检索」即可双通道召回，点「生成超级 Prompt」一键拼装并复制到剪贴板（或脚本化调用 `/teams/{slug}/search` 与 `/teams/{slug}/qa/generate-prompt`），把 Prompt 复制到任意大模型客户端即可获得答复。
+
+<p align="center">
+  <img src="./docs/images/teams-ui/teams-search-qa.png" alt="成员视角的检索 / QA 面板：上方关键字 + 标签 + 向量开关，下方命中条目卡片 + 一键生成超级 Prompt" width="880" />
+</p>
+
+> 更详细的截图（owner 视角的成员/邀请管理、邀请码 reveal 对话框、admin 视角的全部团队 panel）请见 [团队知识库使用手册](./docs/团队知识库使用手册.html)第 0a 章节。
 
 ### 🛡️ 安全与隔离要点
 

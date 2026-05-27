@@ -280,6 +280,31 @@ def shoot_admin_ui(page: Page, base: str) -> None:
     page.reload(wait_until="domcontentloaded")
     page.wait_for_timeout(800)
 
+    # 非团队 panel：直接 hash 切换 + 截图，覆盖运维/开发/配置 3 类手册需要的画面
+    GENERIC_PANELS = [
+        ("overview", "admin-overview.png"),
+        ("jobs", "admin-jobs.png"),
+        ("tags", "admin-tags.png"),
+        ("prompts", "admin-prompts.png"),
+        ("models", "admin-models.png"),
+        ("reminders", "admin-reminders.png"),
+        ("vector-search", "admin-vector-search.png"),
+        ("backup", "admin-backup.png"),
+        ("memos", "admin-memos.png"),
+        ("docparser", "admin-docparser.png"),
+        ("qa", "admin-qa.png"),
+        ("reprocess", "admin-reprocess.png"),
+        ("logs", "admin-logs.png"),
+    ]
+    for panel, fname in GENERIC_PANELS:
+        try:
+            _admin_goto_panel(page, panel)
+            # 列表/详情类 panel 通常 600ms 内由后端拉完
+            page.wait_for_timeout(600)
+            _save(page, fname)
+        except Exception as exc:
+            print(f"  ! skip {panel}: {exc}")
+
     # 团队列表
     _admin_goto_panel(page, "team-list")
     page.wait_for_timeout(400)
@@ -479,8 +504,20 @@ def main() -> int:
             "MEMOSIMA_APP_CONFIG": str(app_yaml),
             "MEMOSIMA_MODELS_CONFIG": str(models_yaml),
         })
-        # 避免任何外部嵌入服务被误调用
-        env.pop("SILICONFLOW_API_KEY", None)
+        # 避免任何外部嵌入 / 推理 / 解析服务被误调用，并且让 /admin/models、
+        # /admin/vector-search、/admin/docparser、/admin/reminders、
+        # /admin/memos 等面板渲染为「未配置」干净状态，不会把宿主机的真实
+        # API Key / token 泄漏进截图。
+        for _leaky in (
+            "SILICONFLOW_API_KEY",
+            "DEEPSEEK_API_KEY",
+            "OPENROUTER_API_KEY",
+            "OPENAI_API_KEY",
+            "MINERU_API_TOKEN",
+            "REMINDER_WEBHOOK_URL",
+            "MEMOS_WEBHOOK_URL",
+        ):
+            env.pop(_leaky, None)
 
         cmd = [
             sys.executable, "-m", "uvicorn",

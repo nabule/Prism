@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>开发运行说明</title>
-<style>:root{color-scheme:light dark;--bg:#f7f8fa;--fg:#1f2937;--muted:#667085;--panel:#fff;--border:#d0d5dd;--accent:#2563eb;--code:#101828;--codebg:#eef2f6}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{max-width:1040px;margin:0 auto;padding:40px 24px 72px}article{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:32px;box-shadow:0 1px 2px rgba(16,24,40,.05)}h1,h2,h3{line-height:1.25;margin:1.4em 0 .6em}h1{margin-top:0;font-size:2rem}h2{border-top:1px solid var(--border);padding-top:1.1em}a{color:var(--accent)}table{border-collapse:collapse;width:100%;margin:1rem 0;display:block;overflow-x:auto}th,td{border:1px solid var(--border);padding:.55rem .7rem;text-align:left;vertical-align:top}th{background:#f2f4f7}pre{background:var(--codebg);color:var(--code);padding:1rem;border-radius:8px;overflow-x:auto}code{background:var(--codebg);color:var(--code);padding:.12rem .28rem;border-radius:4px}pre code{background:transparent;padding:0}blockquote{border-left:4px solid var(--border);margin:1rem 0;padding:.2rem 1rem;color:var(--muted)}.meta{color:var(--muted);font-size:.92rem;margin-bottom:1.5rem}.toc{background:#f9fafb;border:1px solid var(--border);border-radius:8px;padding:1rem;margin:1rem 0 1.5rem}.toc a{display:inline-block;margin:.15rem .6rem .15rem 0}@media (prefers-color-scheme:dark){:root{--bg:#0b1220;--fg:#e5e7eb;--muted:#9ca3af;--panel:#111827;--border:#374151;--accent:#60a5fa;--code:#e5e7eb;--codebg:#1f2937}th{background:#1f2937}.toc{background:#111827}}</style>
+<style>:root{color-scheme:light dark;--bg:#f7f8fa;--fg:#1f2937;--muted:#667085;--panel:#fff;--border:#d0d5dd;--accent:#2563eb;--code:#101828;--codebg:#eef2f6}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{max-width:1040px;margin:0 auto;padding:40px 24px 72px}article{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:32px;box-shadow:0 1px 2px rgba(16,24,40,.05)}h1,h2,h3{line-height:1.25;margin:1.4em 0 .6em}h1{margin-top:0;font-size:2rem}h2{border-top:1px solid var(--border);padding-top:1.1em}a{color:var(--accent)}table{border-collapse:collapse;width:100%;margin:1rem 0;display:block;overflow-x:auto}th,td{border:1px solid var(--border);padding:.55rem .7rem;text-align:left;vertical-align:top}th{background:#f2f4f7}pre{background:var(--codebg);color:var(--code);padding:1rem;border-radius:8px;overflow-x:auto}code{background:var(--codebg);color:var(--code);padding:.12rem .28rem;border-radius:4px}pre code{background:transparent;padding:0}blockquote{border-left:4px solid var(--border);margin:1rem 0;padding:.2rem 1rem;color:var(--muted)}.meta{color:var(--muted);font-size:.92rem;margin-bottom:1.5rem}.toc{background:#f9fafb;border:1px solid var(--border);border-radius:8px;padding:1rem;margin:1rem 0 1.5rem}.toc a{display:inline-block;margin:.15rem .6rem .15rem 0}figure.shot{margin:1.2rem auto;max-width:960px;text-align:center}figure.shot img{max-width:100%;height:auto;border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 14px rgba(16,24,40,.08)}figure.shot figcaption{color:var(--muted);font-size:.9rem;margin-top:.5rem}.shot-grid{display:grid;gap:16px;margin:1.2rem 0;grid-template-columns:repeat(auto-fit,minmax(360px,1fr))}.shot-grid figure.shot{margin:0}@media (prefers-color-scheme:dark){:root{--bg:#0b1220;--fg:#e5e7eb;--muted:#9ca3af;--panel:#111827;--border:#374151;--accent:#60a5fa;--code:#e5e7eb;--codebg:#1f2937}th{background:#1f2937}.toc{background:#111827}}</style>
 </head>
 <body>
 <main>
@@ -57,6 +57,12 @@ npx nx build sidecar
 </code></pre>
 <p>页面通过现有管理 API 工作，需要输入 <code>SIDECAR_ADMIN_TOKEN</code>。token 只保存在浏览器 <code>localStorage</code>，不会写入 HTML、日志或仓库。页面也支持查看和保存 AI 调用配置；单条 memo 整理、标签总结和提醒抽取都可以单独选择模型 provider 并编辑提示词。</p>
 <p>页面“大模型”区域支持直接切换默认 provider、修改模型名、base URL、响应格式、扩展 JSON 和 key。保存后 <code>config/models.yaml</code> 会记录非机密模型参数，真实 key 写入已忽略的 <code>config/.env.local</code>。API 和 worker 会在后续加载模型配置时读取该文件；备份包不会包含该密钥文件。</p>
+
+<figure class="shot">
+  <img src="images/teams-ui/admin-overview.png" alt="管理后台首页：健康卡片 + 常用入口 + 备份快捷入口 + 4 大功能 tab 组 + TEAMS 团队 tab。">
+  <figcaption>图 dev-1：本地起 sidecar 后第一眼看到的 <code>/admin/ui</code> 总览页。左上「健康状态」JSON 是开发期判断 worker / models / vector / reminders 是否就绪的一站式自检入口。</figcaption>
+</figure>
+
 <h2>Memos 探针</h2>
 <p>执行 Memos API 探针：</p>
 <pre><code class="language-bash">npx nx run sidecar:probe-memos
@@ -98,6 +104,23 @@ npx nx build sidecar
 <pre><code class="language-text">http://localhost:8080/admin/ui
 </code></pre>
 <p>页面支持健康状态刷新、任务状态筛选、任务详情查看、失败或待澄清任务重试、候选标签详情查看、候选标签通过/拒绝、按标签生成整体总结、提醒管理、Sidecar 备份恢复，以及 AI 调用配置查看和保存。</p>
+
+<div class="shot-grid">
+  <figure class="shot">
+    <img src="images/teams-ui/admin-jobs.png" alt="任务面板：状态过滤、列表展示、单条重试。">
+    <figcaption>图 dev-2：<code>/admin/ui#jobs</code> 任务面板。开发期排障基本就在这里 —— 一眼看出 <code>pending / running / failed / waiting_user</code> 各几条。</figcaption>
+  </figure>
+  <figure class="shot">
+    <img src="images/teams-ui/admin-reprocess.png" alt="重新整理面板：按 memo UID 强制重排 + 按标签批量重排。">
+    <figcaption>图 dev-3：<code>/admin/ui#reprocess</code>「重新整理」面板。改完 prompt 或换 provider 后无需重发 memo —— 直接按 UID 强制重排，或按标签批量重排。</figcaption>
+  </figure>
+</div>
+
+<figure class="shot">
+  <img src="images/teams-ui/admin-logs.png" alt="系统日志面板：结构化日志列表，可按级别 / 模块 / 时间过滤。">
+  <figcaption>图 dev-4：<code>/admin/ui#logs</code> 系统日志面板。所有结构化日志（包含 worker 处理 memo、模型调用响应、提醒发送结果）都汇总于此，配合 <code>npx nx test sidecar</code> 是日常开发的两大调试入口。</figcaption>
+</figure>
+
 <p>worker 维护 <code>#系统/Memosima</code> 管理入口 memo 时，会使用 Memos 0.28 兼容的 <code>content.contains(&quot;memosima:admin-entry&quot;)</code> filter 表达式查找已有入口，避免把 HTML marker 原文作为 filter 导致 Memos 返回 400。</p>
 <p>查询任务：</p>
 <pre><code class="language-bash">curl -H &quot;Authorization: Bearer&lt;空格&gt;$SIDECAR_ADMIN_TOKEN&quot; \
@@ -178,7 +201,21 @@ curl -X POST -H &quot;Authorization: Bearer&lt;空格&gt;$SIDECAR_ADMIN_TOKEN&qu
 <p>所有解析结果均写入 Sidecar SQLite 的 <code>artifacts</code> 表，字段包括 <code>memo_uid</code>、<code>resource_uid</code> 和 <code>content_markdown</code> 等。解析得到的 Markdown 会在调用 LLM 前拼接到原 memo 正文后面参与智能整理。</p>
 <p>对于正文为空、只有附件的原 memo，worker 会在 LLM 分析完成后使用 <code>PATCH /api/v1/memos/{memo_uid}</code> 回写一级标题。标题来自 LLM draft 的 <code>title</code> 字段，并会去掉多余的 <code>AI整理</code> 前缀和 Markdown <code>#</code> 符号，避免覆盖已有正文。</p>
 <p>解析结果会出现在 job <code>result.attachments</code> 中。若未配置 <code>MINERU_API_TOKEN</code>，Office/PDF 附件会记录为 <code>document_parser_not_configured</code>，而 Draw.io 与思维脑图不受影响，依然可以通过本地离线解析成功。</p>
-<p><strong>离线 RAG Prompt 编译器接口</strong>：在 API 中新增了 <code>POST /admin/qa/generate-prompt</code>，支持用户通过 active 标签和模糊关键词（通过 Memos API 的 <code>content.contains</code> 召回）获取相关的 Memo 正文及关联的 Artifacts 解析段，组装成系统提示词和用户 Query 合一的超级 Prompt 返给管理页面，便于离线环境一键复制粘贴。</p>onfig/taxonomy.yaml</code> 或 SQLite <code>business_tags</code> 中的 active 标签时才直接使用；未知标签会降级为候选标签并写入 <code>tag_candidates</code>；禁用标签进入 <code>disabled_tags</code>；系统标签不会由 LLM 创建。业务标签的最后一级名称必须全局唯一，例如已有 <code>#项目/数管</code> 时，后台会把 <code>#数管</code> 归一到该正式标签，并阻止 <code>#其他/数管</code> 成为候选或审核通过。Sidecar 还会按 <code>limits.max_ai_active_tags</code> 和 <code>limits.max_ai_candidate_tags</code> 限制单条无标签 memo 的 LLM 自动补充数量，默认最多接收 5 个正式标签和 2 个候选标签。</p>
+<p><strong>离线 RAG Prompt 编译器接口</strong>：在 API 中新增了 <code>POST /admin/qa/generate-prompt</code>，支持用户通过 active 标签和模糊关键词（通过 Memos API 的 <code>content.contains</code> 召回）获取相关的 Memo 正文及关联的 Artifacts 解析段，组装成系统提示词和用户 Query 合一的超级 Prompt 返给管理页面，便于离线环境一键复制粘贴。</p>
+
+<figure class="shot">
+  <img src="images/teams-ui/admin-qa.png" alt="QA 离线问答面板：标签药丸 + 关键字 + 向量开关 + 一键生成超级 Prompt。">
+  <figcaption>图 dev-5：<code>/admin/ui#qa</code> 面板，对应 <code>POST /admin/qa/generate-prompt</code> 后端入口。开发期可结合 <code>npx nx test sidecar -- -k qa</code> 验证 chunking / 召回 / 拼装链路。</figcaption>
+</figure>
+
+<p>另：自 v0.7 起，团队知识库接口 <code>/teams/{slug}/search</code>、<code>/teams/{slug}/qa/generate-prompt</code> 也使用同一套召回与拼装框架，前端入口在 <code>/teams/ui</code>（成员 SPA），开发详见 <a href="团队知识库使用手册.html">团队知识库使用手册</a>。</p>
+
+<figure class="shot">
+  <img src="images/teams-ui/teams-entries.png" alt="/teams/ui 成员入口的「词条」tab：列表 + 标签筛选 + 编辑/删除。">
+  <figcaption>图 dev-6：<code>/teams/ui</code> 成员 SPA 的「词条」tab —— 开发期可直接用脚本生成的 demo 团队（<code>scripts/snapshot_teams_ui.py</code> 一键产数据）来验证 token 隔离与 owner / editor / viewer 三级权限。</figcaption>
+</figure>
+
+<p>onfig/taxonomy.yaml</code> 或 SQLite <code>business_tags</code> 中的 active 标签时才直接使用；未知标签会降级为候选标签并写入 <code>tag_candidates</code>；禁用标签进入 <code>disabled_tags</code>；系统标签不会由 LLM 创建。业务标签的最后一级名称必须全局唯一，例如已有 <code>#项目/数管</code> 时，后台会把 <code>#数管</code> 归一到该正式标签，并阻止 <code>#其他/数管</code> 成为候选或审核通过。Sidecar 还会按 <code>limits.max_ai_active_tags</code> 和 <code>limits.max_ai_candidate_tags</code> 限制单条无标签 memo 的 LLM 自动补充数量，默认最多接收 5 个正式标签和 2 个候选标签。</p>
 <p>所有 LLM 调用点的默认提示词和模型选择都从 <code>config/prompts.yaml</code> 加载。当前调用点为 <code>organize_memo</code>、<code>tag_summary</code> 和 <code>reminder_extraction</code>。<code>organize_memo</code> 支持 <code>{active_tags}</code>、<code>{local_plan_json}</code>、<code>{content}</code> 占位符；<code>tag_summary</code> 支持 <code>{tag}</code>、<code>{memo_count}</code>、<code>{memos_markdown}</code> 占位符；<code>reminder_extraction</code> 支持 <code>{trigger_tag}</code>、<code>{now}</code>、<code>{timezone}</code>、<code>{content}</code> 占位符。管理页面保存 AI 调用配置会写回该文件；任务重试时的临时提示词覆盖只写入任务 payload，不会改变默认配置或临时切换模型。</p>
 <p>Sidecar 会在本地 <code>memos</code> 表记录两类 memo：</p>
 <ul>

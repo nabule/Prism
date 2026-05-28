@@ -2725,6 +2725,36 @@ btnJumpToJobs.addEventListener("click", () => {
   window.location.hash = "jobs";
 });
 
+// === Magic link 自动登录 ===
+// deploy.sh 末尾会打印 http://host:port/admin/ui#admin_token=xxx 形式的一次性链接，
+// 用户从终端直接 Ctrl+点击即可登录。此处在最早期解析 URL hash：
+//   1. 如果发现 admin_token=xxx，写入 localStorage 并立刻 history.replaceState
+//      把 hash 清掉，避免 token 长期暴露在地址栏 / 书签 / 浏览器历史里；
+//   2. hash 不参与 HTTP 请求，不会出现在 nginx/caddy/uvicorn 的 access log；
+//   3. 解析逻辑放在 tokenInput.value 赋值与 loadXxx() 之前，确保后续装载读到的
+//      就是 magic link 带过来的新 token。
+// 已知权衡：token 仍会在浏览器历史里出现一次。考虑到 SIDECAR_ADMIN_TOKEN 本来
+// 就要粘贴到 localStorage（拿到浏览器写权限的攻击者无论如何都能读到），并且
+// deploy.sh 任何时候都可以重新生成 token，这点暴露在产品体验提升面前是可接受的。
+(function applyMagicLinkToken() {
+  try {
+    const rawHash = window.location.hash || "";
+    if (!rawHash || rawHash.length < 2) return;
+    const params = new URLSearchParams(rawHash.slice(1));
+    const tokenFromUrl = params.get("admin_token");
+    if (!tokenFromUrl) return;
+    localStorage.setItem(storageKey, tokenFromUrl);
+    // 仅剔除 admin_token，其它 hash 段（例如 #prompts 这种面板锚点）保留
+    params.delete("admin_token");
+    const remaining = params.toString();
+    const newHash = remaining ? `#${remaining}` : "";
+    const newUrl = window.location.pathname + window.location.search + newHash;
+    window.history.replaceState(null, "", newUrl);
+  } catch (err) {
+    console.warn("magic link token 解析失败：", err);
+  }
+})();
+
 tokenInput.value = localStorage.getItem(storageKey) || "";
 loadHealth();
 // 读类配置（提示词 / 模型 / 文档解析 / Memos / 提醒 / 向量检索）服务端已去除

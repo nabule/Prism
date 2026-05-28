@@ -238,11 +238,18 @@ bootstrap_memos_pat || true
 # ---------- 结束 banner ----------
 CURRENT_TOKEN="$(grep -E '^SIDECAR_ADMIN_TOKEN=' .env | head -n1 | cut -d= -f2-)"
 CURRENT_PAT="$(grep -E '^MEMOS_API_TOKEN=' .env | head -n1 | cut -d= -f2-)"
+# 一次性自动登录链接：把 Admin Token 放在 URL hash 里（hash 不发到服务端 access log）。
+# 前端 admin_ui 检测到 #admin_token=xxx 后会写入 localStorage 并 history.replaceState
+# 清掉 hash，避免长期留在地址栏/书签里。这样用户从终端直接 Ctrl+点击即登录，
+# 不再需要手动复制 token 到右上角输入框。
+MAGIC_LINK="http://localhost:${GATEWAY_PORT}/admin/ui#admin_token=${CURRENT_TOKEN}"
 echo -e "${BLUE}===============================================${NC}"
 echo -e "${GREEN}        🎉 Prism (棱镜) 部署完成！             ${NC}"
 echo -e "${BLUE}===============================================${NC}"
 echo -e "${GREEN}网关入口:        ${YELLOW}http://localhost:${GATEWAY_PORT}${NC}"
 echo -e "${GREEN}Sidecar 管理端:  ${YELLOW}http://localhost:${GATEWAY_PORT}/admin/ui${NC}"
+echo -e "${GREEN}一次性登录链接:  ${YELLOW}${MAGIC_LINK}${NC}"
+echo -e "${GREEN}                 ${NC}(点击即自动写入 Admin Token，浏览器侧 hash 自动清空)"
 echo -e "${GREEN}Admin Token:     ${BLUE}${CURRENT_TOKEN}${NC}"
 if [ -n "$CURRENT_PAT" ]; then
     echo -e "${GREEN}Memos PAT:       ${BLUE}${CURRENT_PAT}${NC}"

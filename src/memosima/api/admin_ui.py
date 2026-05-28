@@ -1226,12 +1226,21 @@ async function requestJson(path, options = {}) {
   if (options.body && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
+  // 鉴权策略：
+  //   - 写类（POST/PUT/DELETE）以及非 /admin/* 路径依旧严格要求 token；
+  //   - 读类（GET，含默认）允许在没有 token 时直接发请求（服务端已对 6 个公开
+  //     读端点去除 require_admin），便于首次访问 UI 时自动加载提示词 / 模型 /
+  //     文档解析 / Memos / 提醒 / 向量检索的默认配置；
+  //   - 服务端如返回 401 / 403，调用方仍会按原逻辑抛错。
   if (path.startsWith("/admin/") && path !== "/admin/ui") {
+    const method = (options.method || "GET").toUpperCase();
+    const isWrite = method !== "GET" && method !== "HEAD";
     const adminToken = token();
-    if (!adminToken) {
+    if (adminToken) {
+      headers.set("Authorization", `Bearer ${adminToken}`);
+    } else if (isWrite) {
       throw new Error("缺少 Admin Token");
     }
-    headers.set("Authorization", `Bearer ${adminToken}`);
   }
   const response = await fetch(path, { ...options, headers });
   const text = await response.text();
@@ -2718,20 +2727,24 @@ btnJumpToJobs.addEventListener("click", () => {
 
 tokenInput.value = localStorage.getItem(storageKey) || "";
 loadHealth();
+// 读类配置（提示词 / 模型 / 文档解析 / Memos / 提醒 / 向量检索）服务端已去除
+// require_admin，且响应均经过 Pydantic 视图脱敏（不含 api_key、token 明文），
+// 因此即使浏览器尚未粘贴 Admin Token 也允许直接加载默认值，避免首次进入 UI
+// 时 textarea / 下拉框全部空白被误判为"配置没生效"。
+loadPrompts();
+loadModels();
+loadDocumentParser();
+loadMemosConfig();
+loadRemindersConfig();
+loadVectorSearchConfig();
 if (token()) {
   loadJobs();
   loadCandidates();
   loadReminders();
-  loadRemindersConfig();
-  loadVectorSearchConfig();
-  loadPrompts();
-  loadModels();
-  loadDocumentParser();
   loadQABusinessTags();
   loadReprocessBusinessTags();
   loadTagSummaryBusinessTags();
   renderTagSummaryPills();
-  loadMemosConfig();
   loadLogs();
 }
 

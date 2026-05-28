@@ -450,7 +450,6 @@ def create_app(
     @app.get(
         "/admin/prompts",
         response_model=PromptsResponse,
-        dependencies=[Depends(require_admin)],
     )
     async def get_prompts() -> PromptsResponse:
         prompts = load_prompts_or_default(config.prompts_path)
@@ -463,7 +462,6 @@ def create_app(
     @app.get(
         "/admin/models",
         response_model=LLMModelsResponse,
-        dependencies=[Depends(require_admin)],
     )
     async def get_models() -> LLMModelsResponse:
         return _models_response(app.state.models)
@@ -923,7 +921,6 @@ def create_app(
     @app.get(
         "/admin/reminders/config",
         response_model=RemindersConfigView,
-        dependencies=[Depends(require_admin)],
     )
     async def get_reminders_config() -> RemindersConfigView:
         cfg: AppConfig = app.state.config
@@ -960,7 +957,6 @@ def create_app(
     @app.get(
         "/admin/vector-search/config",
         response_model=VectorSearchConfigView,
-        dependencies=[Depends(require_admin)],
     )
     async def get_vector_search_config() -> VectorSearchConfigView:
         cfg: AppConfig = app.state.config
@@ -1384,7 +1380,6 @@ def create_app(
     @app.get(
         "/admin/document-parser",
         response_model=DocumentParserConfigView,
-        dependencies=[Depends(require_admin)],
     )
     async def get_document_parser_config() -> DocumentParserConfigView:
         cfg: AppConfig = app.state.config
@@ -1449,7 +1444,6 @@ def create_app(
     @app.get(
         "/admin/memos/config",
         response_model=MemosConfigView,
-        dependencies=[Depends(require_admin)],
     )
     async def get_memos_config() -> MemosConfigView:
         cfg: AppConfig = app.state.config

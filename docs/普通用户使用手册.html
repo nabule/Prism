@@ -208,6 +208,11 @@
 把 JSON 文件递归遍历并秒级转换为了带缩进的 Markdown，比大模型在线 OCR 快得多。
 下一步要写完 test_p3_qa_drawio 单元测试并跟进 master 分支的推送。</code></pre>
 
+  <figure class="shot">
+    <img src="images/teams-ui/admin-jobs.png" alt="管理后台「任务」面板：按状态过滤的整理任务队列，支持单条重试。">
+    <figcaption>图 1：任务面板（<code>#jobs</code>）—— 每条 Memos 笔记都会触发一次 AI 整理任务，状态在此一目了然，无需用户手工触发；失败的可一键重试。</figcaption>
+  </figure>
+
   ---
 
   <h2>2. 🏷️ 标签双层治理与自动建议</h2>
@@ -254,6 +259,11 @@
       <li><strong>自动丰富</strong>：如果您只传了附件而未写正文，Prism 整理完后会自动在 Memos 原笔记中回写一个清晰的卡片标题（如 <code># Prism 架构设计</code>），极大提升阅读辨识度。</li>
     </ol>
   </div>
+
+  <figure class="shot">
+    <img src="images/teams-ui/admin-docparser.png" alt="管理后台「文档解析」面板：drawio / Mind Elixir / Office / PDF 的解析开关与本地/远程 provider 切换。">
+    <figcaption>图 3：文档解析面板（<code>#docparser</code>）—— <code>.drawio</code> 与 Mind Elixir <code>.json</code> 走本地解析（零网络），Office / PDF 走 MinerU；所有开关在此可独立切换。</figcaption>
+  </figure>
 
   ---
 
@@ -336,6 +346,11 @@
   <h2>7. 🔒 隐私与 SaaS 多租户隔离提示</h2>
   <p class="warn">警示：本系统在单实例下绑定单一 API 密钥，且全量知识解析存于同一个 SQLite 数据库中。请勿与他人共享使用同一个 Sidecar 实例，否则会发生跨用户的知识数据检索与泄露。</p>
   <p><strong>最佳 SaaS 部署方案</strong>：如果家庭成员或团队中有多人记录需求，管理员应在宿主机上使用独立文件夹为每位成员运行一套物理隔离的容器栈，并在各自的 <code>.env</code> 中指定不同的 <code>GATEWAY_PORT</code> 端口启动，以物理级别的沙箱隔离方式保障大家的数据主权。</p>
+
+  <figure class="shot">
+    <img src="images/teams-ui/admin-team-list.png" alt="管理后台团队列表，展示团队级隔离粒度。">
+    <figcaption>图 7：团队隔离视图（<code>#team-list</code>）—— 如果只是「家庭/小组共享一个知识库」而不是「彻底独立账号」，可以在一个 Sidecar 内开多个团队，每个团队拥有独立成员、独立词条空间；与「一人一容器」的物理隔离是两个不同层级，按需选择。</figcaption>
+  </figure>
 
   ---
 

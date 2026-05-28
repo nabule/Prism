@@ -95,6 +95,12 @@ npx nx build sidecar
   --verify-sidecar-url &quot;http://localhost:8080&quot; \
   --verify-sidecar-token &quot;$SIDECAR_ADMIN_TOKEN&quot;
 </code></pre>
+
+<figure class="shot">
+  <img src="images/teams-ui/admin-memos.png" alt="管理后台「Memos 同步」面板：Base URL / PAT / 入口模式（poll / webhook）/ 可见性等配置。">
+  <figcaption>Memos 同步面板（<code>#memos</code>）—— 探针命令验证完链路后，可在此 UI 里把 Base URL / PAT / ingestion_mode 持久化到 <code>config/app.yaml</code>，下次启动自动生效。</figcaption>
+</figure>
+
 <h2>启动 Worker</h2>
 <p>持续轮询由 Compose 中的 <code>sidecar-worker</code> 服务负责：</p>
 <pre><code class="language-bash">npx nx run sidecar:up
@@ -191,7 +197,14 @@ curl -X POST -H &quot;Authorization: Bearer&lt;空格&gt;$SIDECAR_ADMIN_TOKEN&qu
 <li><code>needs_clarification</code>：内容过短时标记为需要澄清；问号、URL 参数等特殊字符不会单独触发待澄清。</li>
 </ul>
 <p>该草案用于 P2 早期验证标签治理和任务结构。内容明确时，worker 会创建一条 Markdown AI 整理 memo，内容包含 <code>#系统/AI整理</code>、来源 memo、摘要、标签状态和原文摘录，并在 job <code>result.ai_summary_memo_uid</code> 返回新 memo uid。AI 整理 memo 不再写入业务 <code>#tag</code>，业务标签只在“标签”区域以普通文本展示，避免 AI 生成内容污染 Memos 原生标签筛选。</p>
-<p>当所选 provider 对应的 key 存在时，worker 会按 <code>config/models.yaml</code> 调用 OpenAI-compatible <code>/chat/completions</code>，要求模型返回 JSON 对象，并把模型输出的摘要、要点和待办写入 AI 整理 memo。当前默认 provider 为 <code>deepseek</code>，默认模型为 <code>deepseek-v4-flash</code>，需要配置 <code>DEEPSEEK_API_KEY</code>。模型请求中的 <code>base_url</code>、<code>default_model</code>、<code>temperature</code>、<code>max_tokens</code>、<code>response_format</code> 和 <code>extra_body</code> 全部由配置文件控制；DeepSeek 模板在 <code>extra_body.thinking.type</code> 中显式配置 <code>disabled</code>，让摘要类任务使用非 thinking 输出。<code>max_tokens</code> 留空时不发送输出 token 限制，Sidecar 不主动截断输入正文。真实 key 只放在本地 <code>.env</code>、部署环境变量</p><h2>P3 附件解析与 QA 问答</h2>
+<p>当所选 provider 对应的 key 存在时，worker 会按 <code>config/models.yaml</code> 调用 OpenAI-compatible <code>/chat/completions</code>，要求模型返回 JSON 对象，并把模型输出的摘要、要点和待办写入 AI 整理 memo。当前默认 provider 为 <code>deepseek</code>，默认模型为 <code>deepseek-v4-flash</code>，需要配置 <code>DEEPSEEK_API_KEY</code>。模型请求中的 <code>base_url</code>、<code>default_model</code>、<code>temperature</code>、<code>max_tokens</code>、<code>response_format</code> 和 <code>extra_body</code> 全部由配置文件控制；DeepSeek 模板在 <code>extra_body.thinking.type</code> 中显式配置 <code>disabled</code>，让摘要类任务使用非 thinking 输出。<code>max_tokens</code> 留空时不发送输出 token 限制，Sidecar 不主动截断输入正文。真实 key 只放在本地 <code>.env</code>、部署环境变量</p>
+
+<figure class="shot">
+  <img src="images/teams-ui/admin-prompts.png" alt="管理后台「AI 配置」面板：organize_memo / tag_summary / reminder_extraction 三类提示词的编辑器。">
+  <figcaption>AI 配置面板（<code>#prompts</code>）—— P2 整理草案所用的 <code>organize_memo</code> Prompt 模板可在此热更新，无需重启 worker；保存即覆盖 <code>config/prompts.yaml</code>。</figcaption>
+</figure>
+
+<h2>P3 附件解析与 QA 问答</h2>
 <p>worker 处理 memo 时会读取 memo 中的 <code>resources</code> 或 <code>attachments</code> 字段。对于允许扩展名内的 <code>.txt</code> 和 <code>.md</code> 附件，会通过 Memos 资源接口下载并安全解码为 Markdown；对于 <code>.doc</code>、<code>.docx</code>、<code>.xls</code>、<code>.xlsx</code>、<code>.ppt</code>、<code>.pptx</code> 和 <code>.pdf</code>，会调用可插拔文档解析 provider（默认 MinerU 在线 API）。<strong>对于 <code>.drawio</code>（.drawio.svg）与 Mind Elixir <code>.json</code> 脑图，会启动本地 100% 离线的高保真解析器</strong>：</p>
 <ul>
   <li><code>kind=attachment_drawio</code>（本地离线解压 cell 文本）</li>
@@ -254,6 +267,12 @@ curl -X POST -H &quot;Authorization: Bearer&lt;空格&gt;$SIDECAR_ADMIN_TOKEN&qu
 <p>Office/PDF 解析流程为：向 MinerU 申请上传 URL，PUT 上传文件，轮询批量解析结果，下载结果 zip 并读取其中的 Markdown。得到的 Markdown 会在调用 LLM 前拼接到原 memo 正文后面，后续 AI 整理、标签生成、候选标签审核和 AI 整理 memo 创建流程保持不变。</p>
 <p>对于正文为空、只有附件的原 memo，worker 会在 LLM 分析完成后使用 <code>PATCH /api/v1/memos/{memo_uid}</code> 回写一级标题。标题来自 LLM draft 的 <code>title</code> 字段，并会去掉多余的 <code>AI整理</code> 前缀和 Markdown <code>#</code> 符号，避免把原 memo 变成标签或覆盖已有正文。</p>
 <p>解析结果会出现在 job <code>result.attachments</code> 中，状态可能是 <code>parsed</code>、<code>skipped</code> 或 <code>failed</code>。如果未配置 <code>MINERU_API_TOKEN</code>，Office/PDF 附件会记录为 <code>document_parser_not_configured</code>，不会阻塞普通正文整理。</p>
+
+<figure class="shot">
+  <img src="images/teams-ui/admin-docparser.png" alt="管理后台「文档解析」面板：provider 选择、MinerU Base URL / Token、模型版本、超时、表格 / 公式 / OCR 开关。">
+  <figcaption>文档解析面板（<code>#docparser</code>）—— P3 的 Office/PDF 走 MinerU；<code>.drawio</code> / Mind Elixir 走本地解析。所有开关在此面板独立切换，未配 Token 时会显式提示 <code>document_parser_not_configured</code>。</figcaption>
+</figure>
+
 <h2>Docker 状态</h2>
 <p>仓库已提供可发布的 <code>docker-compose.yml</code>、<code>Dockerfile</code> 和 <code>gateway/Caddyfile</code>。</p>
 <p><code>npx nx build sidecar</code> 会执行 <code>docker compose build</code>，覆盖 Sidecar、worker 和网关发布栈。真实联调时需先确认 Compose 正在运行最新镜像和当前挂载配置，再从实际监听的 Caddy 网关端口访问 Memos、<code>/admin/ui</code> 和 <code>/health</code>。</p>

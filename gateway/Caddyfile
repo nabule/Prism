@@ -8,6 +8,10 @@
 		reverse_proxy sidecar:8080
 	}
 
+	handle /teams/* {
+		reverse_proxy sidecar:8080
+	}
+
 	handle /health {
 		reverse_proxy sidecar:8080
 	}

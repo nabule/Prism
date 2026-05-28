@@ -238,15 +238,58 @@ bootstrap_memos_pat || true
 # ---------- 结束 banner ----------
 CURRENT_TOKEN="$(grep -E '^SIDECAR_ADMIN_TOKEN=' .env | head -n1 | cut -d= -f2-)"
 CURRENT_PAT="$(grep -E '^MEMOS_API_TOKEN=' .env | head -n1 | cut -d= -f2-)"
+# 探测一个可被局域网/公网用户实际访问到的主机 IP。优先级：
+#   1. PRISM_PUBLIC_HOST 环境变量（运维显式覆盖，比如域名 prism.example.com）；
+#   2. hostname -I 第一个非 127/172 的 IPv4（典型 LAN IP，例如 192.168.x.x）；
+#   3. ip route 默认网关接口的 src IP；
+#   4. 兜底回到 localhost（与历史行为一致）。
+detect_public_host() {
+    if [ -n "${PRISM_PUBLIC_HOST:-}" ]; then
+        echo "$PRISM_PUBLIC_HOST"
+        return
+    fi
+    local ip
+    ip="$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -E '^(10|192\.168|172\.(1[6-9]|2[0-9]|3[0-1]))\.' | head -n1)"
+    if [ -z "$ip" ]; then
+        ip="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '/src/ {for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}')"
+    fi
+    if [ -z "$ip" ]; then
+        ip="localhost"
+    fi
+    echo "$ip"
+}
+PUBLIC_HOST="$(detect_public_host)"
+
+# 一次性自动登录链接：把 Admin Token 放在 URL hash 里（hash 不发到服务端 access log）。
+# 前端 admin_ui 检测到 #admin_token=xxx 后会写入 localStorage 并 history.replaceState
+# 清掉 hash，避免长期留在地址栏/书签里。这样用户从终端直接 Ctrl+点击即登录，
+# 不再需要手动复制 token 到右上角输入框。
+MAGIC_LINK_LOCAL="http://localhost:${GATEWAY_PORT}/admin/ui#admin_token=${CURRENT_TOKEN}"
+MAGIC_LINK_LAN="http://${PUBLIC_HOST}:${GATEWAY_PORT}/admin/ui#admin_token=${CURRENT_TOKEN}"
 echo -e "${BLUE}===============================================${NC}"
 echo -e "${GREEN}        🎉 Prism (棱镜) 部署完成！             ${NC}"
 echo -e "${BLUE}===============================================${NC}"
-echo -e "${GREEN}网关入口:        ${YELLOW}http://localhost:${GATEWAY_PORT}${NC}"
-echo -e "${GREEN}Sidecar 管理端:  ${YELLOW}http://localhost:${GATEWAY_PORT}/admin/ui${NC}"
-echo -e "${GREEN}Admin Token:     ${BLUE}${CURRENT_TOKEN}${NC}"
-if [ -n "$CURRENT_PAT" ]; then
-    echo -e "${GREEN}Memos PAT:       ${BLUE}${CURRENT_PAT}${NC}"
+if [ "$PUBLIC_HOST" != "localhost" ]; then
+    echo -e "${GREEN}网关入口（本机）:    ${YELLOW}http://localhost:${GATEWAY_PORT}${NC}"
+    echo -e "${GREEN}网关入口（局域网）:  ${YELLOW}http://${PUBLIC_HOST}:${GATEWAY_PORT}${NC}"
+    echo -e "${GREEN}Sidecar 管理端:      ${YELLOW}http://${PUBLIC_HOST}:${GATEWAY_PORT}/admin/ui${NC}"
+    echo -e "${GREEN}一次性登录链接（本机）:    ${YELLOW}${MAGIC_LINK_LOCAL}${NC}"
+    echo -e "${GREEN}一次性登录链接（局域网）:  ${YELLOW}${MAGIC_LINK_LAN}${NC}"
+    echo -e "${YELLOW}提示:${NC} ${GREEN}localhost / 127.0.0.1 仅在 Prism 所在主机访问有效；${NC}"
+    echo -e "       ${GREEN}从其它电脑 / 手机访问，请使用上面的局域网链接（${PUBLIC_HOST}）。${NC}"
+    echo -e "       ${GREEN}如需对外暴露公网域名，请用 PRISM_PUBLIC_HOST=your.domain bash deploy.sh。${NC}"
 else
-    echo -e "${YELLOW}Memos PAT:       (未自动获取，请手动在管理界面创建并回填 .env)${NC}"
+    echo -e "${GREEN}网关入口:            ${YELLOW}http://localhost:${GATEWAY_PORT}${NC}"
+    echo -e "${GREEN}Sidecar 管理端:      ${YELLOW}http://localhost:${GATEWAY_PORT}/admin/ui${NC}"
+    echo -e "${GREEN}一次性登录链接:      ${YELLOW}${MAGIC_LINK_LOCAL}${NC}"
+    echo -e "${YELLOW}提示:${NC} ${GREEN}未探测到 LAN IP，仅生成 localhost 入口；${NC}"
+    echo -e "       ${GREEN}如需远程访问，请通过 PRISM_PUBLIC_HOST=<IP或域名> bash deploy.sh 显式指定。${NC}"
+fi
+echo -e "${GREEN}                     ${NC}(点击 magic link 即自动写入 Admin Token，浏览器侧 hash 自动清空)"
+echo -e "${GREEN}Admin Token:         ${BLUE}${CURRENT_TOKEN}${NC}"
+if [ -n "$CURRENT_PAT" ]; then
+    echo -e "${GREEN}Memos PAT:           ${BLUE}${CURRENT_PAT}${NC}"
+else
+    echo -e "${YELLOW}Memos PAT:           (未自动获取，请手动在管理界面创建并回填 .env)${NC}"
 fi
 echo -e "${BLUE}===============================================${NC}"

@@ -120,6 +120,39 @@ bash <(curl -s -L https://raw.githubusercontent.com/nabule/Prism/master/deploy.s
 4. **拉取与热启动**：执行 `docker compose -f docker-compose.release.yml pull` 从官方 Container Registry (GHCR) 一秒拉取 prebuilt 生产级镜像并热启动。
 5. **自动创建 Memos 管理员账号与长期 PAT**：等待 Memos 起来后，自动 `POST /api/v1/users` 创建 host 账号，登录后签发不过期的 `MEMOS_API_TOKEN`（PAT）并写回 `.env`，随后 `docker compose up -d sidecar sidecar-worker` 让其用新 PAT 重建（注意：`docker compose restart` 不会重读 `env_file`，必须 `up -d` 才会拿到新 PAT），无需手动登录 Memos 设置页。初始账号与密码会以注释形式记录在 `.env` 末尾，方便后续登录 Memos 前端。
 
+### 🔑 关于 Admin Token：何时必须粘贴
+
+> [!IMPORTANT]
+> **首次进入 `http://<host>:${GATEWAY_PORT}/admin/ui` 不再要求立即粘贴 Token**。提示词、模型 Provider、文档解析、Memos、提醒、向量检索这 6 个**只读配置面板**会在页面初始化阶段直接拉取并渲染默认值（服务端已对它们去除 `require_admin`，且响应均经 Pydantic 视图脱敏，不含任何 `api_key` / `token` 明文）。这避免了历史版本 "textarea 空白 / Provider 下拉为空" 被误判为 "配置没加载" 的体感坑。
+>
+> **以下场景仍然必须粘贴 `SIDECAR_ADMIN_TOKEN`**（在右上角输入框粘贴后会自动写入 `localStorage["memosima.adminToken"]`，值取自 `deploy.sh` 末尾 banner 或 `.env` 中的 `SIDECAR_ADMIN_TOKEN=`）：
+> - **任何写操作**：保存提示词 / 切换 Provider / 修改 MinerU Token / 修改 Memos PAT / 触发批量重整理 / 删除全部 memo / 重置数据库 / 上传备份等所有 `PUT/POST/DELETE` 端点；
+> - **任何鉴权读端点**：Job 队列、候选标签、提醒列表、业务标签、系统日志，以及 QA / 备份 / 重整理面板的全部交互。
+>
+> 如果只关心默认提示词与 Provider 是否被正确读入，**不粘贴 Token 就能看到**；执行任何修改时若未粘贴 Token，前端会立即提示 "缺少 Admin Token"，请按以下方式取值：
+> ```bash
+> grep ^SIDECAR_ADMIN_TOKEN= .env
+> ```
+>
+> **服务端配置自检**（排除 deploy.sh / 配置文件嫌疑）：
+> ```bash
+> # 6 个公开读端点：无需 Token 即可返回完整 JSON
+> curl http://127.0.0.1:${GATEWAY_PORT:-8085}/admin/prompts
+> curl http://127.0.0.1:${GATEWAY_PORT:-8085}/admin/models
+> curl http://127.0.0.1:${GATEWAY_PORT:-8085}/admin/document-parser
+> curl http://127.0.0.1:${GATEWAY_PORT:-8085}/admin/memos/config
+> curl http://127.0.0.1:${GATEWAY_PORT:-8085}/admin/reminders/config
+> curl http://127.0.0.1:${GATEWAY_PORT:-8085}/admin/vector-search/config
+>
+> # 写端点 / 鉴权读端点：仍需 Bearer Token
+> TOKEN=$(grep ^SIDECAR_ADMIN_TOKEN= .env | cut -d= -f2)
+> curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:${GATEWAY_PORT:-8085}/admin/jobs
+> ```
+>
+> **升级 / 迁移特别注意**：`deploy.sh` 在 `.env` 不存在时会**重新生成** `SIDECAR_ADMIN_TOKEN`（既有 `.env` 会被保留）。在新目录全新跑 `deploy.sh` 后，浏览器里残留的**旧部署 Token 与新 Token 完全不同**，执行任何写操作前必须重新粘贴；继续沿用旧 Token 时所有写端点会返回 `401 {"detail":"Invalid admin token"}`。
+>
+> **提示词级 Provider 字段**（`organize_memo.provider` / `tag_summary.provider` / `reminder_extraction.provider`）在 `config/prompts.yaml` 模板中**故意留空**，UI 下拉框首项 `"使用默认 provider"` 即代表 fallback 到 `config/models.yaml` 的 `default_provider`（默认 `deepseek`）。这是预期设计，**不需要在 yaml 里手动添加 provider 字段**；如需为某个调用点单独指定 Provider，请在 UI 上选择并保存。
+
 ---
 
 ## ⚡ 极速本地实机开发热重载配置
@@ -266,7 +299,7 @@ providers:
 
 ## 🌐 管理 REST API 速查表
 
-所有 `/admin/*` 接口均要求请求头 `Authorization: Bearer ${SIDECAR_ADMIN_TOKEN}`；`/webhooks/memos` 与 `/health` 公开。完整字段、入参 schema、错误码定义请参见 [详细设计文档](https://nabule.github.io/Prism/详细设计.html) 的「管理 REST API 全量索引」章节。
+绝大多数 `/admin/*` 接口都要求请求头 `Authorization: Bearer ${SIDECAR_ADMIN_TOKEN}`；`/webhooks/memos`、`/health` 以及 6 个**公开读端点**（`GET /admin/prompts`、`GET /admin/models`、`GET /admin/document-parser`、`GET /admin/memos/config`、`GET /admin/reminders/config`、`GET /admin/vector-search/config`，响应均经 Pydantic 视图脱敏，不含任何 `api_key` / `token` 明文）允许匿名访问。完整字段、入参 schema、错误码定义请参见 [详细设计文档](https://nabule.github.io/Prism/详细设计.html) 的「管理 REST API 全量索引」章节。
 
 | 分类 | 方法 + 路径 | 说明 |
 | :--- | :--- | :--- |

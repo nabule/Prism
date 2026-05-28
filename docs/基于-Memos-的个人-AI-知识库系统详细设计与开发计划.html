@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>基于 Memos 的个人 AI 知识库系统详细设计与开发计划</title>
-<style>:root{color-scheme:light dark;--bg:#f7f8fa;--fg:#1f2937;--muted:#667085;--panel:#fff;--border:#d0d5dd;--accent:#2563eb;--code:#101828;--codebg:#eef2f6}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{max-width:1040px;margin:0 auto;padding:40px 24px 72px}article{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:32px;box-shadow:0 1px 2px rgba(16,24,40,.05)}h1,h2,h3{line-height:1.25;margin:1.4em 0 .6em}h1{margin-top:0;font-size:2rem}h2{border-top:1px solid var(--border);padding-top:1.1em}a{color:var(--accent)}table{border-collapse:collapse;width:100%;margin:1rem 0;display:block;overflow-x:auto}th,td{border:1px solid var(--border);padding:.55rem .7rem;text-align:left;vertical-align:top}th{background:#f2f4f7}pre{background:var(--codebg);color:var(--code);padding:1rem;border-radius:8px;overflow-x:auto}code{background:var(--codebg);color:var(--code);padding:.12rem .28rem;border-radius:4px}pre code{background:transparent;padding:0}blockquote{border-left:4px solid var(--border);margin:1rem 0;padding:.2rem 1rem;color:var(--muted)}.meta{color:var(--muted);font-size:.92rem;margin-bottom:1.5rem}.toc{background:#f9fafb;border:1px solid var(--border);border-radius:8px;padding:1rem;margin:1rem 0 1.5rem}.toc a{display:inline-block;margin:.15rem .6rem .15rem 0}@media (prefers-color-scheme:dark){:root{--bg:#0b1220;--fg:#e5e7eb;--muted:#9ca3af;--panel:#111827;--border:#374151;--accent:#60a5fa;--code:#e5e7eb;--codebg:#1f2937}th{background:#1f2937}.toc{background:#111827}}</style>
+<style>:root{color-scheme:light dark;--bg:#f7f8fa;--fg:#1f2937;--muted:#667085;--panel:#fff;--border:#d0d5dd;--accent:#2563eb;--code:#101828;--codebg:#eef2f6}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{max-width:1040px;margin:0 auto;padding:40px 24px 72px}article{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:32px;box-shadow:0 1px 2px rgba(16,24,40,.05)}h1,h2,h3{line-height:1.25;margin:1.4em 0 .6em}h1{margin-top:0;font-size:2rem}h2{border-top:1px solid var(--border);padding-top:1.1em}a{color:var(--accent)}table{border-collapse:collapse;width:100%;margin:1rem 0;display:block;overflow-x:auto}th,td{border:1px solid var(--border);padding:.55rem .7rem;text-align:left;vertical-align:top}th{background:#f2f4f7}pre{background:var(--codebg);color:var(--code);padding:1rem;border-radius:8px;overflow-x:auto}code{background:var(--codebg);color:var(--code);padding:.12rem .28rem;border-radius:4px}pre code{background:transparent;padding:0}blockquote{border-left:4px solid var(--border);margin:1rem 0;padding:.2rem 1rem;color:var(--muted)}.meta{color:var(--muted);font-size:.92rem;margin-bottom:1.5rem}.toc{background:#f9fafb;border:1px solid var(--border);border-radius:8px;padding:1rem;margin:1rem 0 1.5rem}.toc a{display:inline-block;margin:.15rem .6rem .15rem 0}figure.shot{margin:1.2rem auto;max-width:960px;text-align:center}figure.shot img{max-width:100%;height:auto;border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 14px rgba(16,24,40,.08)}figure.shot figcaption{color:var(--muted);font-size:.9rem;margin-top:.5rem}@media (prefers-color-scheme:dark){:root{--bg:#0b1220;--fg:#e5e7eb;--muted:#9ca3af;--panel:#111827;--border:#374151;--accent:#60a5fa;--code:#e5e7eb;--codebg:#1f2937}th{background:#1f2937}.toc{background:#111827}}</style>
 </head>
 <body>
 <main>
@@ -47,17 +47,32 @@
 <li><strong>优先匹配旧标签</strong>：如果现有标签（如 <code>#项目B/会议记录</code>）与内容高度契合，AI 将直接使用旧标签，防止标签无限繁殖导致系统混乱。</li>
 <li><strong>智能拓展新标签</strong>：只有在现有标签树均不匹配时，AI 才会生成最贴切的新标签（允许同时生成多个相关标签实现交叉引用），并将其自动挂载到标签树的最合理节点下。</li>
 </ul>
+<figure class="shot">
+  <img src="images/teams-ui/admin-tags.png" alt="管理后台「标签」面板：候选标签审核队列。">
+  <figcaption>图 3-1/3-2：标签面板（<code>#tags</code>）—— 3.1「人工优先」体现在 <code>config/taxonomy.yaml</code> + 数据库 active 标签合并；3.2「先查后建」由下方候选队列承接 AI 提议，必须由人工通过/拒绝。</figcaption>
+</figure>
+
 <h3>3.3 基于标签的自动化文档生成</h3>
 <ul>
 <li><strong>从碎片到结构化阅读</strong>：零散的输入不再只是堆砌。系统可基于特定标签，将名下的所有零碎内容由 AI 串联、润色，重写生成一篇结构完整、连贯的标准文档。</li>
 <li><strong>层级化配置策略</strong>：文档生成支持灵活配置。用户可以全局或手动配置“每级标签下的文档是否自动生成”。例如：配置为只对一级和二级标签（如 <code>#项目A</code>、<code>#项目A/需求</code>）每日定时生成/更新总览文档，而第三级以下标签则作为原始素材池保留碎片形态。</li>
 </ul>
+<figure class="shot">
+  <img src="images/teams-ui/admin-prompts.png" alt="管理后台「AI 配置」面板：tag_summary 等三类提示词的编辑器。">
+  <figcaption>图 3-3：AI 配置面板（<code>#prompts</code>）—— 标签级文档生成所用的 <code>tag_summary</code> Prompt 模板在此热修改；策略层（每日/每周触发）由 <code>config/taxonomy.yaml</code> 控制。</figcaption>
+</figure>
+
 <h3>3.4 人机在环澄清机制 (Human-in-the-Loop Clarification)</h3>
 <ul>
 <li><strong>拒绝强行入库</strong>：当用户输入的零碎内容存在明显的逻辑缺失、指代不明，或者大模型无法确定其应该归属的标签层级时，系统将触发中断机制。</li>
 <li><strong>反问与确认</strong>：AI 会通过调用 Memos API（例如在该条笔记下自动回复一条评论）向用户明确提出疑问：“<em>您提到的‘网关配置’是指归入 #架构/生产环境 还是 #架构/测试环境？缺少端口信息，请补充。</em>”</li>
 <li><strong>状态闭环</strong>：该内容将被标记为 <code>#待澄清</code>。只有在用户回复并补充信息后，AI 才会恢复执行，完成最终的标签生成与内容规整。</li>
 </ul>
+<figure class="shot">
+  <img src="images/teams-ui/admin-jobs.png" alt="管理后台「任务」面板：按状态过滤、查看任务列表、单条重试。">
+  <figcaption>图 3-4：任务面板（<code>#jobs</code>）—— 待澄清的 memo 对应 <code>waiting_user</code> 状态，用户在 Memos 评论补充后由 worker 轮询自动恢复处理。</figcaption>
+</figure>
+
 <hr>
 <h2>4. 核心功能实现逻辑（工作流）</h2>
 <h3>4.1 零碎内容的智能梳理与澄清</h3>
@@ -82,6 +97,11 @@
 <li>虽然去除了物理的无语义文本切片，但在问答检索时，系统依然会在后台将完整的长文和零碎笔记通过 <code>sqlite-vec</code> 进行向量化存储。</li>
 <li>用户输入包含 <code>#问答</code> 标签的问题后，系统不仅通过向量相似度检索相关内容，还会利用多级标签的层次关系召回同标签下的补充信息，交由大模型生成准确解答，并附带原文链接溯源。</li>
 </ul>
+<figure class="shot">
+  <img src="images/teams-ui/admin-qa.png" alt="管理后台「QA 离线问答」面板：标签药丸 + 关键字 + 向量开关 + 一键生成超级 Prompt。">
+  <figcaption>图 4-3：QA 离线问答面板（<code>#qa</code>）—— 4.3 描述的「向量检索 + 标签层级召回」最终落地为这个超级 Prompt 编译器；标签选择 + 向量开关 + 关键字三路融合后一键复制。</figcaption>
+</figure>
+
 <hr>
 <h2>5. 技术栈配置详单</h2>
 <ul>

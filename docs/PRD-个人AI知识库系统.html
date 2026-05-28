@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>个人 AI 知识库系统 PRD</title>
-<style>:root{color-scheme:light dark;--bg:#f7f8fa;--fg:#1f2937;--muted:#667085;--panel:#fff;--border:#d0d5dd;--accent:#2563eb;--code:#101828;--codebg:#eef2f6}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{max-width:1040px;margin:0 auto;padding:40px 24px 72px}article{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:32px;box-shadow:0 1px 2px rgba(16,24,40,.05)}h1,h2,h3{line-height:1.25;margin:1.4em 0 .6em}h1{margin-top:0;font-size:2rem}h2{border-top:1px solid var(--border);padding-top:1.1em}a{color:var(--accent)}table{border-collapse:collapse;width:100%;margin:1rem 0;display:block;overflow-x:auto}th,td{border:1px solid var(--border);padding:.55rem .7rem;text-align:left;vertical-align:top}th{background:#f2f4f7}pre{background:var(--codebg);color:var(--code);padding:1rem;border-radius:8px;overflow-x:auto}code{background:var(--codebg);color:var(--code);padding:.12rem .28rem;border-radius:4px}pre code{background:transparent;padding:0}blockquote{border-left:4px solid var(--border);margin:1rem 0;padding:.2rem 1rem;color:var(--muted)}.meta{color:var(--muted);font-size:.92rem;margin-bottom:1.5rem}.toc{background:#f9fafb;border:1px solid var(--border);border-radius:8px;padding:1rem;margin:1rem 0 1.5rem}.toc a{display:inline-block;margin:.15rem .6rem .15rem 0}@media (prefers-color-scheme:dark){:root{--bg:#0b1220;--fg:#e5e7eb;--muted:#9ca3af;--panel:#111827;--border:#374151;--accent:#60a5fa;--code:#e5e7eb;--codebg:#1f2937}th{background:#1f2937}.toc{background:#111827}}</style>
+<style>:root{color-scheme:light dark;--bg:#f7f8fa;--fg:#1f2937;--muted:#667085;--panel:#fff;--border:#d0d5dd;--accent:#2563eb;--code:#101828;--codebg:#eef2f6}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{max-width:1040px;margin:0 auto;padding:40px 24px 72px}article{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:32px;box-shadow:0 1px 2px rgba(16,24,40,.05)}h1,h2,h3{line-height:1.25;margin:1.4em 0 .6em}h1{margin-top:0;font-size:2rem}h2{border-top:1px solid var(--border);padding-top:1.1em}a{color:var(--accent)}table{border-collapse:collapse;width:100%;margin:1rem 0;display:block;overflow-x:auto}th,td{border:1px solid var(--border);padding:.55rem .7rem;text-align:left;vertical-align:top}th{background:#f2f4f7}pre{background:var(--codebg);color:var(--code);padding:1rem;border-radius:8px;overflow-x:auto}code{background:var(--codebg);color:var(--code);padding:.12rem .28rem;border-radius:4px}pre code{background:transparent;padding:0}blockquote{border-left:4px solid var(--border);margin:1rem 0;padding:.2rem 1rem;color:var(--muted)}.meta{color:var(--muted);font-size:.92rem;margin-bottom:1.5rem}.toc{background:#f9fafb;border:1px solid var(--border);border-radius:8px;padding:1rem;margin:1rem 0 1.5rem}.toc a{display:inline-block;margin:.15rem .6rem .15rem 0}figure.shot{margin:1.2rem auto;max-width:960px;text-align:center}figure.shot img{max-width:100%;height:auto;border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 14px rgba(16,24,40,.08)}figure.shot figcaption{color:var(--muted);font-size:.9rem;margin-top:.5rem}@media (prefers-color-scheme:dark){:root{--bg:#0b1220;--fg:#e5e7eb;--muted:#9ca3af;--panel:#111827;--border:#374151;--accent:#60a5fa;--code:#e5e7eb;--codebg:#1f2937}th{background:#1f2937}.toc{background:#111827}}</style>
 </head>
 <body>
 <main>
@@ -173,6 +173,11 @@
 <li>对重复事件进行幂等处理。</li>
 <li>记录任务状态、错误信息和重试次数。</li>
 </ul>
+<figure class="shot">
+  <img src="images/teams-ui/admin-memos.png" alt="管理后台「Memos 同步」面板：Base URL / PAT / 入口模式（poll / webhook）/ 可见性配置。">
+  <figcaption>图 6-1：Memos 同步面板（<code>#memos</code>）—— 本节需求最终落到这里：Base URL、PAT、ingestion_mode（poll / webhook）三个核心字段全部 UI 化。</figcaption>
+</figure>
+
 <h3>6.2 AI 整理 memo</h3>
 <ul>
 <li>保留原始 memo。</li>
@@ -182,6 +187,11 @@
 <li>处理成功后写入向量索引。</li>
 <li>处理失败时标记 <code>#系统/处理失败</code> 或记录失败任务。</li>
 </ul>
+<figure class="shot">
+  <img src="images/teams-ui/admin-jobs.png" alt="管理后台「任务」面板：按状态过滤的整理任务队列，支持单条重试。">
+  <figcaption>图 6-2：任务面板（<code>#jobs</code>）—— 每条 memo 的整理生命周期都落到 job 行，状态包括 <code>pending</code> / <code>processing</code> / <code>done</code> / <code>failed</code> / <code>waiting_user</code>。</figcaption>
+</figure>
+
 <h3>6.3 人机澄清</h3>
 <ul>
 <li>当内容指代不明、标签归属不确定或关键信息缺失时，系统进入待澄清状态。</li>
@@ -189,6 +199,11 @@
 <li>原始 memo 或任务状态标记为待澄清。</li>
 <li>用户补充后，系统恢复处理。</li>
 </ul>
+<figure class="shot">
+  <img src="images/teams-ui/admin-overview.png" alt="管理后台首页：健康卡片 + 任务计数卡片，含 waiting_user 数量。">
+  <figcaption>图 6-3：管理后台首页（<code>#overview</code>）—— 待澄清任务在概览卡片里聚合，用户补充 memo 后由 worker 自动恢复处理。</figcaption>
+</figure>
+
 <h3>6.4 待审核标签</h3>
 <ul>
 <li>AI 提出新标签时，创建待审核记录。</li>
@@ -196,6 +211,11 @@
 <li>审核通过后触发相关自动文档策略。</li>
 <li>审核拒绝后任务可重新绑定到已有标签。</li>
 </ul>
+<figure class="shot">
+  <img src="images/teams-ui/admin-tags.png" alt="管理后台「标签」面板：上方按标签生成总结，下方候选标签审核队列。">
+  <figcaption>图 6-4：标签面板（<code>#tags</code>）—— 下方候选标签审核队列正是本节描述的「通过 / 拒绝」一键审核入口。</figcaption>
+</figure>
+
 <h3>6.5 附件解析</h3>
 <p>第一版解析以下格式：</p>
 <table>
@@ -235,6 +255,11 @@
 </tr>
 </tbody></table>
 <p>其他格式只保存附件信息，不进入解析和向量化。</p>
+<figure class="shot">
+  <img src="images/teams-ui/admin-docparser.png" alt="管理后台「文档解析」面板：provider / Base URL / Token / 模型版本 / 表格、公式、OCR 开关。">
+  <figcaption>图 6-5：文档解析面板（<code>#docparser</code>）—— <code>.txt</code>/<code>.md</code> 走本地直读；Office/PDF 走 MinerU；<code>.drawio</code>/Mind Elixir <code>.json</code> 走本地离线解析（零网络）。</figcaption>
+</figure>
+
 <h3>6.6 自动文档生成</h3>
 <p>系统支持以下触发模式：</p>
 <ol>
@@ -245,6 +270,11 @@
 <li>手动生成某一级标签以下全部文档。</li>
 </ol>
 <p>生成文档以新 memo 形式写入 Memos，并标记 <code>#系统/AI文档</code>。同一文档保留最近 N 个版本，默认 N=5。</p>
+<figure class="shot">
+  <img src="images/teams-ui/admin-prompts.png" alt="管理后台「AI 配置」面板：tag_summary 等三类提示词的编辑器。">
+  <figcaption>图 6-6：AI 配置面板（<code>#prompts</code>）—— 自动文档生成所使用的 <code>tag_summary</code> Prompt 模板在此热修改，保存即覆盖 <code>config/prompts.yaml</code>。</figcaption>
+</figure>
+
 <h3>6.7 简单问答</h3>
 <p>第一版不做独立问答页面。建议支持以下最小闭环：</p>
 <ol>
@@ -255,6 +285,11 @@
 <li>系统新建回答 memo 或在原 memo 评论中回复。</li>
 </ol>
 <p>默认建议新建回答 memo，并关联问题 memo，保持与 AI 整理结果一致。</p>
+<figure class="shot">
+  <img src="images/teams-ui/admin-qa.png" alt="管理后台「QA 离线问答」面板：标签药丸 + 关键字 + 向量开关 + 一键生成超级 Prompt。">
+  <figcaption>图 6-7：QA 离线问答面板（<code>#qa</code>）—— 实际实现把「简单问答」做成了离线超级 Prompt 编译器，把 memo + 整理摘要 + 附件 Markdown 一次拼齐，复制到任意外部大模型即可。</figcaption>
+</figure>
+
 <h3>6.8 备份恢复</h3>
 <p>第一版支持本地目录备份。备份内容包括：</p>
 <ul>
@@ -268,6 +303,11 @@
 <li>版本信息与恢复说明。</li>
 </ul>
 <p>恢复流程需要支持校验备份包完整性，并提供恢复前检查。</p>
+<figure class="shot">
+  <img src="images/teams-ui/admin-backup.png" alt="管理后台「备份」面板：下载备份 ZIP + 上传恢复入口。">
+  <figcaption>图 6-8：备份面板（<code>#backup</code>）—— 一键下载 = 全量 SQLite + 非机密 YAML 配置；真实 API key（DeepSeek/MinerU/SiliconFlow/Bark）不会被打包，恢复后需重新填写。</figcaption>
+</figure>
+
 <h2>7. 非功能需求</h2>
 <h3>7.1 隐私与安全</h3>
 <ul>

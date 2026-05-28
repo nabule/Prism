@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>个人 AI 知识库系统开发计划与验收标准</title>
-<style>:root{color-scheme:light dark;--bg:#f7f8fa;--fg:#1f2937;--muted:#667085;--panel:#fff;--border:#d0d5dd;--accent:#2563eb;--code:#101828;--codebg:#eef2f6}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{max-width:1040px;margin:0 auto;padding:40px 24px 72px}article{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:32px;box-shadow:0 1px 2px rgba(16,24,40,.05)}h1,h2,h3{line-height:1.25;margin:1.4em 0 .6em}h1{margin-top:0;font-size:2rem}h2{border-top:1px solid var(--border);padding-top:1.1em}a{color:var(--accent)}table{border-collapse:collapse;width:100%;margin:1rem 0;display:block;overflow-x:auto}th,td{border:1px solid var(--border);padding:.55rem .7rem;text-align:left;vertical-align:top}th{background:#f2f4f7}pre{background:var(--codebg);color:var(--code);padding:1rem;border-radius:8px;overflow-x:auto}code{background:var(--codebg);color:var(--code);padding:.12rem .28rem;border-radius:4px}pre code{background:transparent;padding:0}blockquote{border-left:4px solid var(--border);margin:1rem 0;padding:.2rem 1rem;color:var(--muted)}.meta{color:var(--muted);font-size:.92rem;margin-bottom:1.5rem}.toc{background:#f9fafb;border:1px solid var(--border);border-radius:8px;padding:1rem;margin:1rem 0 1.5rem}.toc a{display:inline-block;margin:.15rem .6rem .15rem 0}@media (prefers-color-scheme:dark){:root{--bg:#0b1220;--fg:#e5e7eb;--muted:#9ca3af;--panel:#111827;--border:#374151;--accent:#60a5fa;--code:#e5e7eb;--codebg:#1f2937}th{background:#1f2937}.toc{background:#111827}}</style>
+<style>:root{color-scheme:light dark;--bg:#f7f8fa;--fg:#1f2937;--muted:#667085;--panel:#fff;--border:#d0d5dd;--accent:#2563eb;--code:#101828;--codebg:#eef2f6}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{max-width:1040px;margin:0 auto;padding:40px 24px 72px}article{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:32px;box-shadow:0 1px 2px rgba(16,24,40,.05)}h1,h2,h3{line-height:1.25;margin:1.4em 0 .6em}h1{margin-top:0;font-size:2rem}h2{border-top:1px solid var(--border);padding-top:1.1em}a{color:var(--accent)}table{border-collapse:collapse;width:100%;margin:1rem 0;display:block;overflow-x:auto}th,td{border:1px solid var(--border);padding:.55rem .7rem;text-align:left;vertical-align:top}th{background:#f2f4f7}pre{background:var(--codebg);color:var(--code);padding:1rem;border-radius:8px;overflow-x:auto}code{background:var(--codebg);color:var(--code);padding:.12rem .28rem;border-radius:4px}pre code{background:transparent;padding:0}blockquote{border-left:4px solid var(--border);margin:1rem 0;padding:.2rem 1rem;color:var(--muted)}.meta{color:var(--muted);font-size:.92rem;margin-bottom:1.5rem}.toc{background:#f9fafb;border:1px solid var(--border);border-radius:8px;padding:1rem;margin:1rem 0 1.5rem}.toc a{display:inline-block;margin:.15rem .6rem .15rem 0}figure.shot{margin:1.2rem auto;max-width:960px;text-align:center}figure.shot img{max-width:100%;height:auto;border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 14px rgba(16,24,40,.08)}figure.shot figcaption{color:var(--muted);font-size:.9rem;margin-top:.5rem}.shot-grid{display:grid;gap:16px;margin:1.2rem 0;grid-template-columns:repeat(auto-fit,minmax(360px,1fr))}.shot-grid figure.shot{margin:0}@media (prefers-color-scheme:dark){:root{--bg:#0b1220;--fg:#e5e7eb;--muted:#9ca3af;--panel:#111827;--border:#374151;--accent:#60a5fa;--code:#e5e7eb;--codebg:#1f2937}th{background:#1f2937}.toc{background:#111827}}</style>
 </head>
 <body>
 <main>
@@ -158,6 +158,11 @@
 -&gt; 原 memo 下出现 AI 澄清评论
 -&gt; 任务进入 waiting_user
 </code></pre>
+<figure class="shot">
+  <img src="images/teams-ui/admin-tags.png" alt="管理后台「标签」面板：候选标签审核队列。">
+  <figcaption>图 P2：标签审核面板（<code>#tags</code>）—— P2 阶段「标签审核」最终验收点：候选标签队列、通过/拒绝按钮、tag_summary 表单均上线。</figcaption>
+</figure>
+
 <h2>6. P3：附件解析、索引、简单问答</h2>
 <h3>6.1 目标</h3>
 <p>完成指定附件格式解析、语义单元索引和最小问答闭环。</p>
@@ -196,6 +201,17 @@
 -&gt; 新建回答 memo
 -&gt; 回答包含来源 memo 链接
 </code></pre>
+<div class="shot-grid">
+  <figure class="shot">
+    <img src="images/teams-ui/admin-docparser.png" alt="管理后台「文档解析」面板：MinerU + 本地解析的 provider 切换。">
+    <figcaption>图 P3-a：文档解析面板（<code>#docparser</code>）—— Office/PDF/<code>.drawio</code>/Mind Elixir 解析路由集中在此切换。</figcaption>
+  </figure>
+  <figure class="shot">
+    <img src="images/teams-ui/admin-qa.png" alt="管理后台「QA 离线问答」面板：超级 Prompt 编译器。">
+    <figcaption>图 P3-b：QA 面板（<code>#qa</code>）—— 简单问答闭环在此实现为离线超级 Prompt（本地拼装 + 一键复制到外部 LLM）。</figcaption>
+  </figure>
+</div>
+
 <h2>7. P4：自动文档、版本、备份恢复</h2>
 <h3>7.1 目标</h3>
 <p>完成多触发模式自动文档生成、最近 N 版保留、本地备份恢复。</p>
@@ -239,6 +255,11 @@
 -&gt; 在测试目录恢复
 -&gt; 服务可启动且数据可读
 </code></pre>
+<figure class="shot">
+  <img src="images/teams-ui/admin-backup.png" alt="管理后台「备份」面板：下载备份 ZIP + 上传恢复入口。">
+  <figcaption>图 P4：备份面板（<code>#backup</code>）—— P4 阶段「版本、备份恢复」最终验收点：一键下载备份 ZIP（全量 SQLite + 非机密 YAML），上传 ZIP 可触发恢复流程。</figcaption>
+</figure>
+
 <h2>8. P5：稳定性、文档、部署验收</h2>
 <h3>8.1 目标</h3>
 <p>完善部署、使用、故障处理和真实验收文档。</p>

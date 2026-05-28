@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>个人 AI 知识库系统技术架构设计</title>
-<style>:root{color-scheme:light dark;--bg:#f7f8fa;--fg:#1f2937;--muted:#667085;--panel:#fff;--border:#d0d5dd;--accent:#2563eb;--code:#101828;--codebg:#eef2f6}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{max-width:1040px;margin:0 auto;padding:40px 24px 72px}article{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:32px;box-shadow:0 1px 2px rgba(16,24,40,.05)}h1,h2,h3{line-height:1.25;margin:1.4em 0 .6em}h1{margin-top:0;font-size:2rem}h2{border-top:1px solid var(--border);padding-top:1.1em}a{color:var(--accent)}table{border-collapse:collapse;width:100%;margin:1rem 0;display:block;overflow-x:auto}th,td{border:1px solid var(--border);padding:.55rem .7rem;text-align:left;vertical-align:top}th{background:#f2f4f7}pre{background:var(--codebg);color:var(--code);padding:1rem;border-radius:8px;overflow-x:auto}code{background:var(--codebg);color:var(--code);padding:.12rem .28rem;border-radius:4px}pre code{background:transparent;padding:0}blockquote{border-left:4px solid var(--border);margin:1rem 0;padding:.2rem 1rem;color:var(--muted)}.meta{color:var(--muted);font-size:.92rem;margin-bottom:1.5rem}.toc{background:#f9fafb;border:1px solid var(--border);border-radius:8px;padding:1rem;margin:1rem 0 1.5rem}.toc a{display:inline-block;margin:.15rem .6rem .15rem 0}@media (prefers-color-scheme:dark){:root{--bg:#0b1220;--fg:#e5e7eb;--muted:#9ca3af;--panel:#111827;--border:#374151;--accent:#60a5fa;--code:#e5e7eb;--codebg:#1f2937}th{background:#1f2937}.toc{background:#111827}}</style>
+<style>:root{color-scheme:light dark;--bg:#f7f8fa;--fg:#1f2937;--muted:#667085;--panel:#fff;--border:#d0d5dd;--accent:#2563eb;--code:#101828;--codebg:#eef2f6}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{max-width:1040px;margin:0 auto;padding:40px 24px 72px}article{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:32px;box-shadow:0 1px 2px rgba(16,24,40,.05)}h1,h2,h3{line-height:1.25;margin:1.4em 0 .6em}h1{margin-top:0;font-size:2rem}h2{border-top:1px solid var(--border);padding-top:1.1em}a{color:var(--accent)}table{border-collapse:collapse;width:100%;margin:1rem 0;display:block;overflow-x:auto}th,td{border:1px solid var(--border);padding:.55rem .7rem;text-align:left;vertical-align:top}th{background:#f2f4f7}pre{background:var(--codebg);color:var(--code);padding:1rem;border-radius:8px;overflow-x:auto}code{background:var(--codebg);color:var(--code);padding:.12rem .28rem;border-radius:4px}pre code{background:transparent;padding:0}blockquote{border-left:4px solid var(--border);margin:1rem 0;padding:.2rem 1rem;color:var(--muted)}.meta{color:var(--muted);font-size:.92rem;margin-bottom:1.5rem}.toc{background:#f9fafb;border:1px solid var(--border);border-radius:8px;padding:1rem;margin:1rem 0 1.5rem}.toc a{display:inline-block;margin:.15rem .6rem .15rem 0}figure.shot{margin:1.2rem auto;max-width:960px;text-align:center}figure.shot img{max-width:100%;height:auto;border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 14px rgba(16,24,40,.08)}figure.shot figcaption{color:var(--muted);font-size:.9rem;margin-top:.5rem}.shot-grid{display:grid;gap:16px;margin:1.2rem 0;grid-template-columns:repeat(auto-fit,minmax(360px,1fr))}.shot-grid figure.shot{margin:0}@media (prefers-color-scheme:dark){:root{--bg:#0b1220;--fg:#e5e7eb;--muted:#9ca3af;--panel:#111827;--border:#374151;--accent:#60a5fa;--code:#e5e7eb;--codebg:#1f2937}th{background:#1f2937}.toc{background:#111827}}</style>
 </head>
 <body>
 <main>
@@ -107,6 +107,11 @@ POST /admin/backups
 GET  /admin/backups
 POST /admin/backups/{id}/verify
 </code></pre>
+<figure class="shot">
+  <img src="images/teams-ui/admin-overview.png" alt="管理后台首页：健康卡片、常用入口、备份快捷入口和 4 大功能 tab 组。">
+  <figcaption>图 4-1：API 模块对应的 UI 入口（<code>#overview</code>）—— 健康检查、tag-candidates 审核、文档生成、备份接口均聚合在管理后台首页的快捷入口。</figcaption>
+</figure>
+
 <h3>4.2 Memos Client</h3>
 <p>职责：</p>
 <ul>
@@ -118,6 +123,11 @@ POST /admin/backups/{id}/verify
 <li>下载附件资源。</li>
 </ul>
 <p>需要用集成测试校验 Memos 当前版本接口，避免依赖过期路径。</p>
+<figure class="shot">
+  <img src="images/teams-ui/admin-memos.png" alt="管理后台「Memos 同步」面板：Base URL / PAT / 入口模式 / 可见性配置。">
+  <figcaption>图 4-2：Memos 同步面板（<code>#memos</code>）—— Client 模块连接 Memos 用的 Base URL、PAT、ingestion_mode 配置全部在此 UI 化，无需改 YAML。</figcaption>
+</figure>
+
 <h3>4.3 任务系统</h3>
 <p>Webhook 不直接执行 AI 处理，只创建任务。</p>
 <p>任务类型：</p>
@@ -132,6 +142,11 @@ backup_verify
 backup_restore
 </code></pre>
 <p>MVP 可用 SQLite 任务表加轮询 worker。后续可替换为 Redis Queue、Celery 或 Dramatiq。</p>
+<figure class="shot">
+  <img src="images/teams-ui/admin-jobs.png" alt="管理后台「任务」面板：按状态过滤、查看任务列表、单条重试。">
+  <figcaption>图 4-3：任务面板（<code>#jobs</code>）—— 上述 9 类任务的实时状态、payload、错误信息和重试入口都在这里查看。</figcaption>
+</figure>
+
 <h3>4.4 LLM 网关</h3>
 <p>使用 OpenAI-compatible 抽象，支持：</p>
 <ul>
@@ -178,7 +193,35 @@ backup_restore
 <li>模型输出按 JSON 对象校验，字段包含 <code>title</code>、<code>summary</code>、<code>key_points</code>、<code>todos</code>、<code>needs_clarification</code> 和 <code>clarification_question</code>。</li>
 <li>未配置 API key 时，worker 自动回退到本地模板整理。</li>
 </ul>
+<figure class="shot">
+  <img src="images/teams-ui/admin-models.png" alt="管理后台「大模型」面板：provider 下拉、Base URL、模型名、Key 环境变量、API Key 留空提示。">
+  <figcaption>图 4-4：大模型 provider 配置面板（<code>#models</code>）—— OpenAI-compatible 抽象的具体 provider、Base URL、模型版本、<code>api_key_env</code> 在此 UI 化；保存写入 <code>config/models.yaml</code>。</figcaption>
+</figure>
+
 <h3>4.5 标签树模块</h3>
+<p>Sidecar 持有正式标签树、候选标签、别名和禁用词。Memos 中的标签只作为展示与检索入口。</p>
+<p>核心能力：</p>
+<ul>
+<li>加载标签树配置。</li>
+<li>查询相似标签。</li>
+<li>校验标签格式。</li>
+<li>创建候选标签。</li>
+<li>审核通过或拒绝。当前审核通过会写入 <code>business_tags</code> 表并标记为 <code>active</code>，worker 会合并配置标签和数据库 active 标签。</li>
+<li>导出标签树用于备份。</li>
+</ul>
+<p>标签状态：</p>
+<pre><code class="language-text">active
+candidate
+rejected
+disabled
+merged
+</code></pre>
+<figure class="shot">
+  <img src="images/teams-ui/admin-tags.png" alt="管理后台「标签」面板：上方按标签生成总结，下方候选标签审核队列。">
+  <figcaption>图 4-5：标签面板（<code>#tags</code>）—— 上方 tag-summary 多药丸输入，下方候选标签队列对应「审核通过 / 拒绝」核心能力。</figcaption>
+</figure>
+
+<h3>4.6 附件解析模块</h3>
 <p>Sidecar 持有正式标签树、候选标签、别名和禁用词。Memos 中的标签只作为展示与检索入口。</p>
 <p>核心能力：</p>
 <ul>
@@ -241,6 +284,11 @@ merged
 <li>不解析未知格式。</li>
 <li>解析失败保留原始附件链接和错误原因。</li>
 </ul>
+<figure class="shot">
+  <img src="images/teams-ui/admin-docparser.png" alt="管理后台「文档解析」面板：provider / Base URL / Token / 模型版本 / 表格、公式、OCR 开关。">
+  <figcaption>图 4-6：文档解析面板（<code>#docparser</code>）—— Office/PDF 走 MinerU；<code>.drawio</code>、Mind Elixir JSON 走本地离线解析；所有开关和 provider 切换在此 UI 化。</figcaption>
+</figure>
+
 <h3>4.7 文档生成模块</h3>
 <p>文档生成配置：</p>
 <pre><code class="language-yaml">defaults:
@@ -270,6 +318,11 @@ rules:
 -&gt; 清理超过 N 个版本的旧文档
 -&gt; 写入索引
 </code></pre>
+<figure class="shot">
+  <img src="images/teams-ui/admin-prompts.png" alt="管理后台「AI 配置」面板：tag_summary 等三类提示词的编辑器。">
+  <figcaption>图 4-7：AI 配置面板（<code>#prompts</code>）—— 文档生成所使用的 <code>tag_summary</code> Prompt 模板在此热修改，无需重启 worker。</figcaption>
+</figure>
+
 <h3>4.8 RAG 与问答模块</h3>
 <p>用户体验上不暴露传统 chunk。内部使用语义单元。</p>
 <p>语义单元类型：</p>
@@ -296,6 +349,17 @@ rules:
 -&gt; 新建 AI 回答 memo
 -&gt; 关联问题 memo 与来源 memo
 </code></pre>
+<div class="shot-grid">
+  <figure class="shot">
+    <img src="images/teams-ui/admin-qa.png" alt="管理后台「QA 离线问答」面板：标签药丸 + 关键字 + 向量开关 + 一键生成超级 Prompt。">
+    <figcaption>图 4-8a：QA 离线问答面板（<code>#qa</code>）—— 实际落地把 RAG 做成超级 Prompt 编译器，用户标签 + 关键字 + 向量开关组合召回，一键复制。</figcaption>
+  </figure>
+  <figure class="shot">
+    <img src="images/teams-ui/admin-vector-search.png" alt="管理后台「向量库」配置面板：开关、Embedding 模型、Base URL、API Key。">
+    <figcaption>图 4-8b：向量库面板（<code>#vector-search</code>）—— 决定上述检索策略 1 是否启用、用哪个 Embedding 模型与 provider。</figcaption>
+  </figure>
+</div>
+
 <h3>4.9 备份恢复模块</h3>
 <p>本地备份目录结构：</p>
 <pre><code class="language-text">backups/
@@ -329,6 +393,11 @@ rules:
 <li>启动服务。</li>
 <li>执行健康检查与索引校验。</li>
 </ol>
+<figure class="shot">
+  <img src="images/teams-ui/admin-backup.png" alt="管理后台「备份」面板：下载备份 ZIP + 上传恢复入口。">
+  <figcaption>图 4-9：备份面板（<code>#backup</code>）—— 一键下载 = 全量 SQLite + 非机密 YAML；上传 ZIP 可触发恢复流程。真实 API key 不会被打包。</figcaption>
+</figure>
+
 <h2>5. 数据库设计</h2>
 <h3>5.1 <code>workspaces</code></h3>
 <p>预留多人和多空间。</p>

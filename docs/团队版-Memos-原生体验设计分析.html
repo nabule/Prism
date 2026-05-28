@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>团队版 Memos 原生体验设计分析</title>
+<style>:root{color-scheme:light dark;--bg:#f7f8fa;--fg:#1f2937;--muted:#667085;--panel:#fff;--border:#d0d5dd;--accent:#2563eb;--code:#101828;--codebg:#eef2f6;--warn:#b45309;--ok:#15803d}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{max-width:1080px;margin:0 auto;padding:40px 24px 72px}article{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:32px;box-shadow:0 1px 2px rgba(16,24,40,.05)}h1,h2,h3{line-height:1.25;margin:1.4em 0 .6em}h1{margin-top:0;font-size:2rem}h2{border-top:1px solid var(--border);padding-top:1.1em;font-size:1.5rem}h3{font-size:1.18rem;color:var(--accent)}a{color:var(--accent)}table{border-collapse:collapse;width:100%;margin:1rem 0;display:block;overflow-x:auto}th,td{border:1px solid var(--border);padding:.55rem .7rem;text-align:left;vertical-align:top}th{background:#f2f4f7}pre{background:var(--codebg);color:var(--code);padding:1rem;border-radius:8px;overflow-x:auto;font-size:.88rem;line-height:1.5}code{background:var(--codebg);color:var(--code);padding:.12rem .28rem;border-radius:4px}pre code{background:transparent;padding:0}blockquote{border-left:4px solid var(--accent);margin:1rem 0;padding:.4rem 1rem;color:var(--muted);background:#f3f6fb}.meta{color:var(--muted);font-size:.92rem;margin-bottom:1.5rem}.toc{background:#f9fafb;border:1px solid var(--border);border-radius:8px;padding:1rem 1.2rem;margin:1rem 0 2rem;font-size:.94rem}.toc h2{border:0;padding:0;margin:0 0 .6rem;font-size:1.1rem;color:var(--fg)}.toc ol{margin:0;padding-left:1.4rem}.toc li{margin:.18rem 0}.toc a{text-decoration:none}.callout{border-left:4px solid var(--warn);background:#fef3c7;color:#7c2d12;padding:.75rem 1rem;margin:1rem 0;border-radius:0 6px 6px 0}.callout.ok{border-left-color:var(--ok);background:#dcfce7;color:#14532d}.callout.archive{border-left-color:var(--muted);background:#f2f4f7;color:#475569}.center{text-align:center}.bad{color:#b91c1c}.ok-icon{color:#15803d}.mid{color:#b45309}@media (prefers-color-scheme:dark){:root{--bg:#0b1220;--fg:#e5e7eb;--muted:#9ca3af;--panel:#111827;--border:#374151;--accent:#60a5fa;--code:#e5e7eb;--codebg:#1f2937}th{background:#1f2937}.toc,blockquote{background:#111827}.callout{background:#3f2d0d;color:#fde68a}.callout.ok{background:#0f3a1d;color:#bbf7d0}.callout.archive{background:#1f2937;color:#cbd5e1}}</style>
+</head>
+<body>
+<main>
+<article>
+<div class="meta">归档于 2026-05-28 · 分支 <code>feature/team-knowledge-base</code> · 来源：开发者讨论纪要</div>
+
+<h1>团队版 Memos 原生体验设计分析</h1>
+
+<div class="callout archive">
+  <strong>📦 归档说明</strong>：本文档分析的是「能否让团队版与个人版一样，把写/读体验放在 Memos UI 内」。经讨论<strong>决定暂不实施</strong>，团队版功能保持当前形态（独立 <code>/teams/ui</code> 入口 + Sidecar 自建 <code>team_entries</code> 表）。本文存档供后续如再次评估时直接复用，避免重新讨论同一架构问题。
+</div>
+
+<div class="toc">
+  <h2>目录</h2>
+  <ol>
+    <li><a href="#s1">需求对齐</a></li>
+    <li><a href="#s2">核心障碍：Memos 没有「团队」概念</a></li>
+    <li><a href="#s3">四条可行路径</a></li>
+    <li><a href="#s4">方案对比矩阵</a></li>
+    <li><a href="#s5">推荐结论</a></li>
+    <li><a href="#s6">未决决策点</a></li>
+    <li><a href="#s7">路径 C 的实施分期（若未来重启）</a></li>
+    <li><a href="#s8">触发重新评估的条件</a></li>
+  </ol>
+</div>
+
+<h2 id="s1">1. 需求对齐</h2>
+<p>目标态对齐如下：</p>
+<table>
+  <thead><tr><th>能力</th><th>个人版当前</th><th>团队版目标</th></tr></thead>
+  <tbody>
+    <tr><td>写入笔记</td><td>用户在 Memos UI 写 memo</td><td>团队成员在 Memos UI 写 memo</td></tr>
+    <tr><td>阅读 AI 整理</td><td>Memos UI 里读原 memo + AI 整理 memo（通过 <code>REFERENCE</code> 关联展示）</td><td>团队成员在 Memos UI 里读自己/队友的原 memo + AI 整理 memo</td></tr>
+    <tr><td>管理</td><td>管理员在 <code>/admin/ui</code> 管理任务/标签/提醒/备份</td><td>管理员在 <code>/admin/ui</code> 管理团队 + 任务/标签/提醒/备份</td></tr>
+  </tbody>
+</table>
+<p>等价于在问：<strong>能否让团队成员的写/读完全发生在 Memos UI 内？</strong></p>
+
+<h2 id="s2">2. 核心障碍：Memos 没有「团队」概念</h2>
+<p>必须先讲清这一点，否则所有方案都站不住：</p>
+<ol>
+  <li><strong>Memos 是单用户笔记应用</strong>：一个账号 = 一个独立笔记空间。没有 workspace / team / namespace 这类概念。</li>
+  <li><strong>可见性只有 3 档</strong>：<code>PRIVATE</code>（仅 owner）/ <code>PROTECTED</code>（任何登录用户可见）/ <code>PUBLIC</code>（匿名可见）。<strong>没有「这条只给小组 A 看」</strong>。</li>
+  <li><strong>没有 per-tag ACL</strong>：不能声明「<code>#team/A/*</code> 只对 A 组成员可见」。Memos 不知道「组」是什么。</li>
+  <li><strong>Sidecar 当前只有 1 个 Memos PAT</strong>：worker 以 host 用户身份轮询，所有 AI 整理 memo 都挂在 host 一个账号下。换团队 = 换身份，没有原生支持。</li>
+</ol>
+<p>这就是当初团队版另起 <code>team_entries</code> 表 + 自建 <code>/teams/ui</code> 的根本原因 —— <strong>Memos 的数据模型撑不住「多团队 + 互相隔离」</strong>。</p>
+
+<h2 id="s3">3. 四条可行路径</h2>
+
+<h3>路径 A：标签前缀 + 共享单一 Memos（最便宜，但隔离名存实亡）</h3>
+<p><strong>做法</strong>：所有人共用 host 这一个 Memos 账号，约定团队 X 的 memo 用 <code>#team/X/...</code> 标签。Sidecar worker 按标签前缀分流，AI 整理 memo 也带同前缀。</p>
+<table>
+  <thead><tr><th>维度</th><th>评价</th></tr></thead>
+  <tbody>
+    <tr><td>Memos UX</td><td><span class="ok-icon">✅</span> 100% 原生</td></tr>
+    <tr><td>数据隔离</td><td><span class="bad">❌</span> 假隔离 —— 同一个 Memos 账号下所有人都能看见全部 memo</td></tr>
+    <tr><td>成员账号</td><td>不需要（共用一个）</td></tr>
+    <tr><td>改动量</td><td>极小</td></tr>
+    <tr><td>适合场景</td><td>完全没有隐私需求的家庭/小组（本质等于个人版换个名字）</td></tr>
+  </tbody>
+</table>
+<p><strong>结论</strong>：本质是「单账号开多个分类」，不是真团队。<strong>不推荐</strong>。</p>
+
+<h3>路径 B：每团队一个 Memos 容器（真隔离，资源换效果）</h3>
+<p><strong>做法</strong>：Sidecar 通过 Docker API 编排 N 个 Memos 容器（<code>memos-teamA:5230</code>、<code>memos-teamB:5230</code>…）。每个团队独立 Memos 实例（独立 SQLite、独立账号体系）。Caddy 加 <code>handle /m/{team-slug}/* → memos-{team-slug}:5230</code> 反代。Sidecar worker 按团队 fan-out，每团队一份配置/PAT。</p>
+<table>
+  <thead><tr><th>维度</th><th>评价</th></tr></thead>
+  <tbody>
+    <tr><td>Memos UX</td><td><span class="ok-icon">✅</span> 100% 原生</td></tr>
+    <tr><td>数据隔离</td><td><span class="ok-icon">✅</span> 真隔离（独立进程 + 独立 DB）</td></tr>
+    <tr><td>成员账号</td><td>每个团队成员需要在该团队的 Memos 注册账号</td></tr>
+    <tr><td>AI 整理</td><td>现成机制，按团队跑</td></tr>
+    <tr><td>改动量</td><td><strong>大</strong> —— 容器编排、动态路由、worker 多实例化、UI 改动、备份脚本要改</td></tr>
+    <tr><td>资源占用</td><td>每 Memos 容器 ~50–100MB RAM，10 团队 ≈ 1GB</td></tr>
+    <tr><td>适合规模</td><td>个位数到几十个团队；不适合 SaaS 几千个团队</td></tr>
+    <tr><td>关键风险</td><td>Sidecar「单 PAT 单 Memos」假设深入到 worker / models / backup 各处，需全部抽象化</td></tr>
+  </tbody>
+</table>
+<p><strong>结论</strong>：技术上最干净，<strong>工程量最大</strong>。本质是「多个个人版拼在一起」+ 团队管理皮，团队之间几乎零联动。</p>
+
+<h3>路径 C：保留 team_entries，把 /teams/ui 做成「Memos 同款体验」（推荐）</h3>
+<p><strong>做法</strong>：数据模型不变（仍在 Sidecar <code>team_entries</code> 里），但把 <code>/teams/ui</code> 升级到 Memos 视觉/交互同款：</p>
+<ul>
+  <li><strong>写</strong>：Markdown 编辑器 + 拖拽附件 + <code>#标签</code> 自动补全 + 草稿保存（仿 Memos <code>&lt;MemoEditor&gt;</code>）</li>
+  <li><strong>时间线视图</strong>：卡片瀑布流，左侧原词条、右侧 AI 整理摘要并排（仿 Memos <code>MemoView</code> + REFERENCE 双向锚点）</li>
+  <li><strong>AI 整理 entry</strong>（新功能）：worker 对 <code>team_entries</code> 也跑一遍现有整理流程
+    <ul>
+      <li>触发：team 写入新词条 → 创建 <code>process_team_entry</code> 任务</li>
+      <li>生成 AI 整理结果，存为 <code>team_entries.kind=ai_summary</code>，<code>source_uid</code> 指回原词条</li>
+      <li>时间线把 ai_summary entries 折叠到原 entries 下方（视觉上与 Memos 个人版一致）</li>
+    </ul>
+  </li>
+  <li><strong>附件解析</strong>：worker 现行 docparser（drawio / Mind Elixir / MinerU）原样复用</li>
+  <li><strong>提醒</strong>：reminders 现在从 memo 抽 <code>#提醒</code> 标签，扩到从 <code>team_entries</code> 抽</li>
+  <li><strong>管理后台</strong>：<code>/admin/ui</code> 的 TEAMS 区已有「团队/成员/邀请/词条」，再加「任务」「AI 整理日志」按团队过滤</li>
+</ul>
+<table>
+  <thead><tr><th>维度</th><th>评价</th></tr></thead>
+  <tbody>
+    <tr><td>Memos UX</td><td><span class="mid">🟡</span> 视觉同款但是 Sidecar 自建（用户基本感知不出）</td></tr>
+    <tr><td>数据隔离</td><td><span class="ok-icon">✅</span> 真隔离（<code>team_entries.team_id</code> 外键）</td></tr>
+    <tr><td>成员账号</td><td>不需要 Memos 账号；用现有 team token 体系</td></tr>
+    <tr><td>AI 整理</td><td><span class="ok-icon">✅</span> 复用现有 worker（<code>process_memo</code> → <code>process_team_entry</code>）</td></tr>
+    <tr><td>改动量</td><td>中等 —— 前端编辑器与时间线视图（最大头）、worker 扩 1 类任务、提醒/解析复用</td></tr>
+    <tr><td>资源占用</td><td>不增加容器</td></tr>
+    <tr><td>适合规模</td><td>几十到几百个团队都没问题</td></tr>
+    <tr><td>关键风险</td><td>编辑器/附件上传体验做到「Memos 同款」需要不少 UI 工作；部分用户可能仍坚持「真 Memos」</td></tr>
+  </tbody>
+</table>
+<p><strong>结论</strong>：投入产出比最高。核心思路是<strong>把「Memos UX」和「Memos 后端」解绑</strong> —— 用户要的是写/读体验，不是 Memos 这个具体程序。</p>
+
+<h3>路径 D：B + C 的混合（极致体验，工程量也极致）</h3>
+<p><strong>做法</strong>：每团队一个 Memos 容器（路径 B），同时 Sidecar 把团队全量 memo 镜像到 <code>team_entries</code>，跨团队检索 / 跨团队 QA 仍走 Sidecar 自建 UI。</p>
+<table>
+  <thead><tr><th>维度</th><th>评价</th></tr></thead>
+  <tbody>
+    <tr><td>Memos UX</td><td><span class="ok-icon">✅</span> 写/读都用真 Memos</td></tr>
+    <tr><td>数据隔离</td><td><span class="ok-icon">✅</span> 真隔离</td></tr>
+    <tr><td>跨团队聚合</td><td><span class="ok-icon">✅</span> 通过 Sidecar 自建 UI</td></tr>
+    <tr><td>改动量</td><td><strong>路径 B + C 之和</strong>，最大</td></tr>
+    <tr><td>适合场景</td><td>既要真 Memos 体验，又要 Sidecar 增值能力的高端用户</td></tr>
+  </tbody>
+</table>
+<p><strong>结论</strong>：技术上最优，<strong>工程上最重</strong>。除非确认需求强烈，否则先不做。</p>
+
+<h2 id="s4">4. 方案对比矩阵</h2>
+<table>
+  <thead>
+    <tr><th>维度</th><th>A 单 Memos</th><th>B 多 Memos</th><th>C 升级 /teams/ui</th><th>D 混合</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Memos 原生 UX</td><td class="center">✅</td><td class="center">✅</td><td class="center">🟡 仿</td><td class="center">✅</td></tr>
+    <tr><td>真隔离</td><td class="center">❌</td><td class="center">✅</td><td class="center">✅</td><td class="center">✅</td></tr>
+    <tr><td>成员需 Memos 账号</td><td class="center">共用</td><td class="center">✅ 每团队各注册</td><td class="center">❌ 不要</td><td class="center">✅</td></tr>
+    <tr><td>AI 整理复用现 worker</td><td class="center">✅</td><td class="center">需 fan-out</td><td class="center">✅</td><td class="center">✅</td></tr>
+    <tr><td>附件解析复用</td><td class="center">✅</td><td class="center">✅</td><td class="center">✅</td><td class="center">✅</td></tr>
+    <tr><td>提醒复用</td><td class="center">✅</td><td class="center">需 fan-out</td><td class="center">✅</td><td class="center">✅</td></tr>
+    <tr><td>资源占用增长</td><td class="center">0</td><td class="center">线性 O(N)</td><td class="center">0</td><td class="center">线性 O(N)</td></tr>
+    <tr><td>改动量</td><td class="center">XS</td><td class="center">L</td><td class="center">M</td><td class="center">XL</td></tr>
+    <tr><td>备份/恢复脚本影响</td><td class="center">无</td><td class="center">大改</td><td class="center">小改</td><td class="center">大改</td></tr>
+    <tr><td>适合规模</td><td class="center">不适合团队</td><td class="center">几十</td><td class="center">几十~几百</td><td class="center">几十</td></tr>
+    <tr><td><strong>推荐度</strong></td><td class="center">✗</td><td class="center">△</td><td class="center"><strong>✓</strong></td><td class="center">△</td></tr>
+  </tbody>
+</table>
+
+<h2 id="s5">5. 推荐结论</h2>
+<div class="callout ok">
+  <strong>主线推荐 = 路径 C</strong>（升级 /teams/ui 到 Memos 同款体验），<strong>路径 B 作为后续可选高级模式</strong>。
+</div>
+
+<h3>为什么 C 是主线</h3>
+<ol>
+  <li>用户真正想要的是「像写 Memos 一样写、像看 Memos 一样看」，不是「用 Memos 这个程序」—— 二者可以解耦</li>
+  <li>团队隔离是硬需求，Memos 数据模型先天不支持。C 用 Sidecar 自己的表彻底解决</li>
+  <li>AI 整理 / 附件解析 / 提醒三大现有能力可以直接复用，不需要 fan-out</li>
+  <li>不引入容器编排复杂度，备份脚本只需扩 <code>team_entries</code> 表</li>
+  <li>后续如果某些团队真的要「实体 Memos」，再叠加 B 做混合（路径 D）</li>
+</ol>
+
+<h3>为什么 B 不应该是主线</h3>
+<p>B 把「写/读 UX」绑死在「Memos 进程」上，反而牺牲了团队功能的灵活度：跨团队检索、超级 Prompt、向量 QA 都不在 Memos 里 —— 用户最终还是要在两个 UI 间切来切去。</p>
+
+<h2 id="s6">6. 未决决策点</h2>
+<p>决定 C 之前需要先回答 3 个问题：</p>
+<table>
+  <thead><tr><th>#</th><th>问题</th><th>影响</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Q1</td>
+      <td>成员能不能接受「不是真 Memos UI，但视觉/交互同款」？</td>
+      <td>直接决定 C 是否成立。如果用户死磕「必须是 Memos 那个程序」，只能走 B。</td>
+    </tr>
+    <tr>
+      <td>Q2</td>
+      <td>团队成员之间是否需要互相看到对方的「写作过程草稿」？</td>
+      <td>Memos 个人版没有，所以 C 也可以不做。若要做，编辑器需多人协作，差距大。</td>
+    </tr>
+    <tr>
+      <td>Q3</td>
+      <td>AI 整理结果要不要也同步一份到 Memos，让管理员能在 Memos 里浏览？</td>
+      <td>加一份「写回 Memos host 账号、带 <code>#team/{slug}/...</code> 标签」的可选开关。低成本但偶尔有用。</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="s7">7. 路径 C 的实施分期（若未来重启）</h2>
+<ol>
+  <li><strong>阶段 1</strong>：worker 加 <code>process_team_entry</code> 任务，复用现有 LLM 调用 / 标签治理 / 附件解析；AI 结果以 <code>team_entries.kind=ai_summary</code> 入库；<code>/admin/ui</code> 任务面板加团队过滤</li>
+  <li><strong>阶段 2</strong>：<code>/teams/ui</code> 词条 tab 升级为 Memos 同款时间线 + Markdown 编辑器 + 标签自动补全</li>
+  <li><strong>阶段 3</strong>：<code>/teams/ui</code> 加附件上传 + drawio / Mind Elixir / Office 解析（直接复用 docparser）</li>
+  <li><strong>阶段 4</strong>：<code>/teams/ui</code> 加提醒抽取展示，对接团队级 Webhook（每团队一个 Bark / 钉钉）</li>
+  <li><strong>阶段 5（可选）</strong>：把每团队 AI 整理同步回 Memos host 账号，做「管理员一站式浏览」入口</li>
+</ol>
+
+<h2 id="s8">8. 触发重新评估的条件</h2>
+<p>出现下列任一情况，建议把本文档从存档里捞出来重新讨论：</p>
+<ul>
+  <li>个人版用户开始大量反馈「能不能和家人/小组共享一部分笔记」</li>
+  <li>Memos 上游版本引入了原生的 workspace / 团队概念（解除核心障碍）</li>
+  <li>项目从「自部署个人工具」转向「SaaS 多租户产品」</li>
+  <li>有具体业务场景要求「同一个团队成员的写作过程实时协同」</li>
+</ul>
+
+<hr>
+<p class="meta">
+  本文档为分支 <code>feature/team-knowledge-base</code> 终态前的最后一份设计输出。该分支已用 <code>archive/team-knowledge-base-2026-05-28</code> tag 标记存档，未合入 master。<br>
+  团队版当前形态保持：管理员 <code>/admin/ui</code> 开/管团队；成员 <code>/teams/ui</code> 写/读/检索；与 Memos 完全隔离。
+</p>
+</article>
+</main>
+</body>
+</html>

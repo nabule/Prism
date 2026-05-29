@@ -120,6 +120,28 @@ bash <(curl -s -L https://raw.githubusercontent.com/nabule/Prism/master/deploy.s
 4. **拉取与热启动**：执行 `docker compose -f docker-compose.release.yml pull` 从官方 Container Registry (GHCR) 一秒拉取 prebuilt 生产级镜像并热启动。
 5. **自动创建 Memos 管理员账号与长期 PAT**：等待 Memos 起来后，自动 `POST /api/v1/users` 创建 host 账号，登录后签发不过期的 `MEMOS_API_TOKEN`（PAT）并写回 `.env`，随后 `docker compose up -d sidecar sidecar-worker` 让其用新 PAT 重建（注意：`docker compose restart` 不会重读 `env_file`，必须 `up -d` 才会拿到新 PAT），无需手动登录 Memos 设置页。初始账号与密码会以注释形式记录在 `.env` 末尾，方便后续登录 Memos 前端。
 
+### 🔐 Memos 初始账号、密码与 PAT 保存位置
+
+`deploy.sh` 自动创建的是 **Memos host 账号**（默认用户名 `admin`），并用该账号登录 Memos 后创建长期 Personal Access Token。脚本会把三类凭据写入部署目录的 `.env`：
+
+```bash
+# Sidecar 管理后台登录用；访问 /admin/ui 的 Admin Token
+SIDECAR_ADMIN_TOKEN=...
+
+# Sidecar / worker 代表 Memos host 账号调用 Memos API 用；不要当登录密码使用
+MEMOS_API_TOKEN=memos_pat_...
+
+# Memos 前端登录用；注意这两行是注释，但就是初始登录账号和密码
+# MEMOS_HOST_USER=admin
+# MEMOS_HOST_PASSWORD=<deploy.sh 随机生成的密码>
+```
+
+需要登录 Memos 前端（例如 `http://<host>:${GATEWAY_PORT}/`）时，使用 `.env` 末尾注释里的 `MEMOS_HOST_USER` / `MEMOS_HOST_PASSWORD`；需要登录 Sidecar 管理后台（`/admin/ui`）时，使用 `SIDECAR_ADMIN_TOKEN` 或 banner 打印的一次性登录链接；`MEMOS_API_TOKEN` 只给 Sidecar/worker 调 API，不用于人工登录。若忘记 Memos 密码，可在部署目录查看：
+
+```bash
+grep -E '^# MEMOS_HOST_(USER|PASSWORD)=' .env
+```
+
 ### 🔑 关于 Admin Token：一键登录链接与何时必须粘贴
 
 > [!IMPORTANT]

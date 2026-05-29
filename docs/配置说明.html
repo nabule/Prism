@@ -33,7 +33,11 @@
 </tr>
 <tr>
 <td><code>MEMOS_API_TOKEN</code></td>
-<td>Memos API token</td>
+<td>Memos Personal Access Token，供 Sidecar / worker 代表 Memos host 账号调用 Memos API。<code>deploy.sh</code> 会自动创建 <code>admin</code> host 账号并签发该 PAT；它不是 Memos 前端登录密码。</td>
+</tr>
+<tr>
+<td><code># MEMOS_HOST_USER</code> / <code># MEMOS_HOST_PASSWORD</code></td>
+<td><code>deploy.sh</code> 自动创建的 Memos host 登录账号和随机密码，写在 <code>.env</code> 末尾的注释行里。登录 Memos 前端使用这组值；查询方式：<code>grep -E '^# MEMOS_HOST_(USER|PASSWORD)=' .env</code>。</td>
 </tr>
 <tr>
 <td><code>MEMOS_WEBHOOK_URL</code></td>

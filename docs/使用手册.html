@@ -120,6 +120,19 @@ npx nx up sidecar</code></pre>
   <p>启动后访问 <code>http://localhost:8080</code>（Memos）和 <code>http://localhost:8080/admin/ui</code>（管理端）。</p>
   <p class="note">开发环境映射了本地 <code>./src</code> 目录，修改 Python 源码后容器内 Uvicorn 自动重载，无需重新构建镜像。</p>
 
+  <p><strong>Memos 初始账号与密码保存位置</strong>：一键部署脚本会自动创建 Memos host 账号（默认 <code>admin</code>），登录后签发长期 PAT，并把凭据写入部署目录的 <code>.env</code>：</p>
+  <pre><code># Sidecar 管理后台 /admin/ui 使用
+SIDECAR_ADMIN_TOKEN=...
+
+# Sidecar / worker 调用 Memos API 使用，不是人工登录密码
+MEMOS_API_TOKEN=memos_pat_...
+
+# Memos 前端登录使用（注意：这两行是注释，但就是初始账号和密码）
+# MEMOS_HOST_USER=admin
+# MEMOS_HOST_PASSWORD=&lt;deploy.sh 随机生成的密码&gt;</code></pre>
+  <p>登录 Memos 前端时使用 <code>MEMOS_HOST_USER</code> / <code>MEMOS_HOST_PASSWORD</code>；登录 Sidecar 管理端时使用 <code>SIDECAR_ADMIN_TOKEN</code> 或部署 banner 中的一次性登录链接。忘记 Memos 密码时，在部署目录运行：</p>
+  <pre><code>grep -E '^# MEMOS_HOST_(USER|PASSWORD)=' .env</code></pre>
+
   <h3>5. 创建 Memos PAT</h3>
   <pre><code>npx nx run sidecar:probe-memos -- \
   --bootstrap-username test \

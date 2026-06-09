@@ -392,19 +392,21 @@ reminders:
     app = create_app(config_path=str(app_path), models_path=str(models_path))
     client = TestClient(app)
 
-    # 1. GET config without token
-    unauthorized = client.get("/admin/reminders/config")
-    assert unauthorized.status_code == 401
-
-    # 2. GET config with token
-    response = client.get("/admin/reminders/config", headers={"Authorization": "Bearer admin-token"})
-    assert response.status_code == 200
-    data = response.json()
+    # 1. GET config is public but redacted so /admin/ui can render defaults before login.
+    anonymous = client.get("/admin/reminders/config")
+    assert anonymous.status_code == 200
+    data = anonymous.json()
     assert data["enabled"] is True
     assert data["trigger_tag"] == "#提醒"
     assert data["confidence_threshold"] == 0.75
     assert data["request_timeout_seconds"] == 10.0
     assert data["webhook_url_present"] is True
+    assert "webhook_url" not in data
+
+    # 2. Authenticated GET returns the same redacted view.
+    response = client.get("/admin/reminders/config", headers={"Authorization": "Bearer admin-token"})
+    assert response.status_code == 200
+    assert response.json() == data
 
     # 3. PUT config update
     update_payload = {
@@ -414,6 +416,9 @@ reminders:
         "request_timeout_seconds": 15.0,
         "webhook_url": "https://new-webhook.example.com"
     }
+    unauthorized_put = client.put("/admin/reminders/config", json=update_payload)
+    assert unauthorized_put.status_code == 401
+
     put_response = client.put(
         "/admin/reminders/config",
         json=update_payload,
@@ -1194,5 +1199,4 @@ def test_admin_tag_summary_with_prompt_override(tmp_path, monkeypatch):
     assert FakeLLMClient.seen_prompt_template is not None
     assert FakeLLMClient.seen_prompt_template.system == "System Override Text"
     assert FakeLLMClient.seen_prompt_template.user == "User Override Text"
-
 

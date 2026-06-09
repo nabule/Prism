@@ -134,14 +134,16 @@ def test_generate_prompt_logical_relations(client, monkeypatch):
     object.__setattr__(client.app.state.config, "memos_api_token", "some-token")
 
     # Test OR relationship (default)
-    response = client.post("/admin/qa/generate-prompt", 
+    response = client.post(
+        "/admin/qa/generate-prompt",
         headers={"Authorization": "Bearer testtoken"},
         json={
             "tags": ["#tag1", "#tag2"],
             "relation": "OR",
             "system_prompt": "You are a helpful assistant.",
-            "query": "Hello"
-        }
+            "query": "Hello",
+            "use_vector": False,
+        },
     )
     assert response.status_code == 200
     data = response.json()
@@ -151,14 +153,16 @@ def test_generate_prompt_logical_relations(client, monkeypatch):
     assert "memo2" in [s["memos_uid"] for s in data["sources"]]
 
     # Test AND relationship
-    response = client.post("/admin/qa/generate-prompt", 
+    response = client.post(
+        "/admin/qa/generate-prompt",
         headers={"Authorization": "Bearer testtoken"},
         json={
             "tags": ["#tag1", "#tag2"],
             "relation": "AND",
             "system_prompt": "You are a helpful assistant.",
-            "query": "Hello"
-        }
+            "query": "Hello",
+            "use_vector": False,
+        },
     )
     assert response.status_code == 200
     data = response.json()

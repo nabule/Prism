@@ -773,6 +773,7 @@ bash &lt;(curl -s -L https://raw.githubusercontent.com/nabule/Prism/master/deplo
   <li>生成 <code>gateway/Caddyfile</code>、<code>config/app.yaml</code>（仅当缺失）。</li>
   <li><code>openssl rand -hex 16</code> 生成 <code>SIDECAR_ADMIN_TOKEN</code> 写入 <code>.env</code>。</li>
   <li><code>docker compose -f docker-compose.release.yml pull &amp;&amp; up -d</code>。</li>
+  <li>探测公开 host 与 <code>GATEWAY_PORT</code>，把 <code>PRISM_PUBLIC_BASE_URL</code> 写入 <code>.env</code> 并重建 <code>sidecar</code> / <code>sidecar-worker</code>，供 Memos 管理入口 memo 生成正确网关链接。</li>
 </ol>
 
 <h3>12.2 镜像</h3>
@@ -787,6 +788,7 @@ bash &lt;(curl -s -L https://raw.githubusercontent.com/nabule/Prism/master/deplo
 <ul>
   <li>默认网关：<code>GATEWAY_PORT=8085</code> → <code>:80</code>（容器内 Caddy）。</li>
   <li>Memos 不直接对外，Sidecar 不直接对外，全部经 Caddy 出口。</li>
+  <li>管理入口 memo 的链接来自 <code>PRISM_PUBLIC_BASE_URL</code>（优先）或 <code>app.public_base_url</code>；公网域名或 HTTPS 反代部署可在运行脚本前设置完整 URL。</li>
 </ul>
 
 <h3>12.4 多租户隔离</h3>

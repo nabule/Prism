@@ -52,7 +52,7 @@ def test_repository_models_config_defaults_to_deepseek_v4_flash(monkeypatch):
 
 
 def test_models_config_reads_api_key_presence_from_local_env_file(tmp_path, monkeypatch):
-    monkeypatch.setenv("DEEPSEEK_API_KEY", "old-secret")
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
     models_path = write_yaml(
         tmp_path / "models.yaml",
         """
@@ -74,6 +74,31 @@ providers:
 
     assert config.providers["deepseek"].api_key_present is True
     assert os.getenv("DEEPSEEK_API_KEY") == "local-secret"
+
+
+def test_models_config_keeps_existing_environment_value_over_local_env_file(tmp_path, monkeypatch):
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "real-env-secret")
+    models_path = write_yaml(
+        tmp_path / "models.yaml",
+        """
+default_provider: deepseek
+providers:
+  deepseek:
+    base_url: https://api.deepseek.com
+    api_key_env: DEEPSEEK_API_KEY
+    default_model: deepseek-v4-flash
+    temperature: 0.2
+    max_tokens:
+    response_format: json_object
+    extra_body: {}
+""",
+    )
+    (tmp_path / ".env.local").write_text("DEEPSEEK_API_KEY=stale-local-secret\n", encoding="utf-8")
+
+    config = ModelsConfig.load(models_path)
+
+    assert config.providers["deepseek"].api_key_present is True
+    assert os.getenv("DEEPSEEK_API_KEY") == "real-env-secret"
 
 
 def test_app_config_reads_secret_values_from_environment(tmp_path, monkeypatch):
@@ -123,6 +148,69 @@ def test_app_config_reads_secret_values_from_environment(tmp_path, monkeypatch):
     assert config.reminders_webhook_url == "https://notify.example.com/reminders"
     assert config.reminders_confidence_threshold == 0.75
     assert config.reminders_request_timeout_seconds == 10
+
+
+def test_app_config_public_base_url_can_be_overridden_by_environment(tmp_path, monkeypatch):
+    app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
+    monkeypatch.setenv("PRISM_PUBLIC_BASE_URL", "http://192.168.1.50:8085")
+
+    config = AppConfig.load(app_path)
+
+    assert config.public_base_url == "http://192.168.1.50:8085"
+
+
+def test_app_config_public_base_url_keeps_environment_value_over_local_env_file(tmp_path, monkeypatch):
+    app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
+    (tmp_path / ".env.local").write_text("PRISM_PUBLIC_BASE_URL=http://localhost:5230\n", encoding="utf-8")
+    monkeypatch.setenv("PRISM_PUBLIC_BASE_URL", "http://192.168.1.50:8085")
+
+    config = AppConfig.load(app_path)
+
+    assert config.public_base_url == "http://192.168.1.50:8085"
+
+
+def test_app_config_refreshes_public_base_url_loaded_from_local_env_file(tmp_path, monkeypatch):
+    app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
+    env_path = tmp_path / ".env.local"
+    monkeypatch.delenv("PRISM_PUBLIC_BASE_URL", raising=False)
+    env_path.write_text("PRISM_PUBLIC_BASE_URL=http://192.168.1.50:8085\n", encoding="utf-8")
+
+    first = AppConfig.load(app_path)
+    env_path.write_text("PRISM_PUBLIC_BASE_URL=http://192.168.1.51:8086\n", encoding="utf-8")
+    second = AppConfig.load(app_path)
+
+    assert first.public_base_url == "http://192.168.1.50:8085"
+    assert second.public_base_url == "http://192.168.1.51:8086"
+
+
+def test_app_config_falls_back_when_local_env_file_public_base_url_is_removed(tmp_path, monkeypatch):
+    app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
+    env_path = tmp_path / ".env.local"
+    monkeypatch.delenv("PRISM_PUBLIC_BASE_URL", raising=False)
+    env_path.write_text("PRISM_PUBLIC_BASE_URL=http://192.168.1.50:8085\n", encoding="utf-8")
+
+    first = AppConfig.load(app_path)
+    env_path.write_text("", encoding="utf-8")
+    second = AppConfig.load(app_path)
+
+    assert first.public_base_url == "http://192.168.1.50:8085"
+    assert second.public_base_url == "http://localhost:5230"
+    assert os.getenv("PRISM_PUBLIC_BASE_URL") is None
+
+
+def test_app_config_falls_back_when_local_env_file_is_deleted(tmp_path, monkeypatch):
+    app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
+    env_path = tmp_path / ".env.local"
+    monkeypatch.delenv("PRISM_PUBLIC_BASE_URL", raising=False)
+    env_path.write_text("PRISM_PUBLIC_BASE_URL=http://192.168.1.50:8085\n", encoding="utf-8")
+
+    first = AppConfig.load(app_path)
+    env_path.unlink()
+    second = AppConfig.load(app_path)
+
+    assert first.public_base_url == "http://192.168.1.50:8085"
+    assert second.public_base_url == "http://localhost:5230"
+    assert os.getenv("PRISM_PUBLIC_BASE_URL") is None
 
 
 def test_prompts_config_loads_and_renders_template(tmp_path):

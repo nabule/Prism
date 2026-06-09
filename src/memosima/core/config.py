@@ -12,6 +12,9 @@ class ConfigError(RuntimeError):
     pass
 
 
+_ENV_FILE_VALUES: dict[tuple[Path, str], str] = {}
+
+
 def _read_yaml(path: Path) -> dict[str, Any]:
     if not path.exists():
         raise ConfigError(f"Config file not found: {path}")
@@ -31,7 +34,13 @@ def _env_value(name: str | None, default: str | None = None) -> str | None:
 def load_env_file(path: str | Path = "config/.env.local", *, override: bool = False) -> None:
     env_path = Path(path)
     if not env_path.exists():
+        for env_file_key, value in list(_ENV_FILE_VALUES.items()):
+            tracked_path, key = env_file_key
+            if tracked_path == env_path and os.environ.get(key) == value:
+                os.environ.pop(key, None)
+                _ENV_FILE_VALUES.pop(env_file_key, None)
         return
+    loaded_keys: set[str] = set()
     with env_path.open("r", encoding="utf-8") as file:
         for line in file:
             text = line.strip()
@@ -39,8 +48,18 @@ def load_env_file(path: str | Path = "config/.env.local", *, override: bool = Fa
                 continue
             key, value = text.split("=", 1)
             key = key.strip()
-            if key and (override or key not in os.environ):
-                os.environ[key] = value.strip()
+            value = value.strip()
+            env_file_key = (env_path, key)
+            loaded_keys.add(key)
+            current = os.environ.get(key)
+            if key and (override or key not in os.environ or current == "" or _ENV_FILE_VALUES.get(env_file_key) == current):
+                os.environ[key] = value
+                _ENV_FILE_VALUES[env_file_key] = value
+    for env_file_key, value in list(_ENV_FILE_VALUES.items()):
+        tracked_path, key = env_file_key
+        if tracked_path == env_path and key not in loaded_keys and os.environ.get(key) == value:
+            os.environ.pop(key, None)
+            _ENV_FILE_VALUES.pop(env_file_key, None)
 
 
 @dataclass(frozen=True)
@@ -95,7 +114,7 @@ class AppConfig:
     @classmethod
     def load(cls, path: str | Path = "config/app.yaml") -> "AppConfig":
         config_path = Path(path)
-        load_env_file(config_path.parent / ".env.local", override=True)
+        load_env_file(config_path.parent / ".env.local")
         raw = _read_yaml(config_path)
         app = raw.get("app", {})
         database = raw.get("database", {})
@@ -118,7 +137,9 @@ class AppConfig:
 
         return cls(
             workspace_id=str(app.get("workspace_id", "default")),
-            public_base_url=str(app.get("public_base_url", "http://localhost:5230")),
+            public_base_url=str(
+                _env_value("PRISM_PUBLIC_BASE_URL", str(app.get("public_base_url", "http://localhost:5230")))
+            ),
             timezone=str(app.get("timezone", "Asia/Shanghai")),
             database_path=db_path,
             taxonomy_path=Path(str(taxonomy.get("path", "config/taxonomy.yaml"))),
@@ -204,7 +225,7 @@ class ModelsConfig:
 
     @classmethod
     def load(cls, path: str | Path = "config/models.yaml") -> "ModelsConfig":
-        load_env_file(Path(path).parent / ".env.local", override=True)
+        load_env_file(Path(path).parent / ".env.local")
         raw = _read_yaml(Path(path))
         default_provider = str(raw.get("default_provider", "openrouter"))
         raw_providers = raw.get("providers", {})

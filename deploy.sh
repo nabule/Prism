@@ -45,6 +45,7 @@ echo -e "${BLUE}===============================================${NC}"
 echo -e "${BLUE}       Prism (棱镜) AI 知识库一键部署工具       ${NC}"
 echo -e "${BLUE}===============================================${NC}"
 echo -e "${BLUE}>>> 配置源: ${REPO_RAW_BASE}${NC}"
+REQUESTED_PUBLIC_BASE_URL="${PRISM_PUBLIC_BASE_URL:-}"
 
 # ---------- 通用工具：从仓库释放单个文件 ----------
 # 用法：fetch_file <仓库相对路径> <本地落地路径>
@@ -125,12 +126,53 @@ source .env
 set +o allexport
 GATEWAY_PORT="${GATEWAY_PORT:-8085}"
 
+# 探测一个可被局域网/公网用户实际访问到的主机 IP。优先级：
+#   1. PRISM_PUBLIC_HOST 环境变量（运维显式覆盖，比如域名 prism.example.com）；
+#   2. hostname -I 第一个非 127/172 的 IPv4（典型 LAN IP，例如 192.168.x.x）；
+#   3. ip route 默认网关接口的 src IP；
+#   4. 兜底回到 localhost（与历史行为一致）。
+detect_public_host() {
+    if [ -n "${PRISM_PUBLIC_HOST:-}" ]; then
+        echo "$PRISM_PUBLIC_HOST"
+        return
+    fi
+    local ip
+    ip="$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -E '^(10|192\.168|172\.(1[6-9]|2[0-9]|3[0-1]))\.' | head -n1)"
+    if [ -z "$ip" ]; then
+        ip="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '/src/ {for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}')"
+    fi
+    if [ -z "$ip" ]; then
+        ip="localhost"
+    fi
+    echo "$ip"
+}
+PUBLIC_HOST="$(detect_public_host)"
+if [ -n "$REQUESTED_PUBLIC_BASE_URL" ]; then
+    PUBLIC_BASE_URL="${REQUESTED_PUBLIC_BASE_URL%/}"
+else
+    PUBLIC_BASE_URL="http://${PUBLIC_HOST}:${GATEWAY_PORT}"
+fi
+
+write_public_base_url_env() {
+    if grep -q '^PRISM_PUBLIC_BASE_URL=' .env; then
+        sed -i "s#^PRISM_PUBLIC_BASE_URL=.*#PRISM_PUBLIC_BASE_URL=${PUBLIC_BASE_URL}#" .env
+    else
+        printf 'PRISM_PUBLIC_BASE_URL=%s\n' "$PUBLIC_BASE_URL" >>.env
+    fi
+    echo -e "${GREEN}>>> 已写入公开访问地址: ${BLUE}${PUBLIC_BASE_URL}${NC}"
+}
+
+write_public_base_url_env
+
 # ---------- 4. 拉取镜像 & 启动容器 ----------
 echo -e "${GREEN}[4/6] 拉取生产镜像...${NC}"
 $DOCKER_COMPOSE -f docker-compose.release.yml pull
 
 echo -e "${GREEN}[5/6] 拉起全栈容器...${NC}"
 $DOCKER_COMPOSE -f docker-compose.release.yml up -d
+
+# 确保已有部署在公开地址写回后也重读 env_file。
+$DOCKER_COMPOSE -f docker-compose.release.yml up -d sidecar sidecar-worker >/dev/null
 
 # ---------- 5. 自动创建 Memos host 账号并签发 PAT，写回 .env ----------
 bootstrap_memos_pat() {
@@ -238,27 +280,6 @@ bootstrap_memos_pat || true
 # ---------- 结束 banner ----------
 CURRENT_TOKEN="$(grep -E '^SIDECAR_ADMIN_TOKEN=' .env | head -n1 | cut -d= -f2-)"
 CURRENT_PAT="$(grep -E '^MEMOS_API_TOKEN=' .env | head -n1 | cut -d= -f2-)"
-# 探测一个可被局域网/公网用户实际访问到的主机 IP。优先级：
-#   1. PRISM_PUBLIC_HOST 环境变量（运维显式覆盖，比如域名 prism.example.com）；
-#   2. hostname -I 第一个非 127/172 的 IPv4（典型 LAN IP，例如 192.168.x.x）；
-#   3. ip route 默认网关接口的 src IP；
-#   4. 兜底回到 localhost（与历史行为一致）。
-detect_public_host() {
-    if [ -n "${PRISM_PUBLIC_HOST:-}" ]; then
-        echo "$PRISM_PUBLIC_HOST"
-        return
-    fi
-    local ip
-    ip="$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -E '^(10|192\.168|172\.(1[6-9]|2[0-9]|3[0-1]))\.' | head -n1)"
-    if [ -z "$ip" ]; then
-        ip="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '/src/ {for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}')"
-    fi
-    if [ -z "$ip" ]; then
-        ip="localhost"
-    fi
-    echo "$ip"
-}
-PUBLIC_HOST="$(detect_public_host)"
 
 # 一次性自动登录链接：把 Admin Token 放在 URL hash 里（hash 不发到服务端 access log）。
 # 前端 admin_ui 检测到 #admin_token=xxx 后会写入 localStorage 并 history.replaceState

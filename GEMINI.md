@@ -15,45 +15,65 @@
 
 ### Code Search
 
-优先使用 `semble search` 按语义查找代码片段，适合描述目标行为、模块职责或符号名；只有在需要精确字面量匹配、日志文本、注释文本或穷举确认时再使用 `rg`。
+优先使用 `semble search` 按语义查找代码片段，适合描述目标行为、模块职责或符号名；只有在需要精确字面量匹配、日志文本、注释文本或穷举确认时再使用 `rg`。本机 Semble 通过 `uv tool install --upgrade "semble[mcp]"` 安装和更新，当前 CLI 支持 `search` 与 `find-related` 两个核心检索能力。
 
 ```bash
 semble search "authentication flow" .
-semble search "save_pretrained" .
-semble search "save model to disk" . --top-k 10
+semble search -k 10 "save model to disk" . --content code
+semble search -k 10 "deployment guide" . --content all
 ```
 
 使用 `semble find-related` 基于已有搜索结果中的文件路径和行号查找相似实现：
 
 ```bash
-semble find-related src/auth.py 42 .
+semble find-related -k 5 src/auth.py 42 . --content code
 ```
 
-`path` 省略时默认为当前目录，也可以传入 Git URL。若当前环境找不到 `semble`，使用 `uvx --from "semble[mcp]" semble` 代替。
+`path` 省略时默认为当前目录，也可以传入 Git URL。`--content` 可选 `code`、`docs`、`config`、`all`，默认 `code`；不要再使用已弃用的 `--include-text-files`。若当前环境找不到 `semble`，使用 `uvx --from "semble[mcp]" semble` 代替。
+
+项目内提供自动更新并检索的脚本：
+
+```bash
+scripts/semble_refresh_search.sh search "Memos API client" . 5 code
+scripts/semble_refresh_search.sh find-related src/memosima/memos/probe.py 35 . 5 code
+```
+
+脚本默认会先执行 `uv tool install --upgrade "semble[mcp]"`，再运行检索；如只想使用现有版本，设置 `SEMBLE_SKIP_UPGRADE=1`。
 
 推荐流程：
 
-1. 先用 `semble search` 获取相关代码片段。
+1. 先用 `scripts/semble_refresh_search.sh search` 或 `semble search` 获取相关代码片段。
 2. 只有返回片段不足以判断时，再打开完整文件。
-3. 对有代表性的结果使用 `semble find-related` 查找相似实现。
+3. 对有代表性的结果使用 `scripts/semble_refresh_search.sh find-related` 或 `semble find-related` 查找相似实现。
 4. 仅在需要精确字面量匹配或穷举确认时使用 `rg`。
 
 ### 自动化通知协议 (Notification Protocol)
 
-当满足以下任一条件时，**必须**在执行 Bark 通知指令，通知指令直接执行无需等待用户确认：
+当满足以下任一条件时，**必须**执行 All Notify 通知指令，通知指令直接执行无需等待用户确认：
 
 1. 一个主要子任务 (Sub-task) 已完成。
 2. 任务挂起，等待用户提供输入或确认。
+3. 生成任何报告（如代码审查、安全审查、测试报告等）。
 
-**指令模板:**
+统一通过 All Notify 入口 `http://127.0.0.1:8765/send/claude` 发送，禁止直接调用 Bark、SMTP 等下游通道。
+
+**GET 指令模板:**
 
 ```bash
 title="任务更新" # 根据上下文修改标题
 body="当前任务已完成/等待输入..." # 根据上下文修改内容
 
-# 发送 POST 请求触发通知，并隐藏输出
-curl -X POST "https://api.day.app/d3ahVvenXMeS8Njud97g7U/" \
-     -d "title=$title" \
-     -d "body=$body" \
-     -s -o /dev/null
+curl -sS -G "http://127.0.0.1:8765/send/claude" \
+     --data-urlencode "title=$title" \
+     --data-urlencode "message=$body" \
+     -o /dev/null
+```
+
+**POST JSON 指令模板（适合长内容/报告）:**
+
+```bash
+curl -sS -X POST "http://127.0.0.1:8765/send/claude" \
+     -H "Content-Type: application/json" \
+     -d '{"title":"任务更新","message":"当前任务已完成"}' \
+     -o /dev/null
 ```

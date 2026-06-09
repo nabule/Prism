@@ -119,6 +119,7 @@ bash <(curl -s -L https://raw.githubusercontent.com/nabule/Prism/master/deploy.s
 3. **强密钥生成**：自动调用 OpenSSL 随机算法生成 **16 字节超强随机 `SIDECAR_ADMIN_TOKEN`**，直接写入新建的 `.env` 文件中，默认即为最高防御状态。
 4. **拉取与热启动**：执行 `docker compose -f docker-compose.release.yml pull` 从官方 Container Registry (GHCR) 一秒拉取 prebuilt 生产级镜像并热启动。
 5. **自动创建 Memos 管理员账号与长期 PAT**：等待 Memos 起来后，自动 `POST /api/v1/users` 创建 host 账号，登录后签发不过期的 `MEMOS_API_TOKEN`（PAT）并写回 `.env`，随后 `docker compose up -d sidecar sidecar-worker` 让其用新 PAT 重建（注意：`docker compose restart` 不会重读 `env_file`，必须 `up -d` 才会拿到新 PAT），无需手动登录 Memos 设置页。初始账号与密码会以注释形式记录在 `.env` 末尾，方便后续登录 Memos 前端。
+6. **写入公开管理入口地址**：脚本会探测局域网 IP 与 `GATEWAY_PORT`，把 `PRISM_PUBLIC_BASE_URL=http://<host>:<port>` 写入 `.env` 并重建 `sidecar` / `sidecar-worker`。Worker 会用这个地址维护 Memos 里的管理入口 memo，避免链接停留在 `localhost` 或旧端口。需要公网域名或 HTTPS 反代时，直接以 `PRISM_PUBLIC_BASE_URL=https://your.domain bash deploy.sh` 覆盖；只想指定 host 时可用 `PRISM_PUBLIC_HOST=192.168.x.x bash deploy.sh`。
 
 ### 🔐 Memos 初始账号、密码与 PAT 保存位置
 
@@ -227,6 +228,20 @@ npx nx build sidecar
 npx nx run sidecar:probe-memos
 ```
 
+### 🔎 Semble 语义代码检索
+
+本仓库推荐优先使用 [Semble](https://github.com/MinishLab/semble) 做语义代码检索，用自然语言描述目标行为、模块职责或符号名；只有在需要精确字面量匹配、日志文本、注释文本或穷举确认时再使用 `rg`。
+
+```bash
+# 自动更新 Semble 后检索代码
+scripts/semble_refresh_search.sh search "Memos API client" . 5 code
+
+# 基于某个结果的文件和行号查找相似实现
+scripts/semble_refresh_search.sh find-related src/memosima/memos/probe.py 35 . 5 code
+```
+
+脚本默认会执行 `uv tool install --upgrade "semble[mcp]"` 后再检索；如需跳过更新，设置 `SEMBLE_SKIP_UPGRADE=1`。`content` 可选 `code`、`docs`、`config`、`all`，默认 `code`。
+
 ---
 
 
@@ -251,6 +266,8 @@ npx nx run sidecar:probe-memos
 | `SILICONFLOW_API_KEY` | ❌ | SiliconFlow API Key（向量检索默认开启，缺 Key 时自动跳过入库并降级到文本召回） |
 | `REMINDER_WEBHOOK_URL` | ❌ | 提醒通知出口（Bark 兼容接口，如 `https://api.day.app/your-key/`） |
 | `GATEWAY_PORT` | ❌ | Caddy 网关对外暴露端口，默认 `8085`（多租户部署时改为不同端口区分） |
+| `PRISM_PUBLIC_BASE_URL` | ❌ | 管理入口 memo 和 AI 整理 memo 中管理链接使用的完整公开网关地址；`deploy.sh` 会自动写入，可手动设为局域网地址或反代域名 |
+| `PRISM_PUBLIC_HOST` | ❌ | 仅供 `deploy.sh` 拼接公开地址的 host 覆盖值，例如 `192.168.1.10` 或 `prism.example.com` |
 | `PRISM_VERSION` | ❌ | 拉取 GHCR 镜像的版本标签，默认 `latest`，可锁定 `v0.6.6` 等确定版本 |
 
 > ① 至少配置一个推理 provider 的 Key，推荐 `DEEPSEEK_API_KEY`。
@@ -260,7 +277,7 @@ npx nx run sidecar:probe-memos
 | 配置路径 | 默认值 | 说明 |
 | :--- | :--- | :--- |
 | `app.workspace_id` | `default` | 工作区标识 |
-| `app.public_base_url` | `http://localhost:8080` | Sidecar 对外公开地址 |
+| `app.public_base_url` | `http://localhost:8080` | Sidecar 对外公开地址；运行时可被 `PRISM_PUBLIC_BASE_URL` 覆盖 |
 | `app.timezone` | `Asia/Shanghai` | Worker 进行提醒抽取、时区换算与日志时间显示使用的默认时区 |
 | `database.path` | `data/sidecar/sidecar.db` | SQLite 数据库路径（WAL 模式） |
 | `taxonomy.path` | `config/taxonomy.yaml` | 标签治理体系配置文件路径 |

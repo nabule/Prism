@@ -370,7 +370,7 @@ wheels = [
 
 [[package]]
 name = "memosima"
-version = "0.6.8"
+version = "0.6.10"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },

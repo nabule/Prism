@@ -85,7 +85,7 @@ txt/md/docx/xlsx/pdf/drawio/mind-elixir-json
 <td>后台任务、附件解析、AI 调用、索引、文档生成</td>
 </tr>
 </tbody></table>
-<p>默认只暴露 Caddy 网关宿主机端口 <code>${GATEWAY_PORT:-8080}:80</code>。用户访问 <code>http://localhost:8080/</code> 进入 Memos，访问 <code>http://localhost:8080/admin/ui</code> 进入 Sidecar 管理页面。Memos 的 <code>5230</code> 和 Sidecar 容器内部 <code>8080</code> 默认不直接暴露到宿主机。</p>
+<p>默认只暴露 Caddy 网关宿主机端口；开发 Compose 默认为 <code>${GATEWAY_PORT:-8080}:80</code>，生产 release Compose 默认为 <code>${GATEWAY_PORT:-8085}:80</code>。用户通过统一网关进入 Memos 与 Sidecar 管理页面，Memos 的 <code>5230</code> 和 Sidecar 容器内部 <code>8080</code> 默认不直接暴露到宿主机。Memos 管理入口 memo 的链接由 <code>PRISM_PUBLIC_BASE_URL</code>（优先）或 <code>app.public_base_url</code> 生成，<code>deploy.sh</code> 会把探测到的公开网关地址写入 <code>.env</code>。</p>
 <h2>4. 模块设计</h2>
 <h3>4.1 API 模块</h3>
 <p>职责：</p>

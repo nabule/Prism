@@ -128,7 +128,7 @@ GATEWAY_PORT="${GATEWAY_PORT:-8085}"
 
 # 探测一个可被局域网/公网用户实际访问到的主机 IP。优先级：
 #   1. PRISM_PUBLIC_HOST 环境变量（运维显式覆盖，比如域名 prism.example.com）；
-#   2. hostname -I 第一个非 127/172 的 IPv4（典型 LAN IP，例如 192.168.x.x）；
+#   2. hostname -I 第一个非本机回环/容器网段的 IPv4（典型 LAN IP）；
 #   3. ip route 默认网关接口的 src IP；
 #   4. 兜底回到 localhost（与历史行为一致）。
 detect_public_host() {

@@ -67,7 +67,7 @@
   <h3>🚀 官方推荐：独立容器化部署模式（SaaS/多租户物理隔离）</h3>
   <p>若您需要为多人、团队成员或不同账户提供各自独立的 AI 自动标签归档和离线 QA Prompter 功能，最安全、隔离性最好的方式是<strong>为每个用户部署一套物理隔离的独立容器栈</strong>：</p>
   <ul>
-    <li><strong>目录与代码物理隔离</strong>：为每个用户在宿主机创建独立的部署工作目录（例如 <code>/srv/prism-local/code/prism_userA</code>），克隆相同的项目代码。</li>
+    <li><strong>目录与代码物理隔离</strong>：为每个用户在宿主机创建独立的部署工作目录（例如 <code>/srv/prism/userA</code>），克隆相同的项目代码。</li>
     <li><strong>独立配置文件</strong>：在各自的 <code>.env</code> 文件中填写该用户专属的 <code>MEMOS_API_TOKEN</code>、<code>SIDECAR_ADMIN_TOKEN</code> 以及各自偏爱的大模型 API Key。</li>
     <li><strong>端口与反代隔离</strong>：在各自的 <code>.env</code> 中指定不同的 <code>GATEWAY_PORT</code>（例如用户 A 的网关暴露端口设为 <code>8080</code>，用户 B 设为 <code>8081</code>），在宿主机使用 Nginx 或反代工具将不同的二级域名（如 <code>usera.memos.local</code>）映射至对应的容器网关入口。</li>
   </ul>

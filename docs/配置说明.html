@@ -49,11 +49,11 @@
 </tr>
 <tr>
 <td><code>PRISM_PUBLIC_BASE_URL</code></td>
-<td>管理入口 memo 和 AI 整理 memo 中管理链接使用的完整公开网关地址。<code>deploy.sh</code> 会自动写入，例如 <code>http://192.168.1.10:8085</code>；如使用 HTTPS 反代，可在运行部署脚本前显式设置为域名。</td>
+<td>管理入口 memo 和 AI 整理 memo 中管理链接使用的完整公开网关地址。<code>deploy.sh</code> 会自动写入；如使用 HTTPS 反代，可在运行部署脚本前显式设置为域名，例如 <code>https://prism.example.com</code>。</td>
 </tr>
 <tr>
 <td><code>PRISM_PUBLIC_HOST</code></td>
-<td>仅供 <code>deploy.sh</code> 拼接公开地址的 host 覆盖值，例如 <code>192.168.1.10</code> 或 <code>prism.example.com</code>。</td>
+<td>仅供 <code>deploy.sh</code> 拼接公开地址的 host 覆盖值，例如 <code>prism.lan</code> 或 <code>prism.example.com</code>。</td>
 </tr>
 
 <tr>
@@ -93,7 +93,7 @@
 </ul>
 <p>本地部署推荐使用 <code>poll</code> 模式，不需要暴露公网地址。Memos <code>0.28.0</code> 会拒绝 webhook URL 指向本机、Docker 内网或其他保留/私有 IP；只有在需要 webhook 模式时，才需要配置公网可达 URL 或公网隧道。</p>
 <p>默认 Docker Compose 包含 <code>gateway</code>、<code>memos</code>、<code>sidecar</code> 和 <code>sidecar-worker</code> 四个服务。<code>gateway</code> 使用 Caddy 按路径分流：<code>/admin/*</code>、<code>/health</code>、<code>/webhooks/*</code> 到 Sidecar，其余路径到 Memos。默认只暴露 <code>http://localhost:8080</code> 一个宿主机入口；Memos 的 <code>5230</code> 和 Sidecar 容器内部 <code>8080</code> 不直接暴露。可以通过 <code>GATEWAY_PORT</code> 修改宿主机端口。</p>
-<p>管理入口 memo 和 AI 整理 memo 中的管理链接由 <code>PRISM_PUBLIC_BASE_URL</code> 或 <code>app.public_base_url</code> 生成；如果用户从其他设备访问 Memos，应把该值配置为浏览器可访问的统一网关地址，例如 <code>http://192.168.1.10:8085</code> 或反向代理域名。<code>deploy.sh</code> 会自动把探测到的公开地址写入 <code>.env</code> 并重建 <code>sidecar</code> / <code>sidecar-worker</code>，worker 空闲时会刷新 Memos 里的管理入口 memo。管理页面按「概览、任务、标签、AI 配置、模型、提醒、备份」聚合功能，并支持 <code>#overview</code>、<code>#jobs</code>、<code>#tag-candidates</code>、<code>#tag-summary</code>、<code>#prompts</code>、<code>#models</code>、<code>#reminders</code> 和 <code>#backup</code> 锚点直达。</p>
+<p>管理入口 memo 和 AI 整理 memo 中的管理链接由 <code>PRISM_PUBLIC_BASE_URL</code> 或 <code>app.public_base_url</code> 生成；如果用户从其他设备访问 Memos，应把该值配置为浏览器可访问的统一网关地址，例如 <code>https://prism.example.com</code>。<code>deploy.sh</code> 会自动把探测到的公开地址写入 <code>.env</code> 并重建 <code>sidecar</code> / <code>sidecar-worker</code>，worker 空闲时会刷新 Memos 里的管理入口 memo。管理页面按「概览、任务、标签、AI 配置、模型、提醒、备份」聚合功能，并支持 <code>#overview</code>、<code>#jobs</code>、<code>#tag-candidates</code>、<code>#tag-summary</code>、<code>#prompts</code>、<code>#models</code>、<code>#reminders</code> 和 <code>#backup</code> 锚点直达。</p>
 <h2>reminders</h2>
 <p><code>reminders</code> 控制 <code>#提醒</code> 时间识别和定时通知：</p>
 <pre><code class="language-yaml">reminders:

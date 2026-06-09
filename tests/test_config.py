@@ -152,48 +152,48 @@ def test_app_config_reads_secret_values_from_environment(tmp_path, monkeypatch):
 
 def test_app_config_public_base_url_can_be_overridden_by_environment(tmp_path, monkeypatch):
     app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
-    monkeypatch.setenv("PRISM_PUBLIC_BASE_URL", "http://192.168.1.50:8085")
+    monkeypatch.setenv("PRISM_PUBLIC_BASE_URL", "https://prism.example.test")
 
     config = AppConfig.load(app_path)
 
-    assert config.public_base_url == "http://192.168.1.50:8085"
+    assert config.public_base_url == "https://prism.example.test"
 
 
 def test_app_config_public_base_url_keeps_environment_value_over_local_env_file(tmp_path, monkeypatch):
     app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
     (tmp_path / ".env.local").write_text("PRISM_PUBLIC_BASE_URL=http://localhost:5230\n", encoding="utf-8")
-    monkeypatch.setenv("PRISM_PUBLIC_BASE_URL", "http://192.168.1.50:8085")
+    monkeypatch.setenv("PRISM_PUBLIC_BASE_URL", "https://prism.example.test")
 
     config = AppConfig.load(app_path)
 
-    assert config.public_base_url == "http://192.168.1.50:8085"
+    assert config.public_base_url == "https://prism.example.test"
 
 
 def test_app_config_refreshes_public_base_url_loaded_from_local_env_file(tmp_path, monkeypatch):
     app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
     env_path = tmp_path / ".env.local"
     monkeypatch.delenv("PRISM_PUBLIC_BASE_URL", raising=False)
-    env_path.write_text("PRISM_PUBLIC_BASE_URL=http://192.168.1.50:8085\n", encoding="utf-8")
+    env_path.write_text("PRISM_PUBLIC_BASE_URL=https://prism-a.example.test\n", encoding="utf-8")
 
     first = AppConfig.load(app_path)
-    env_path.write_text("PRISM_PUBLIC_BASE_URL=http://192.168.1.51:8086\n", encoding="utf-8")
+    env_path.write_text("PRISM_PUBLIC_BASE_URL=https://prism-b.example.test\n", encoding="utf-8")
     second = AppConfig.load(app_path)
 
-    assert first.public_base_url == "http://192.168.1.50:8085"
-    assert second.public_base_url == "http://192.168.1.51:8086"
+    assert first.public_base_url == "https://prism-a.example.test"
+    assert second.public_base_url == "https://prism-b.example.test"
 
 
 def test_app_config_falls_back_when_local_env_file_public_base_url_is_removed(tmp_path, monkeypatch):
     app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
     env_path = tmp_path / ".env.local"
     monkeypatch.delenv("PRISM_PUBLIC_BASE_URL", raising=False)
-    env_path.write_text("PRISM_PUBLIC_BASE_URL=http://192.168.1.50:8085\n", encoding="utf-8")
+    env_path.write_text("PRISM_PUBLIC_BASE_URL=https://prism.example.test\n", encoding="utf-8")
 
     first = AppConfig.load(app_path)
     env_path.write_text("", encoding="utf-8")
     second = AppConfig.load(app_path)
 
-    assert first.public_base_url == "http://192.168.1.50:8085"
+    assert first.public_base_url == "https://prism.example.test"
     assert second.public_base_url == "http://localhost:5230"
     assert os.getenv("PRISM_PUBLIC_BASE_URL") is None
 
@@ -202,13 +202,13 @@ def test_app_config_falls_back_when_local_env_file_is_deleted(tmp_path, monkeypa
     app_path = write_yaml(tmp_path / "app.yaml", app_config_text(tmp_path / "sidecar.db"))
     env_path = tmp_path / ".env.local"
     monkeypatch.delenv("PRISM_PUBLIC_BASE_URL", raising=False)
-    env_path.write_text("PRISM_PUBLIC_BASE_URL=http://192.168.1.50:8085\n", encoding="utf-8")
+    env_path.write_text("PRISM_PUBLIC_BASE_URL=https://prism.example.test\n", encoding="utf-8")
 
     first = AppConfig.load(app_path)
     env_path.unlink()
     second = AppConfig.load(app_path)
 
-    assert first.public_base_url == "http://192.168.1.50:8085"
+    assert first.public_base_url == "https://prism.example.test"
     assert second.public_base_url == "http://localhost:5230"
     assert os.getenv("PRISM_PUBLIC_BASE_URL") is None
 

@@ -55,7 +55,7 @@ scripts/semble_refresh_search.sh find-related src/memosima/memos/probe.py 35 . 5
 2. 任务挂起，等待用户提供输入或确认。
 3. 生成任何报告（如代码审查、安全审查、测试报告等）。
 
-统一通过 All Notify 入口 `http://127.0.0.1:8765/send/claude` 发送，禁止直接调用 Bark、SMTP 等下游通道。
+统一通过本地私有配置中的 All Notify 入口发送，禁止直接调用 Bark、SMTP 等下游通道。真实入口不要写入 Git；可保存在 `.codex/local-notify.md` 等已忽略的本地文件中。
 
 **GET 指令模板:**
 
@@ -63,7 +63,7 @@ scripts/semble_refresh_search.sh find-related src/memosima/memos/probe.py 35 . 5
 title="任务更新" # 根据上下文修改标题
 body="当前任务已完成/等待输入..." # 根据上下文修改内容
 
-curl -sS -G "http://127.0.0.1:8765/send/claude" \
+curl -sS -G "$ALL_NOTIFY_URL" \
      --data-urlencode "title=$title" \
      --data-urlencode "message=$body" \
      -o /dev/null
@@ -72,7 +72,7 @@ curl -sS -G "http://127.0.0.1:8765/send/claude" \
 **POST JSON 指令模板（适合长内容/报告）:**
 
 ```bash
-curl -sS -X POST "http://127.0.0.1:8765/send/claude" \
+curl -sS -X POST "$ALL_NOTIFY_URL" \
      -H "Content-Type: application/json" \
      -d '{"title":"任务更新","message":"当前任务已完成"}' \
      -o /dev/null

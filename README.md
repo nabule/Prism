@@ -119,7 +119,7 @@ bash <(curl -s -L https://raw.githubusercontent.com/nabule/Prism/master/deploy.s
 3. **强密钥生成**：自动调用 OpenSSL 随机算法生成 **16 字节超强随机 `SIDECAR_ADMIN_TOKEN`**，直接写入新建的 `.env` 文件中，默认即为最高防御状态。
 4. **拉取与热启动**：执行 `docker compose -f docker-compose.release.yml pull` 从官方 Container Registry (GHCR) 一秒拉取 prebuilt 生产级镜像并热启动。
 5. **自动创建 Memos 管理员账号与长期 PAT**：等待 Memos 起来后，自动 `POST /api/v1/users` 创建 host 账号，登录后签发不过期的 `MEMOS_API_TOKEN`（PAT）并写回 `.env`，随后 `docker compose up -d sidecar sidecar-worker` 让其用新 PAT 重建（注意：`docker compose restart` 不会重读 `env_file`，必须 `up -d` 才会拿到新 PAT），无需手动登录 Memos 设置页。初始账号与密码会以注释形式记录在 `.env` 末尾，方便后续登录 Memos 前端。
-6. **写入公开管理入口地址**：脚本会探测局域网 IP 与 `GATEWAY_PORT`，把 `PRISM_PUBLIC_BASE_URL=http://<host>:<port>` 写入 `.env` 并重建 `sidecar` / `sidecar-worker`。Worker 会用这个地址维护 Memos 里的管理入口 memo，避免链接停留在 `localhost` 或旧端口。需要公网域名或 HTTPS 反代时，直接以 `PRISM_PUBLIC_BASE_URL=https://your.domain bash deploy.sh` 覆盖；只想指定 host 时可用 `PRISM_PUBLIC_HOST=192.168.x.x bash deploy.sh`。
+6. **写入公开管理入口地址**：脚本会探测局域网 IP 与 `GATEWAY_PORT`，把 `PRISM_PUBLIC_BASE_URL=http://<host>:<port>` 写入 `.env` 并重建 `sidecar` / `sidecar-worker`。Worker 会用这个地址维护 Memos 里的管理入口 memo，避免链接停留在 `localhost` 或旧端口。需要公网域名或 HTTPS 反代时，直接以 `PRISM_PUBLIC_BASE_URL=https://your.domain bash deploy.sh` 覆盖；只想指定 host 时可用 `PRISM_PUBLIC_HOST=prism.lan bash deploy.sh`。
 
 ### 🔐 Memos 初始账号、密码与 PAT 保存位置
 
@@ -148,7 +148,7 @@ grep -E '^# MEMOS_HOST_(USER|PASSWORD)=' .env
 > [!IMPORTANT]
 > **首选：用 `deploy.sh` 末尾打印的一次性登录链接**。banner 里直接给出形如下面的可点击 URL：
 > ```
-> 一次性登录链接:  http://localhost:8085/admin/ui#admin_token=<one-time-random-token>
+> 一次性登录链接:  http://localhost:8085/admin/ui#admin_token=<一次性随机token>
 > ```
 > 在终端 `Ctrl+点击`（或复制粘贴到浏览器）后，前端会**自动**把 `#admin_token=...` 写入 `localStorage["memosima.adminToken"]`，再用 `history.replaceState` 把 hash 从地址栏抹掉，避免长期暴露在书签/历史里。Token 走 URL hash 不进入 HTTP 请求，**不会出现在 Caddy / Uvicorn 的 access log**。从此不再需要手动复制 token 到右上角输入框。
 >
@@ -267,7 +267,7 @@ scripts/semble_refresh_search.sh find-related src/memosima/memos/probe.py 35 . 5
 | `REMINDER_WEBHOOK_URL` | ❌ | 提醒通知出口（Bark 兼容接口，如 `https://api.day.app/your-key/`） |
 | `GATEWAY_PORT` | ❌ | Caddy 网关对外暴露端口，默认 `8085`（多租户部署时改为不同端口区分） |
 | `PRISM_PUBLIC_BASE_URL` | ❌ | 管理入口 memo 和 AI 整理 memo 中管理链接使用的完整公开网关地址；`deploy.sh` 会自动写入，可手动设为局域网地址或反代域名 |
-| `PRISM_PUBLIC_HOST` | ❌ | 仅供 `deploy.sh` 拼接公开地址的 host 覆盖值，例如 `192.168.1.10` 或 `prism.example.com` |
+| `PRISM_PUBLIC_HOST` | ❌ | 仅供 `deploy.sh` 拼接公开地址的 host 覆盖值，例如 `prism.lan` 或 `prism.example.com` |
 | `PRISM_VERSION` | ❌ | 拉取 GHCR 镜像的版本标签，默认 `latest`，可锁定 `v0.6.6` 等确定版本 |
 
 > ① 至少配置一个推理 provider 的 Key，推荐 `DEEPSEEK_API_KEY`。
